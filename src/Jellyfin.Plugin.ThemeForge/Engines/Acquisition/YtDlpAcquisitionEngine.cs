@@ -51,6 +51,7 @@ public sealed class YtDlpAcquisitionEngine : IAcquisitionEngine
     private readonly IProcessRunner _processRunner;
     private readonly ILoudnessNormalizer _normalizer;
     private readonly IAudioProbe _probe;
+    private readonly IAudioVerifier _verifier;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IThemeForgeLogger<YtDlpAcquisitionEngine> _logger;
 
@@ -59,6 +60,7 @@ public sealed class YtDlpAcquisitionEngine : IAcquisitionEngine
     /// <param name="processRunner">Runs yt-dlp.</param>
     /// <param name="normalizer">Encodes the finished theme.</param>
     /// <param name="probe">Verifies the finished theme.</param>
+    /// <param name="verifier">Checks that what was downloaded is actually music.</param>
     /// <param name="httpClientFactory">Fetches candidates that are already audio files.</param>
     /// <param name="logger">Logger.</param>
     public YtDlpAcquisitionEngine(
@@ -66,6 +68,7 @@ public sealed class YtDlpAcquisitionEngine : IAcquisitionEngine
         IProcessRunner processRunner,
         ILoudnessNormalizer normalizer,
         IAudioProbe probe,
+        IAudioVerifier verifier,
         IHttpClientFactory httpClientFactory,
         IThemeForgeLogger<YtDlpAcquisitionEngine> logger)
     {
@@ -73,6 +76,7 @@ public sealed class YtDlpAcquisitionEngine : IAcquisitionEngine
         _processRunner = processRunner;
         _normalizer = normalizer;
         _probe = probe;
+        _verifier = verifier;
         _httpClientFactory = httpClientFactory;
         _logger = logger;
     }
@@ -102,6 +106,27 @@ public sealed class YtDlpAcquisitionEngine : IAcquisitionEngine
                 throw new InvalidOperationException($"the downloaded audio is unusable: {sourceProbe.Problem}");
             }
 
+            // Before the encode, not after: a recap or a reaction video is thrown away without
+            // spending two ffmpeg passes on it, and nothing that fails here can reach the library.
+            // A candidate that came from a catalogue is not checked -- those are thirty-second
+            // clips, too short for the measure to mean anything, and their provenance is a better
+            // answer than a measurement would be.
+            var assessment = candidate.Provenance is null
+                ? await _verifier
+                    .AssessAsync(downloaded, sourceProbe.DurationSeconds, configuration, cancellationToken)
+                    .ConfigureAwait(false)
+                : new AudioAssessment(
+                    AudioVerdict.NotMeasured,
+                    null,
+                    null,
+                    null,
+                    $"it came from {candidate.Provenance}, which is keyed on this title's own database id");
+
+            if (!assessment.IsAcceptable)
+            {
+                throw new InvalidOperationException($"what was downloaded is not a theme: {assessment.Reason}");
+            }
+
             var finalPath = Path.Combine(workingDirectory, "theme.mp3");
             var measurement = await _normalizer.EncodeAsync(
                 downloaded,
@@ -125,11 +150,13 @@ public sealed class YtDlpAcquisitionEngine : IAcquisitionEngine
 
             var info = new FileInfo(finalPath);
             _logger.LogInformation(
-                "ThemeForge: acquired \"{Title}\" — {Duration:0}s, {Size:N0} bytes{Loudness}.",
+                "ThemeForge: acquired \"{Title}\" — {Duration:0}s, {Size:N0} bytes{Loudness}; audio check: {Verdict}{Measure}.",
                 candidate.Title,
                 finalProbe.DurationSeconds,
                 info.Length,
-                measurement is null ? string.Empty : string.Create(CultureInfo.InvariantCulture, $", input {measurement.IntegratedLufs:0.#} LUFS normalised to {configuration.TargetLoudnessLufs:0.#}"));
+                measurement is null ? string.Empty : string.Create(CultureInfo.InvariantCulture, $", input {measurement.IntegratedLufs:0.#} LUFS normalised to {configuration.TargetLoudnessLufs:0.#}"),
+                assessment.Verdict,
+                assessment.BandDiffStd is null ? string.Empty : string.Create(CultureInfo.InvariantCulture, $" ({assessment.BandDiffStd:0.00})"));
 
             return new AcquiredAudio
             {
@@ -139,6 +166,7 @@ public sealed class YtDlpAcquisitionEngine : IAcquisitionEngine
                 Sha256 = await FileHash.ComputeSha256Async(finalPath, cancellationToken).ConfigureAwait(false),
                 SizeBytes = info.Length,
                 SourceUrl = candidate.Url,
+                Assessment = assessment,
             };
         }
         catch

@@ -83,6 +83,16 @@ public sealed class LibraryRowDto
     /// is no help at all when the question is whether a setting was even consulted.
     /// </remarks>
     public string? SkipReason { get; set; }
+
+    /// <summary>
+    /// Gets or sets the music-versus-speech measure taken on the downloaded audio.
+    /// </summary>
+    /// <remarks>
+    /// Shown for every item, accepted or not. The two populations are about 0.6 apart, so seeing
+    /// where a library's own assignments actually fall is the only way to tell whether the
+    /// threshold is set sensibly for it.
+    /// </remarks>
+    public double? BandDiffStd { get; set; }
 }
 
 /// <summary>The plugin's current state, for the status panel.</summary>

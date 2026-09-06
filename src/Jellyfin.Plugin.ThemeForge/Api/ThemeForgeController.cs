@@ -628,6 +628,7 @@ public class ThemeForgeController : ControllerBase
                 LoudnessLufs = entry?.LoudnessLufs,
                 LastError = entry?.LastError,
                 SkipReason = entry?.LastSkipReason,
+                BandDiffStd = entry?.BandDiffStd,
             });
         }
 

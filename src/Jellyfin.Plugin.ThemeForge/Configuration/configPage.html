@@ -181,6 +181,29 @@
                     </div>
 
                     <h3 class="checkboxListLabel">Audio</h3>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="RejectNonMusic" />
+                        <span>Check that what was downloaded is actually music</span>
+                    </label>
+                    <div class="fieldDescription" style="margin:.25em 0 1em 0;">
+                        Every other check judges a title, and a title can be wrong about what the file holds.
+                        This one measures the audio, so a recap, a reaction or a stretch of dialogue is thrown
+                        away before it reaches your library. Files under a minute are passed without an
+                        opinion &mdash; the measure cannot tell music from speech at that length.
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="MusicThreshold" min="0" max="20" step="0.1" label="Counts as music at or below" />
+                        <div class="fieldDescription">
+                            Measured on a 66-clip corpus, music fell between 0.31 and 5.57 and speech between
+                            6.20 and 12.32. Anything between the two values goes to the review queue rather
+                            than being decided either way. The measured value is recorded against every item,
+                            so you can see where your own library actually sits.
+                        </div>
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="SpeechThreshold" min="0" max="20" step="0.1" label="Rejected as speech above" />
+                    </div>
+
                     <div class="inputContainer">
                         <input is="emby-input" type="number" id="AudioBitrate" min="64" max="320" step="8" label="MP3 bitrate (kbit/s)" />
                     </div>
@@ -369,7 +392,7 @@
                 'AutoProvisionYtDlp', 'ProcessSeries', 'ProcessMovies',
                 'BackupExistingThemes', 'RequireDedicatedFolder', 'DryRun',
                 'EnableLoudnessNormalization', 'StopLadderOnConfidentHit', 'TrustTopicChannels',
-                'EnableFileLogging', 'UseThemerrDb', 'UsePlexThemeArchive'
+                'EnableFileLogging', 'UseThemerrDb', 'UsePlexThemeArchive', 'RejectNonMusic'
             ];
             var NUMBERS = [
                 'AutoAssignThreshold', 'ReviewThreshold', 'MinimumTitleSimilarity', 'AudioBitrate',
@@ -377,7 +400,8 @@
                 'SearchResultsPerQuery', 'HydrateTopCandidates', 'SeriesIdealMinSeconds', 'SeriesIdealMaxSeconds',
                 'MovieIdealMinSeconds', 'MovieIdealMaxSeconds', 'HardMinSeconds', 'HardMaxSeconds',
                 'MaxConcurrency', 'RequestDelayMs', 'MaxAttempts',
-                'MaxLogFileSizeMb', 'MaxLogFiles', 'FileLogLevel'
+                'MaxLogFileSizeMb', 'MaxLogFiles', 'FileLogLevel',
+                'MusicThreshold', 'SpeechThreshold'
             ];
             var TEXTS = ['YtDlpPath', 'FfmpegPath'];
             var LISTS = [
@@ -683,7 +707,7 @@
                     el('tfLibrary').innerHTML =
                         '<table style="width:100%;border-collapse:collapse;font-size:.9em;">' +
                         '<thead><tr style="text-align:left;border-bottom:1px solid #444;">' +
-                        '<th>Title</th><th>State</th><th>File</th><th>Theme</th><th>Score</th><th>Loudness</th></tr></thead><tbody>' +
+                        '<th>Title</th><th>State</th><th>File</th><th>Theme</th><th>Score</th><th>Loudness</th><th>Audio</th></tr></thead><tbody>' +
                         rows.map(function (row) {
                             return '<tr style="border-bottom:1px solid #2a2a2a;">' +
                                 '<td>' + esc(row.Label) + '</td>' +
@@ -694,9 +718,10 @@
                                     : '&mdash;') + '</td>' +
                                 '<td>' + (row.Score === null || row.Score === undefined ? '&mdash;' : row.Score.toFixed(1)) + '</td>' +
                                 '<td>' + (row.LoudnessLufs === null || row.LoudnessLufs === undefined ? '&mdash;' : row.LoudnessLufs.toFixed(1) + ' LUFS') + '</td>' +
+                                '<td>' + (row.BandDiffStd === null || row.BandDiffStd === undefined ? '&mdash;' : row.BandDiffStd.toFixed(2)) + '</td>' +
                                 '</tr>' +
-                                (row.LastError ? '<tr><td colspan="6" style="color:#c88;font-size:.85em;padding-bottom:.5em;">' + esc(row.LastError) + '</td></tr>' : '') +
-                                (row.SkipReason ? '<tr><td colspan="6" style="color:#999;font-size:.85em;padding-bottom:.5em;">Passed over because ' + esc(row.SkipReason) + '</td></tr>' : '');
+                                (row.LastError ? '<tr><td colspan="7" style="color:#c88;font-size:.85em;padding-bottom:.5em;">' + esc(row.LastError) + '</td></tr>' : '') +
+                                (row.SkipReason ? '<tr><td colspan="7" style="color:#999;font-size:.85em;padding-bottom:.5em;">Passed over because ' + esc(row.SkipReason) + '</td></tr>' : '');
                         }).join('') +
                         '</tbody></table>';
                 }, function () {

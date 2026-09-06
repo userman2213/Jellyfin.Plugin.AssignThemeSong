@@ -107,6 +107,17 @@ public sealed class ThemeIndexEntry
     public DateTime? LastSkipUtc { get; set; }
 
     /// <summary>
+    /// Gets or sets the music-versus-speech measure taken on the downloaded audio.
+    /// </summary>
+    /// <remarks>
+    /// Recorded whatever the verdict was, including when the file was accepted. The two
+    /// populations are separated by about 0.6, and that gap will be crossed eventually across a
+    /// library of a few hundred titles; having the number next to each assignment is what turns
+    /// "is the threshold right?" into a question the data can answer.
+    /// </remarks>
+    public double? BandDiffStd { get; set; }
+
+    /// <summary>
     /// Gets a value indicating whether an automated run may touch this item, because a person
     /// decided it.
     /// </summary>

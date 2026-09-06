@@ -54,6 +54,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<IThemeProvenanceSource, PlexTvThemeSource>();
         serviceCollection.AddSingleton<IDecisionPolicy, DecisionPolicy>();
         serviceCollection.AddSingleton<IAudioProbe, AudioProbe>();
+        serviceCollection.AddSingleton<IAudioVerifier, AudioVerifier>();
         serviceCollection.AddSingleton<ILoudnessNormalizer, LoudnessNormalizer>();
         serviceCollection.AddSingleton<IAcquisitionEngine, YtDlpAcquisitionEngine>();
         serviceCollection.AddSingleton<IThemePlacementEngine, ThemePlacementEngine>();

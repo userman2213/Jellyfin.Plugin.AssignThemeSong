@@ -347,7 +347,12 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
             // refusing to act on an explicit instruction would be the surprising behaviour.
             var overwriting = new ResolvedThemePolicy(true, ThemeOverwritePolicy.ReplaceAny, string.Empty);
 
-            var audio = await _acquisitionEngine.AcquireAsync(candidate, configuration, cancellationToken).ConfigureAwait(false);
+            // The same applies to the audio check. Someone who has listened to a clip and asked
+            // for it does not need to be told it does not sound like music.
+            var asRequested = configuration.ShallowCopy();
+            asRequested.RejectNonMusic = false;
+
+            var audio = await _acquisitionEngine.AcquireAsync(candidate, asRequested, cancellationToken).ConfigureAwait(false);
 
             try
             {
@@ -600,6 +605,23 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
 
         try
         {
+            entry.BandDiffStd = audio.Assessment?.BandDiffStd;
+
+            if (audio.NeedsReview)
+            {
+                // The download sounded like neither music nor speech. It is not thrown away and
+                // not written either: it goes to the queue so a person can listen, and the staged
+                // file is discarded because approving it re-fetches anyway.
+                entry.State = ThemeItemState.PendingReview;
+                entry.LastError = null;
+                report.NoteReason(audio.Assessment!.Reason);
+                _logger.LogInformation(
+                    "ThemeForge: holding \"{Item}\" for review — {Reason}.",
+                    identity.Label,
+                    audio.Assessment.Reason);
+                return ItemOutcome.Queued;
+            }
+
             var placement = await _placementEngine.PlaceAsync(item, audio, configuration, policy, cancellationToken).ConfigureAwait(false);
             if (!placement.Success)
             {

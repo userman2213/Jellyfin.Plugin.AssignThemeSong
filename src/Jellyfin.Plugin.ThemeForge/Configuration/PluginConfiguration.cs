@@ -175,6 +175,55 @@ public class PluginConfiguration : BasePluginConfiguration
     public int AudioBitrate { get; set; } = 192;
 
     /// <summary>
+    /// Gets or sets a value indicating whether a downloaded file is checked to be music before
+    /// it is written to the library.
+    /// </summary>
+    /// <remarks>
+    /// Every scoring rule judges a listing, and a listing can be wrong about what the file holds.
+    /// This measures the audio itself, so a recap, a reaction or a stretch of dialogue is thrown
+    /// away before it reaches the library. Files shorter than a minute are passed without an
+    /// opinion: below that the measure cannot tell the two apart.
+    /// </remarks>
+    public bool RejectNonMusic { get; set; } = true;
+
+    /// <summary>Gets or sets the band measure at or below which a file counts as music.</summary>
+    /// <remarks>
+    /// Measured on a 66-clip corpus, music fell between 0.31 and 5.57 and speech between 6.20 and
+    /// 12.32. Anything between the two thresholds goes to review rather than being decided.
+    /// </remarks>
+    public double MusicThreshold { get; set; } = 5.6;
+
+    /// <summary>Gets or sets the band measure above which a file is rejected as speech.</summary>
+    public double SpeechThreshold { get; set; } = 6.2;
+
+    /// <summary>Gets or sets the mean volume below which a file is treated as having nothing in it.</summary>
+    public double SilenceThresholdDb { get; set; } = -50;
+
+    /// <summary>
+    /// Gets or sets the loudness range below which a file may be treated as unchanging noise.
+    /// </summary>
+    /// <remarks>
+    /// Checked before the music measure, because steady noise is the one case that measure gets
+    /// confidently wrong in the dangerous direction: room tone scores as more musical than any
+    /// real music does. It is not sufficient on its own, though — a heavily compressed theme has
+    /// very little loudness range either. A measured theme came in at 1.8 LU, which is not much
+    /// above this, so <see cref="SteadyNoiseCeiling"/> has to agree before anything is rejected.
+    /// </remarks>
+    public double MinimumLoudnessRange { get; set; } = 1.0;
+
+    /// <summary>
+    /// Gets or sets the band measure below which a file with no loudness range is treated as
+    /// noise rather than as compressed music.
+    /// </summary>
+    /// <remarks>
+    /// Room tone measures around 0.72 here and a sustained chord 1.86, while music with any
+    /// movement in it sits well above. Requiring both this and the loudness range to be
+    /// degenerate is what keeps the guard from throwing away a real theme that simply happens to
+    /// be loud all the way through.
+    /// </remarks>
+    public double SteadyNoiseCeiling { get; set; } = 2.0;
+
+    /// <summary>
     /// Gets or sets a value indicating whether every theme is normalized to a common loudness.
     /// This is what makes themes play at a consistent volume; Jellyfin has no theme volume
     /// control of its own, so without it loudness is whatever the uploader mastered.
