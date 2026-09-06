@@ -1,7 +1,20 @@
 <Project>
+
   <PropertyGroup>
-    <!-- Suppress package downgrade warnings since we must match Jellyfin's dependency versions -->
+    <TargetFramework>net9.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+
+    <!-- Jellyfin pins its own versions of several transitive packages; a downgrade
+         warning here is expected and must not fail the build. -->
     <MSBuildWarningAsErrors>$(MSBuildWarningAsErrors.Replace(';NU1605', ''))</MSBuildWarningAsErrors>
     <NoWarn>$(NoWarn);NU1605</NoWarn>
+
+    <ThemeForgeVersion>1.0.0.0</ThemeForgeVersion>
   </PropertyGroup>
+
 </Project>

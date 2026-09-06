@@ -1,0 +1,70 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build, for example 1.0.0.0'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Work out the version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          # Jellyfin plugin manifests require a four-part version.
+          case "$(echo "$VERSION" | tr -cd '.' | wc -c)" in
+            2) VERSION="$VERSION.0" ;;
+          esac
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        run: |
+          dotnet publish src/Jellyfin.Plugin.ThemeForge/Jellyfin.Plugin.ThemeForge.csproj \
+            -c Release -o publish \
+            -p:ThemeForgeVersion=${{ steps.version.outputs.version }}
+
+      - name: Test
+        run: dotnet test Jellyfin.Plugin.ThemeForge.sln -c Release
+
+      - name: Package
+        id: package
+        run: |
+          mkdir -p artifacts
+          cp src/Jellyfin.Plugin.ThemeForge/images/icon.png publish/ || true
+          ( cd publish && zip -r "../artifacts/themeforge_${{ steps.version.outputs.version }}.zip" . )
+          CHECKSUM=$(md5sum "artifacts/themeforge_${{ steps.version.outputs.version }}.zip" | cut -d' ' -f1)
+          echo "checksum=$CHECKSUM" >> "$GITHUB_OUTPUT"
+          echo "ThemeForge ${{ steps.version.outputs.version }} md5: $CHECKSUM"
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*.zip
+          body: |
+            ThemeForge ${{ steps.version.outputs.version }}
+
+            Package checksum (md5): `${{ steps.package.outputs.checksum }}`
+
+            Add this checksum and the asset URL to `manifest.json` to make the release
+            installable from the Jellyfin plugin catalogue.

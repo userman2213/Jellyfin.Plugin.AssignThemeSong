@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>ThemeForge</title>
+</head>
+<body>
+<div id="ThemeForgeConfigPage" data-role="page" class="page type-interior pluginConfigurationPage"
+     data-require="emby-input,emby-button,emby-checkbox,emby-select,emby-collapse">
+    <div data-role="content">
+        <div class="content-primary">
+
+            <div class="verticalSection">
+                <div class="sectionTitleContainer flex align-items-center">
+                    <h2 class="sectionTitle">ThemeForge</h2>
+                </div>
+                <p class="fieldDescription">
+                    Finds a theme song for every movie and series, scores the candidates, and assigns the
+                    confident ones. Anything less certain waits in the review queue below.
+                </p>
+            </div>
+
+            <div class="localnav">
+                <a href="#" is="emby-linkbutton" data-tab="status" class="ThemeForgeTab emby-tab-button emby-tab-button-active"><span>Status</span></a>
+                <a href="#" is="emby-linkbutton" data-tab="review" class="ThemeForgeTab emby-tab-button"><span>Review queue</span></a>
+                <a href="#" is="emby-linkbutton" data-tab="library" class="ThemeForgeTab emby-tab-button"><span>Library</span></a>
+                <a href="#" is="emby-linkbutton" data-tab="settings" class="ThemeForgeTab emby-tab-button"><span>Settings</span></a>
+            </div>
+
+            <!-- ------------------------------------------------------------------ Status -->
+            <div class="ThemeForgePanel" data-panel="status">
+                <div class="verticalSection">
+                    <div id="tfStatus" class="fieldDescription" style="line-height:1.9;"></div>
+                    <br />
+                    <button is="emby-button" type="button" id="tfRun" class="raised button-submit block">
+                        <span>Run now</span>
+                    </button>
+                    <button is="emby-button" type="button" id="tfRefreshStatus" class="raised block">
+                        <span>Refresh</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- ------------------------------------------------------------ Review queue -->
+            <div class="ThemeForgePanel" data-panel="review" style="display:none;">
+                <div class="verticalSection">
+                    <p class="fieldDescription">
+                        These scored well enough to suggest, but not well enough to assign unattended.
+                        Open a candidate to listen to it, then approve or reject.
+                    </p>
+                    <div id="tfQueue"></div>
+                </div>
+            </div>
+
+            <!-- ---------------------------------------------------------------- Library -->
+            <div class="ThemeForgePanel" data-panel="library" style="display:none;">
+                <div class="verticalSection">
+                    <div class="inputContainer">
+                        <input is="emby-input" type="text" id="tfFilter" label="Filter by title" />
+                    </div>
+                    <button is="emby-button" type="button" id="tfLoadLibrary" class="raised block"><span>Load library</span></button>
+                    <div id="tfLibrary" style="margin-top:1em;"></div>
+                </div>
+            </div>
+
+            <!-- --------------------------------------------------------------- Settings -->
+            <div class="ThemeForgePanel" data-panel="settings" style="display:none;">
+                <form id="tfForm">
+
+                    <h3 class="checkboxListLabel">Tools</h3>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="text" id="YtDlpPath" label="yt-dlp path" />
+                        <div class="fieldDescription">Leave empty to use yt-dlp from PATH, or let ThemeForge download and update its own copy.</div>
+                    </div>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="AutoProvisionYtDlp" />
+                        <span>Download and update yt-dlp automatically</span>
+                    </label>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="text" id="FfmpegPath" label="ffmpeg path" />
+                        <div class="fieldDescription">Leave empty to auto-detect, preferring Jellyfin's own ffmpeg build.</div>
+                    </div>
+
+                    <h3 class="checkboxListLabel">What to process</h3>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="ProcessSeries" /><span>Series</span>
+                    </label>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="ProcessMovies" /><span>Movies</span>
+                    </label>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="SkipItemsWithExistingTheme" />
+                        <span>Leave items that already have a theme file alone</span>
+                    </label>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="OverwriteExisting" />
+                        <span>Replace themes ThemeForge has already assigned</span>
+                    </label>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="BackupExistingThemes" />
+                        <span>Keep a backup copy when replacing a theme</span>
+                    </label>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="RequireDedicatedFolder" />
+                        <span>Only write a theme when the item has its own folder</span>
+                    </label>
+                    <div class="fieldDescription" style="margin-bottom:1.5em;">
+                        In a flat movie library every film shares one folder, so a theme written there would
+                        apply to all of them. With this on, those items are skipped and the reason recorded.
+                    </div>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="DryRun" />
+                        <span>Dry run — score and report, but never write anything</span>
+                    </label>
+
+                    <h3 class="checkboxListLabel">Confidence thresholds</h3>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="AutoAssignThreshold" min="0" max="100" step="1" label="Assign automatically at or above" />
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="ReviewThreshold" min="0" max="100" step="1" label="Offer for review at or above" />
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="MinimumTitleSimilarity" min="0" max="1" step="0.01" label="Minimum title match (0-1)" />
+                        <div class="fieldDescription">Below this, a candidate is rejected outright however good it otherwise looks.</div>
+                    </div>
+
+                    <h3 class="checkboxListLabel">Audio</h3>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="AudioBitrate" min="64" max="320" step="8" label="MP3 bitrate (kbit/s)" />
+                    </div>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="EnableLoudnessNormalization" />
+                        <span>Normalise every theme to the same loudness</span>
+                    </label>
+                    <div class="fieldDescription" style="margin-bottom:1.5em;">
+                        Jellyfin plays themes at the same volume as everything else and offers no theme volume
+                        control, so without this a theme is as loud as whoever uploaded it made it. Normalising
+                        at encode time fixes that on every client.
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="TargetLoudnessLufs" min="-40" max="-5" step="0.5" label="Loudness target (LUFS)" />
+                        <div class="fieldDescription">-23 is the broadcast standard. Use a higher value such as -18 if themes feel too quiet.</div>
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="TargetTruePeakDb" min="-9" max="0" step="0.1" label="True peak ceiling (dBTP)" />
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="MaxThemeSeconds" min="0" max="600" step="5" label="Trim to this many seconds (0 keeps the full theme)" />
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="FadeInSeconds" min="0" max="10" step="0.1" label="Fade in (seconds)" />
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="FadeOutSeconds" min="0" max="30" step="0.5" label="Fade out (seconds)" />
+                    </div>
+
+                    <h3 class="checkboxListLabel">Searching</h3>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="SearchResultsPerQuery" min="1" max="50" step="1" label="Results per search" />
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="HydrateTopCandidates" min="1" max="20" step="1" label="Candidates to inspect in full" />
+                    </div>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="StopLadderOnConfidentHit" />
+                        <span>Stop searching as soon as a confident match is found</span>
+                    </label>
+                    <div class="inputContainer">
+                        <textarea is="emby-textarea" id="SeriesQueryTemplates" rows="5" label="Series searches (one per line)"></textarea>
+                        <div class="fieldDescription">Most specific first. {title} and {year} are substituted.</div>
+                    </div>
+                    <div class="inputContainer">
+                        <textarea is="emby-textarea" id="MovieQueryTemplates" rows="5" label="Movie searches (one per line)"></textarea>
+                    </div>
+
+                    <h3 class="checkboxListLabel">Scoring</h3>
+                    <div class="inputContainer">
+                        <textarea is="emby-textarea" id="PositiveKeywords" rows="3" label="Words that suggest a real theme (one per line)"></textarea>
+                    </div>
+                    <div class="inputContainer">
+                        <textarea is="emby-textarea" id="NegativeKeywords" rows="6" label="Words that disqualify a candidate (one per line)"></textarea>
+                    </div>
+                    <div class="inputContainer">
+                        <textarea is="emby-textarea" id="PreferredChannels" rows="3" label="Trusted channels (one per line)"></textarea>
+                    </div>
+                    <div class="inputContainer">
+                        <textarea is="emby-textarea" id="BlockedChannels" rows="3" label="Blocked channels (one per line)"></textarea>
+                    </div>
+                    <div class="inputContainer">
+                        <textarea is="emby-textarea" id="BlockedVideoIds" rows="3" label="Blocked video ids (one per line)"></textarea>
+                    </div>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="TrustTopicChannels" />
+                        <span>Trust YouTube's auto-generated "- Topic" music channels</span>
+                    </label>
+
+                    <h3 class="checkboxListLabel">Plausible lengths</h3>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="SeriesIdealMinSeconds" min="1" step="1" label="Series theme, shortest expected (s)" />
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="SeriesIdealMaxSeconds" min="1" step="1" label="Series theme, longest expected (s)" />
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="MovieIdealMinSeconds" min="1" step="1" label="Movie theme, shortest expected (s)" />
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="MovieIdealMaxSeconds" min="1" step="1" label="Movie theme, longest expected (s)" />
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="HardMinSeconds" min="1" step="1" label="Reject anything shorter than (s)" />
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="HardMaxSeconds" min="1" step="1" label="Reject anything longer than (s)" />
+                    </div>
+
+                    <h3 class="checkboxListLabel">Pace</h3>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="MaxConcurrency" min="1" max="8" step="1" label="Items processed at once" />
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="RequestDelayMs" min="0" max="30000" step="100" label="Minimum gap between requests (ms)" />
+                        <div class="fieldDescription">Raising these risks being rate limited, which makes a run fail entirely.</div>
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="MaxAttempts" min="1" max="10" step="1" label="Attempts before giving up on an item" />
+                    </div>
+
+                    <br />
+                    <button is="emby-button" type="submit" class="raised button-submit block"><span>Save</span></button>
+                </form>
+            </div>
+
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        (function () {
+            'use strict';
+
+            var PLUGIN_ID = 'bfb42f2f-93f8-4d6b-97e6-1750035c211f';
+
+            var CHECKBOXES = [
+                'AutoProvisionYtDlp', 'ProcessSeries', 'ProcessMovies', 'SkipItemsWithExistingTheme',
+                'OverwriteExisting', 'BackupExistingThemes', 'RequireDedicatedFolder', 'DryRun',
+                'EnableLoudnessNormalization', 'StopLadderOnConfidentHit', 'TrustTopicChannels'
+            ];
+            var NUMBERS = [
+                'AutoAssignThreshold', 'ReviewThreshold', 'MinimumTitleSimilarity', 'AudioBitrate',
+                'TargetLoudnessLufs', 'TargetTruePeakDb', 'MaxThemeSeconds', 'FadeInSeconds', 'FadeOutSeconds',
+                'SearchResultsPerQuery', 'HydrateTopCandidates', 'SeriesIdealMinSeconds', 'SeriesIdealMaxSeconds',
+                'MovieIdealMinSeconds', 'MovieIdealMaxSeconds', 'HardMinSeconds', 'HardMaxSeconds',
+                'MaxConcurrency', 'RequestDelayMs', 'MaxAttempts'
+            ];
+            var TEXTS = ['YtDlpPath', 'FfmpegPath'];
+            var LISTS = [
+                'SeriesQueryTemplates', 'MovieQueryTemplates', 'PositiveKeywords', 'NegativeKeywords',
+                'PreferredChannels', 'BlockedChannels', 'BlockedVideoIds'
+            ];
+
+            var page = document.querySelector('#ThemeForgeConfigPage');
+
+            function el(id) { return page.querySelector('#' + id); }
+            function esc(text) {
+                var div = document.createElement('div');
+                div.textContent = text === null || text === undefined ? '' : String(text);
+                return div.innerHTML;
+            }
+
+            function api(method, path, body) {
+                var request = {
+                    type: method,
+                    url: ApiClient.getUrl('ThemeForge/' + path),
+                    dataType: 'json'
+                };
+                if (body !== undefined) {
+                    request.data = JSON.stringify(body);
+                    request.contentType = 'application/json';
+                }
+                return ApiClient.ajax(request);
+            }
+
+            // ---------------------------------------------------------------- tabs
+            page.querySelectorAll('.ThemeForgeTab').forEach(function (tab) {
+                tab.addEventListener('click', function (event) {
+                    event.preventDefault();
+                    var name = tab.getAttribute('data-tab');
+
+                    page.querySelectorAll('.ThemeForgeTab').forEach(function (other) {
+                        other.classList.toggle('emby-tab-button-active', other === tab);
+                    });
+                    page.querySelectorAll('.ThemeForgePanel').forEach(function (panel) {
+                        panel.style.display = panel.getAttribute('data-panel') === name ? '' : 'none';
+                    });
+
+                    if (name === 'review') { loadQueue(); }
+                    if (name === 'status') { loadStatus(); }
+                });
+            });
+
+            // -------------------------------------------------------------- status
+            function loadStatus() {
+                api('GET', 'Status').then(function (status) {
+                    var lines = [];
+                    lines.push('<strong>' + (status.IsRunning ? 'A run is in progress.' : 'Idle.') + '</strong>');
+                    lines.push('yt-dlp: ' + esc(status.YtDlpVersion));
+                    lines.push('ffmpeg: ' + esc(status.FfmpegPath || 'not resolved'));
+                    if (status.ToolProblem) {
+                        lines.push('<span style="color:#ff5f56;">Tooling problem: ' + esc(status.ToolProblem) + '</span>');
+                    }
+                    lines.push('Indexed: ' + status.Indexed +
+                               ' &middot; assigned: ' + status.Assigned +
+                               ' &middot; awaiting review: ' + status.PendingReview +
+                               ' &middot; failed: ' + status.Failed);
+                    if (status.LastRunSummary) {
+                        lines.push('Last run: ' + esc(status.LastRunSummary));
+                    }
+                    if (status.LastRunReasons && status.LastRunReasons.length) {
+                        lines.push('Most common reasons: ' + status.LastRunReasons.map(esc).join('; '));
+                    }
+                    el('tfStatus').innerHTML = lines.join('<br />');
+                }, function () {
+                    el('tfStatus').textContent = 'Could not read the plugin status.';
+                });
+            }
+
+            el('tfRefreshStatus').addEventListener('click', loadStatus);
+            el('tfRun').addEventListener('click', function () {
+                api('POST', 'Run').then(function (result) {
+                    Dashboard.alert(result.Message);
+                    loadStatus();
+                });
+            });
+
+            // --------------------------------------------------------- review queue
+            function loadQueue() {
+                Dashboard.showLoadingMsg();
+                api('GET', 'Queue').then(function (items) {
+                    Dashboard.hideLoadingMsg();
+
+                    if (!items.length) {
+                        el('tfQueue').innerHTML = '<p class="fieldDescription">Nothing is waiting for review.</p>';
+                        return;
+                    }
+
+                    el('tfQueue').innerHTML = items.map(renderQueueItem).join('');
+                    wireQueueButtons();
+                }, function () {
+                    Dashboard.hideLoadingMsg();
+                    el('tfQueue').textContent = 'Could not load the review queue.';
+                });
+            }
+
+            function renderQueueItem(item) {
+                var alternates = (item.Alternates || []).map(function (alt) {
+                    return '<li><a href="' + esc(alt.Url) + '" target="_blank" rel="noopener">' + esc(alt.Title) + '</a>' +
+                           ' &mdash; ' + alt.Score.toFixed(1) + ' (' + esc(alt.Reason) + ')' +
+                           ' <button is="emby-button" type="button" class="raised tfApprove" data-id="' + item.ItemId +
+                           '" data-url="' + esc(alt.Url) + '"><span>Use this</span></button></li>';
+                }).join('');
+
+                return '' +
+                    '<div class="verticalSection" style="border-bottom:1px solid #333;padding-bottom:1em;margin-bottom:1em;">' +
+                        '<h3 style="margin-bottom:.25em;">' + esc(item.Label) + ' <small>(' + esc(item.Kind) + ')</small></h3>' +
+                        '<div>Proposed: <a href="' + esc(item.CandidateUrl) + '" target="_blank" rel="noopener">' +
+                            esc(item.CandidateTitle) + '</a>' +
+                            (item.CandidateChannel ? ' by ' + esc(item.CandidateChannel) : '') +
+                            ' &mdash; <strong>' + (item.Score === null ? '?' : item.Score.toFixed(1)) + '/100</strong></div>' +
+                        '<details style="margin:.5em 0;"><summary>Why it scored that</summary>' +
+                            '<pre style="white-space:pre-wrap;font-size:.85em;">' +
+                            esc((item.ScoreBreakdown || []).join('\n')) + '</pre></details>' +
+                        (alternates ? '<details><summary>Other candidates</summary><ul>' + alternates + '</ul></details>' : '') +
+                        '<div style="margin-top:.75em;">' +
+                            '<button is="emby-button" type="button" class="raised button-submit tfApprove" data-id="' + item.ItemId + '"><span>Approve</span></button> ' +
+                            '<button is="emby-button" type="button" class="raised tfReject" data-id="' + item.ItemId + '"><span>Reject</span></button> ' +
+                            '<button is="emby-button" type="button" class="raised tfBlock" data-id="' + item.ItemId + '"><span>Reject and block this video</span></button>' +
+                        '</div>' +
+                    '</div>';
+            }
+
+            function wireQueueButtons() {
+                page.querySelectorAll('.tfApprove').forEach(function (button) {
+                    button.addEventListener('click', function () {
+                        var url = button.getAttribute('data-url');
+                        var path = 'Queue/' + button.getAttribute('data-id') + '/Approve' +
+                                   (url ? '?url=' + encodeURIComponent(url) : '');
+                        Dashboard.showLoadingMsg();
+                        api('POST', path).then(function (result) {
+                            Dashboard.hideLoadingMsg();
+                            Dashboard.alert(result.Message);
+                            loadQueue();
+                        }, function () {
+                            Dashboard.hideLoadingMsg();
+                            Dashboard.alert('That did not work. Check the server log.');
+                        });
+                    });
+                });
+
+                function reject(button, block) {
+                    Dashboard.showLoadingMsg();
+                    api('POST', 'Queue/' + button.getAttribute('data-id') + '/Reject?blockVideo=' + block)
+                        .then(function (result) {
+                            Dashboard.hideLoadingMsg();
+                            Dashboard.alert(result.Message);
+                            loadQueue();
+                        });
+                }
+
+                page.querySelectorAll('.tfReject').forEach(function (b) {
+                    b.addEventListener('click', function () { reject(b, false); });
+                });
+                page.querySelectorAll('.tfBlock').forEach(function (b) {
+                    b.addEventListener('click', function () { reject(b, true); });
+                });
+            }
+
+            // -------------------------------------------------------------- library
+            el('tfLoadLibrary').addEventListener('click', function () {
+                Dashboard.showLoadingMsg();
+                var filter = el('tfFilter').value.trim();
+                api('GET', 'Library' + (filter ? '?filter=' + encodeURIComponent(filter) : '')).then(function (rows) {
+                    Dashboard.hideLoadingMsg();
+                    el('tfLibrary').innerHTML =
+                        '<table style="width:100%;border-collapse:collapse;font-size:.9em;">' +
+                        '<thead><tr style="text-align:left;border-bottom:1px solid #444;">' +
+                        '<th>Title</th><th>State</th><th>File</th><th>Theme</th><th>Score</th><th>Loudness</th></tr></thead><tbody>' +
+                        rows.map(function (row) {
+                            return '<tr style="border-bottom:1px solid #2a2a2a;">' +
+                                '<td>' + esc(row.Label) + '</td>' +
+                                '<td>' + esc(row.State) + '</td>' +
+                                '<td>' + (row.HasThemeFile ? 'yes' : '&mdash;') + '</td>' +
+                                '<td>' + (row.ThemeUrl
+                                    ? '<a href="' + esc(row.ThemeUrl) + '" target="_blank" rel="noopener">' + esc(row.ThemeTitle || 'source') + '</a>'
+                                    : '&mdash;') + '</td>' +
+                                '<td>' + (row.Score === null || row.Score === undefined ? '&mdash;' : row.Score.toFixed(1)) + '</td>' +
+                                '<td>' + (row.LoudnessLufs === null || row.LoudnessLufs === undefined ? '&mdash;' : row.LoudnessLufs.toFixed(1) + ' LUFS') + '</td>' +
+                                '</tr>' +
+                                (row.LastError ? '<tr><td colspan="6" style="color:#c88;font-size:.85em;padding-bottom:.5em;">' + esc(row.LastError) + '</td></tr>' : '');
+                        }).join('') +
+                        '</tbody></table>';
+                }, function () {
+                    Dashboard.hideLoadingMsg();
+                    el('tfLibrary').textContent = 'Could not load the library overview.';
+                });
+            });
+
+            // ------------------------------------------------------------- settings
+            function loadConfig() {
+                Dashboard.showLoadingMsg();
+                ApiClient.getPluginConfiguration(PLUGIN_ID).then(function (config) {
+                    CHECKBOXES.forEach(function (id) { el(id).checked = !!config[id]; });
+                    NUMBERS.forEach(function (id) { el(id).value = config[id]; });
+                    TEXTS.forEach(function (id) { el(id).value = config[id] || ''; });
+                    LISTS.forEach(function (id) { el(id).value = (config[id] || []).join('\n'); });
+                    Dashboard.hideLoadingMsg();
+                    loadStatus();
+                });
+            }
+
+            el('tfForm').addEventListener('submit', function (event) {
+                event.preventDefault();
+                Dashboard.showLoadingMsg();
+
+                ApiClient.getPluginConfiguration(PLUGIN_ID).then(function (config) {
+                    CHECKBOXES.forEach(function (id) { config[id] = el(id).checked; });
+                    NUMBERS.forEach(function (id) {
+                        var value = parseFloat(el(id).value);
+                        config[id] = isNaN(value) ? config[id] : value;
+                    });
+                    TEXTS.forEach(function (id) { config[id] = el(id).value.trim(); });
+                    LISTS.forEach(function (id) {
+                        config[id] = el(id).value.split('\n')
+                            .map(function (line) { return line.trim(); })
+                            .filter(function (line) { return line.length > 0; });
+                    });
+
+                    ApiClient.updatePluginConfiguration(PLUGIN_ID, config).then(function (result) {
+                        Dashboard.processPluginConfigurationUpdateResult(result);
+                    });
+                });
+
+                return false;
+            });
+
+            page.addEventListener('pageshow', loadConfig);
+        })();
+    </script>
+</div>
+</body>
+</html>

@@ -315,4 +315,4 @@ FodyWeavers.xsd
 
 # Plugin-specific
 *.zip
-!Jellyfin.Plugin.AssignThemeSong_*.zip
+!themeforge_*.zip
