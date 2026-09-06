@@ -9,6 +9,15 @@
         "description": "ThemeForge searches YouTube with yt-dlp, ranks every candidate with an explainable scoring engine, and writes the winner to theme.mp3 beside your media. High-confidence matches are assigned automatically; anything less certain waits in a review queue. Every theme is loudness-normalised at encode time so themes play at a consistent volume, which Jellyfin itself provides no way to control. All decisions are recorded in a persistent index, so re-runs are idempotent and manual choices are never overwritten.",
         "versions": [
             {
+                "version": "2.1.0.0",
+                "targetAbi": "10.11.0.0",
+                "framework": "net9.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_2.1.0.0.zip",
+                "checksum": "937260b61015aa3fd8fd787c733865bf",
+                "timestamp": "2026-09-06T17:59:53Z",
+                "changelog": "ThemerrDB is now asked first for films, shows and film collections, and its index is mirrored\nlocally by a daily scheduled task. Previously it was asked one item at a time and only about\nfilms, so a scan spent one request per title discovering that most were not in the database. A\ntitle that is not in it now costs nothing.\n\nA series carrying only a TheTVDB id is matched by name against the catalogued shows, strictly\nenough that \"Girls\" cannot match \"Golden Girls\". A film with no theme of its own inherits its\ncollection's, so Alien3 gets the Alien Collection theme.\n\nWhich catalogue answers first is stated rather than left to registration order: ThemerrDB, then\nPlex's archive for the series ThemerrDB does not have.\n\nA dry run no longer fills the review queue. It was recording the winning candidate and its score\nbefore returning, so items the run would have assigned outright sat in the queue at full marks and\nstayed after dry run was switched off. Those entries are cleared automatically."
+            },
+            {
                 "version": "2.0.0.0",
                 "targetAbi": "10.11.0.0",
                 "framework": "net9.0",

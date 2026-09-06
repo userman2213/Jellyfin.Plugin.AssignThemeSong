@@ -14,7 +14,7 @@
     <MSBuildWarningAsErrors>$(MSBuildWarningAsErrors.Replace(';NU1605', ''))</MSBuildWarningAsErrors>
     <NoWarn>$(NoWarn);NU1605</NoWarn>
 
-    <ThemeForgeVersion>2.0.0.0</ThemeForgeVersion>
+    <ThemeForgeVersion>2.1.0.0</ThemeForgeVersion>
   </PropertyGroup>
 
 </Project>
