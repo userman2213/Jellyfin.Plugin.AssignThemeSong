@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.ThemeForge.Configuration;
 using Jellyfin.Plugin.ThemeForge.Engines.Acquisition;
+using Jellyfin.Plugin.ThemeForge.Engines.Policy;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Providers;
 using MediaBrowser.Model.IO;
@@ -52,9 +53,10 @@ public interface IThemePlacementEngine
     /// <param name="item">The library item.</param>
     /// <param name="audio">The staged, verified theme.</param>
     /// <param name="configuration">Settings.</param>
+    /// <param name="policy">The effective policy for this item's library.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>What happened.</returns>
-    Task<PlacementResult> PlaceAsync(BaseItem item, AcquiredAudio audio, PluginConfiguration configuration, CancellationToken cancellationToken);
+    Task<PlacementResult> PlaceAsync(BaseItem item, AcquiredAudio audio, PluginConfiguration configuration, ResolvedThemePolicy policy, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -133,11 +135,13 @@ public sealed class ThemePlacementEngine : IThemePlacementEngine
         BaseItem item,
         AcquiredAudio audio,
         PluginConfiguration configuration,
+        ResolvedThemePolicy policy,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(item);
         ArgumentNullException.ThrowIfNull(audio);
         ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(policy);
 
         var (directory, reason) = ResolveThemeDirectory(item, configuration);
         if (directory is null)
@@ -151,9 +155,9 @@ public sealed class ThemePlacementEngine : IThemePlacementEngine
         {
             if (File.Exists(target))
             {
-                if (!configuration.OverwriteExisting)
+                if (policy.Overwrite == ThemeOverwritePolicy.Never)
                 {
-                    return PlacementResult.Skipped("a theme already exists here and overwriting is disabled");
+                    return PlacementResult.Skipped("a theme already exists here and this library is set never to replace one");
                 }
 
                 if (configuration.BackupExistingThemes)

@@ -24,6 +24,7 @@
                 <a href="#" is="emby-linkbutton" data-tab="status" class="ThemeForgeTab emby-tab-button emby-tab-button-active"><span>Status</span></a>
                 <a href="#" is="emby-linkbutton" data-tab="review" class="ThemeForgeTab emby-tab-button"><span>Review queue</span></a>
                 <a href="#" is="emby-linkbutton" data-tab="library" class="ThemeForgeTab emby-tab-button"><span>Library</span></a>
+                <a href="#" is="emby-linkbutton" data-tab="libraries" class="ThemeForgeTab emby-tab-button"><span>Libraries</span></a>
                 <a href="#" is="emby-linkbutton" data-tab="settings" class="ThemeForgeTab emby-tab-button"><span>Settings</span></a>
                 <a href="#" is="emby-linkbutton" data-tab="log" class="ThemeForgeTab emby-tab-button"><span>Log</span></a>
             </div>
@@ -64,6 +65,30 @@
                 </div>
             </div>
 
+            <!-- ------------------------------------------------------- Per-library rules -->
+            <div class="ThemeForgePanel" data-panel="libraries" style="display:none;">
+                <div class="verticalSection">
+                    <p class="fieldDescription">
+                        What ThemeForge is allowed to do in each library. Shows and films usually want
+                        different answers: a shows library is worth re-running as scoring improves, while a
+                        curated film library may hold themes you picked by hand.
+                    </p>
+                    <div class="selectContainer">
+                        <label class="selectLabel" for="DefaultOverwritePolicy">Default for libraries with no rule</label>
+                        <select is="emby-select" id="DefaultOverwritePolicy">
+                            <option value="1">Never replace an existing theme</option>
+                            <option value="2">Replace themes ThemeForge chose</option>
+                            <option value="3">Replace any theme, including ones I placed</option>
+                        </select>
+                    </div>
+                    <div id="tfLibraries" style="margin-top:1em;"></div>
+                    <br />
+                    <button is="emby-button" type="button" id="tfSaveLibraries" class="raised button-submit block">
+                        <span>Save library rules</span>
+                    </button>
+                </div>
+            </div>
+
             <!-- -------------------------------------------------------------------- Log -->
             <div class="ThemeForgePanel" data-panel="log" style="display:none;">
                 <div class="verticalSection">
@@ -101,14 +126,10 @@
                     <label class="emby-checkbox-label">
                         <input is="emby-checkbox" type="checkbox" id="ProcessMovies" /><span>Movies</span>
                     </label>
-                    <label class="emby-checkbox-label">
-                        <input is="emby-checkbox" type="checkbox" id="SkipItemsWithExistingTheme" />
-                        <span>Leave items that already have a theme file alone</span>
-                    </label>
-                    <label class="emby-checkbox-label">
-                        <input is="emby-checkbox" type="checkbox" id="OverwriteExisting" />
-                        <span>Replace themes ThemeForge has already assigned</span>
-                    </label>
+                    <div class="fieldDescription" style="margin:.5em 0 1.5em;">
+                        Whether existing themes may be replaced is set per library, on the
+                        <strong>Libraries</strong> tab.
+                    </div>
                     <label class="emby-checkbox-label">
                         <input is="emby-checkbox" type="checkbox" id="BackupExistingThemes" />
                         <span>Keep a backup copy when replacing a theme</span>
@@ -298,8 +319,8 @@
             var PLUGIN_ID = 'bfb42f2f-93f8-4d6b-97e6-1750035c211f';
 
             var CHECKBOXES = [
-                'AutoProvisionYtDlp', 'ProcessSeries', 'ProcessMovies', 'SkipItemsWithExistingTheme',
-                'OverwriteExisting', 'BackupExistingThemes', 'RequireDedicatedFolder', 'DryRun',
+                'AutoProvisionYtDlp', 'ProcessSeries', 'ProcessMovies',
+                'BackupExistingThemes', 'RequireDedicatedFolder', 'DryRun',
                 'EnableLoudnessNormalization', 'StopLadderOnConfidentHit', 'TrustTopicChannels',
                 'EnableFileLogging'
             ];
@@ -355,6 +376,7 @@
                     if (name === 'review') { loadQueue(); }
                     if (name === 'status') { loadStatus(); }
                     if (name === 'log') { loadLog(); }
+                    if (name === 'libraries') { loadLibraries(); }
                 });
             });
 
@@ -398,6 +420,81 @@
             }
 
             el('tfRefreshLog').addEventListener('click', loadLog);
+
+            // -------------------------------------------------- per-library rules
+            var POLICY_LABELS = [
+                { value: 0, text: 'Use the default above' },
+                { value: 1, text: 'Never replace an existing theme' },
+                { value: 2, text: 'Replace themes ThemeForge chose' },
+                { value: 3, text: 'Replace any theme, including ones I placed' }
+            ];
+
+            function loadLibraries() {
+                Dashboard.showLoadingMsg();
+                api('GET', 'Libraries').then(function (libraries) {
+                    Dashboard.hideLoadingMsg();
+
+                    if (!libraries.length) {
+                        el('tfLibraries').innerHTML =
+                            '<p class="fieldDescription">No movie or show libraries were found.</p>';
+                        return;
+                    }
+
+                    el('tfLibraries').innerHTML = libraries.map(function (library) {
+                        var options = POLICY_LABELS.map(function (option) {
+                            var selected = option.value === library.Overwrite ? ' selected' : '';
+                            return '<option value="' + option.value + '"' + selected + '>' + esc(option.text) + '</option>';
+                        }).join('');
+
+                        return '' +
+                            '<div class="verticalSection" data-library="' + esc(library.Id) + '" data-name="' + esc(library.Name) + '"' +
+                            ' style="border-bottom:1px solid #333;padding-bottom:1em;margin-bottom:1em;">' +
+                                '<h3 style="margin-bottom:.25em;">' + esc(library.Name) +
+                                    ' <small style="color:#888;">(' + esc(library.CollectionType) + ')</small></h3>' +
+                                '<label class="emby-checkbox-label">' +
+                                    '<input is="emby-checkbox" type="checkbox" class="tfLibEnabled"' +
+                                    (library.Enabled ? ' checked' : '') + ' />' +
+                                    '<span>Look for theme songs in this library</span>' +
+                                '</label>' +
+                                '<div class="selectContainer" style="margin-top:.5em;">' +
+                                    '<select is="emby-select" class="tfLibPolicy">' + options + '</select>' +
+                                '</div>' +
+                            '</div>';
+                    }).join('');
+                }, function () {
+                    Dashboard.hideLoadingMsg();
+                    el('tfLibraries').textContent = 'Could not load the libraries.';
+                });
+            }
+
+            el('tfSaveLibraries').addEventListener('click', function () {
+                var rules = [];
+                page.querySelectorAll('#tfLibraries [data-library]').forEach(function (row) {
+                    rules.push({
+                        LibraryId: row.getAttribute('data-library'),
+                        LibraryName: row.getAttribute('data-name'),
+                        Enabled: row.querySelector('.tfLibEnabled').checked,
+                        Overwrite: parseInt(row.querySelector('.tfLibPolicy').value, 10)
+                    });
+                });
+
+                Dashboard.showLoadingMsg();
+
+                // The default lives in the main configuration; the rules have their own endpoint.
+                ApiClient.getPluginConfiguration(PLUGIN_ID).then(function (config) {
+                    config.DefaultOverwritePolicy = parseInt(el('DefaultOverwritePolicy').value, 10);
+                    return ApiClient.updatePluginConfiguration(PLUGIN_ID, config);
+                }).then(function () {
+                    return api('POST', 'Libraries', rules);
+                }).then(function (result) {
+                    Dashboard.hideLoadingMsg();
+                    Dashboard.alert(result.Message);
+                    loadLibraries();
+                }, function () {
+                    Dashboard.hideLoadingMsg();
+                    Dashboard.alert('Could not save the library rules.');
+                });
+            });
 
             // ------------------------------------------------- remove every theme
             el('tfRemoveAll').addEventListener('click', function () {
@@ -548,6 +645,7 @@
                     NUMBERS.forEach(function (id) { el(id).value = config[id]; });
                     TEXTS.forEach(function (id) { el(id).value = config[id] || ''; });
                     LISTS.forEach(function (id) { el(id).value = (config[id] || []).join('\n'); });
+                    el('DefaultOverwritePolicy').value = config.DefaultOverwritePolicy || 1;
                     Dashboard.hideLoadingMsg();
                     loadStatus();
                 });

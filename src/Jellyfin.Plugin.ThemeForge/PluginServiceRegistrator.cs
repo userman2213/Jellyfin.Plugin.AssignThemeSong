@@ -5,6 +5,7 @@ using Jellyfin.Plugin.ThemeForge.Engines.Identity;
 using Jellyfin.Plugin.ThemeForge.Engines.Index;
 using Jellyfin.Plugin.ThemeForge.Engines.Orchestration;
 using Jellyfin.Plugin.ThemeForge.Engines.Placement;
+using Jellyfin.Plugin.ThemeForge.Engines.Policy;
 using Jellyfin.Plugin.ThemeForge.Engines.Query;
 using Jellyfin.Plugin.ThemeForge.Engines.Scoring;
 using Jellyfin.Plugin.ThemeForge.Engines.Scoring.Rules;
@@ -51,6 +52,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<ILoudnessNormalizer, LoudnessNormalizer>();
         serviceCollection.AddSingleton<IAcquisitionEngine, YtDlpAcquisitionEngine>();
         serviceCollection.AddSingleton<IThemePlacementEngine, ThemePlacementEngine>();
+        serviceCollection.AddSingleton<ILibraryPolicyResolver, LibraryPolicyResolver>();
         serviceCollection.AddSingleton<IThemeIndex, JsonThemeIndex>();
 
         // Scoring rules, collected into the engine.

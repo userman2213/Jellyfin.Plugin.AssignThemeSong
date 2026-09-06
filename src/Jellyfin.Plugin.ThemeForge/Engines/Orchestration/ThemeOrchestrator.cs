@@ -13,6 +13,7 @@ using Jellyfin.Plugin.ThemeForge.Engines.Discovery;
 using Jellyfin.Plugin.ThemeForge.Engines.Identity;
 using Jellyfin.Plugin.ThemeForge.Engines.Index;
 using Jellyfin.Plugin.ThemeForge.Engines.Placement;
+using Jellyfin.Plugin.ThemeForge.Engines.Policy;
 using Jellyfin.Plugin.ThemeForge.Engines.Query;
 using Jellyfin.Plugin.ThemeForge.Engines.Scoring;
 using MediaBrowser.Controller.Entities;
@@ -77,6 +78,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
     private readonly IAcquisitionEngine _acquisitionEngine;
     private readonly IThemePlacementEngine _placementEngine;
     private readonly IThemeIndex _index;
+    private readonly ILibraryPolicyResolver _policyResolver;
     private readonly IThemeForgeLogger<ThemeOrchestrator> _logger;
     private readonly RequestThrottle _throttle = new();
 
@@ -95,6 +97,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
     /// <param name="acquisitionEngine">Downloads and normalises the chosen candidate.</param>
     /// <param name="placementEngine">Writes the theme into the library.</param>
     /// <param name="index">Records decisions.</param>
+    /// <param name="policyResolver">Resolves per-library overwrite rules.</param>
     /// <param name="logger">Logger.</param>
     public ThemeOrchestrator(
         ILibraryManager libraryManager,
@@ -106,6 +109,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         IAcquisitionEngine acquisitionEngine,
         IThemePlacementEngine placementEngine,
         IThemeIndex index,
+        ILibraryPolicyResolver policyResolver,
         IThemeForgeLogger<ThemeOrchestrator> logger)
     {
         _libraryManager = libraryManager;
@@ -117,6 +121,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         _acquisitionEngine = acquisitionEngine;
         _placementEngine = placementEngine;
         _index = index;
+        _policyResolver = policyResolver;
         _logger = logger;
     }
 
@@ -219,9 +224,15 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
             return ItemOutcome.Skipped;
         }
 
+        var policy = _policyResolver.Resolve(item, configuration);
+        if (!policy.Enabled)
+        {
+            return ItemOutcome.Skipped;
+        }
+
         var entry = _index.Resolve(item.Id, identity.StableKey) ?? NewEntry(identity);
 
-        var skipReason = ShouldSkip(item, entry, configuration);
+        var skipReason = ShouldSkip(item, entry, configuration, policy);
         if (skipReason is not null)
         {
             _logger.LogDebug("ThemeForge: skipping \"{Item}\" — {Reason}.", identity.Label, skipReason);
@@ -237,7 +248,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
 
             return decision.Outcome switch
             {
-                DecisionOutcome.AutoAssign => await AssignAsync(item, identity, entry, decision, configuration, report, cancellationToken).ConfigureAwait(false),
+                DecisionOutcome.AutoAssign => await AssignAsync(item, identity, entry, decision, configuration, policy, report, cancellationToken).ConfigureAwait(false),
                 DecisionOutcome.Review => Queue(entry, decision, report),
                 _ => NoCandidate(entry, decision, configuration, report),
             };
@@ -288,16 +299,15 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         {
             var candidate = await DescribeAsync(sourceUrl, cancellationToken).ConfigureAwait(false);
 
-            // A human asking for this specific theme outranks the "do not overwrite" setting;
+            // A human asking for this specific theme outranks whatever the library's rule says;
             // refusing to act on an explicit instruction would be the surprising behaviour.
-            var overwriting = configuration.ShallowCopy();
-            overwriting.OverwriteExisting = true;
+            var overwriting = new ResolvedThemePolicy(true, ThemeOverwritePolicy.ReplaceAny, string.Empty);
 
-            var audio = await _acquisitionEngine.AcquireAsync(candidate, overwriting, cancellationToken).ConfigureAwait(false);
+            var audio = await _acquisitionEngine.AcquireAsync(candidate, configuration, cancellationToken).ConfigureAwait(false);
 
             try
             {
-                var placement = await _placementEngine.PlaceAsync(item, audio, overwriting, cancellationToken).ConfigureAwait(false);
+                var placement = await _placementEngine.PlaceAsync(item, audio, configuration, overwriting, cancellationToken).ConfigureAwait(false);
                 if (!placement.Success)
                 {
                     entry.LastError = placement.Reason;
@@ -458,6 +468,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         ThemeIndexEntry entry,
         ThemeDecision decision,
         PluginConfiguration configuration,
+        ResolvedThemePolicy policy,
         RunReport report,
         CancellationToken cancellationToken)
     {
@@ -480,7 +491,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
 
         try
         {
-            var placement = await _placementEngine.PlaceAsync(item, audio, configuration, cancellationToken).ConfigureAwait(false);
+            var placement = await _placementEngine.PlaceAsync(item, audio, configuration, policy, cancellationToken).ConfigureAwait(false);
             if (!placement.Success)
             {
                 report.NoteReason(placement.Reason ?? "the theme could not be written");
@@ -539,7 +550,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
     /// Decides which items are worth looking at, and why an item should be left alone.
     /// </summary>
     /// <returns>A reason to skip, or null to process the item.</returns>
-    private string? ShouldSkip(BaseItem item, ThemeIndexEntry entry, PluginConfiguration configuration)
+    private string? ShouldSkip(BaseItem item, ThemeIndexEntry entry, PluginConfiguration configuration, ResolvedThemePolicy policy)
     {
         // A human's decision always outranks the pipeline's.
         if (entry.IsSettledByHuman)
@@ -547,7 +558,9 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
             return string.Format(CultureInfo.InvariantCulture, "it is marked {0}", entry.State);
         }
 
-        if (entry.State is ThemeItemState.AutoAssigned or ThemeItemState.Approved && !configuration.OverwriteExisting)
+        // A theme ThemeForge chose is only revisited when the library allows replacing one.
+        if (entry.State is ThemeItemState.AutoAssigned or ThemeItemState.Approved
+            && policy.Overwrite == ThemeOverwritePolicy.Never)
         {
             return "it already has a theme assigned by ThemeForge";
         }
@@ -562,8 +575,9 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
             return string.Format(CultureInfo.InvariantCulture, "it has failed {0} times", entry.Attempts);
         }
 
-        // A theme file already on disk that ThemeForge did not write belongs to the user.
-        if (configuration.SkipItemsWithExistingTheme
+        // A theme file already on disk that ThemeForge did not write belongs to the user, and is
+        // only replaced when the library is explicitly set to replace anything.
+        if (policy.Overwrite != ThemeOverwritePolicy.ReplaceAny
             && entry.State == ThemeItemState.Unprocessed
             && _placementEngine.HasExistingTheme(item, configuration))
         {

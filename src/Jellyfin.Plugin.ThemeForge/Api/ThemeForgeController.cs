@@ -6,11 +6,13 @@ using System.Linq;
 using System.Net.Mime;
 using System.Threading;
 using System.Threading.Tasks;
+using Jellyfin.Plugin.ThemeForge.Configuration;
 using Jellyfin.Plugin.ThemeForge.Engines.Acquisition;
 using Jellyfin.Plugin.ThemeForge.Engines.Identity;
 using Jellyfin.Plugin.ThemeForge.Engines.Index;
 using Jellyfin.Plugin.ThemeForge.Engines.Orchestration;
 using Jellyfin.Plugin.ThemeForge.Engines.Placement;
+using Jellyfin.Plugin.ThemeForge.Engines.Policy;
 using Jellyfin.Plugin.ThemeForge.Engines.Tooling;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -43,6 +45,7 @@ public class ThemeForgeController : ControllerBase
     private readonly IThemePlacementEngine _placementEngine;
     private readonly IMediaIdentityResolver _identityResolver;
     private readonly IToolProvisioner _toolProvisioner;
+    private readonly ILibraryPolicyResolver _policyResolver;
     private readonly IThemeForgeLogger<ThemeForgeController> _logger;
 
     /// <summary>Initializes a new instance of the <see cref="ThemeForgeController"/> class.</summary>
@@ -52,6 +55,7 @@ public class ThemeForgeController : ControllerBase
     /// <param name="placementEngine">Theme file placement.</param>
     /// <param name="identityResolver">Item identity.</param>
     /// <param name="toolProvisioner">Tool discovery, for the status panel.</param>
+    /// <param name="policyResolver">Lists libraries and their overwrite rules.</param>
     /// <param name="logger">Logger.</param>
     public ThemeForgeController(
         IThemeOrchestrator orchestrator,
@@ -60,6 +64,7 @@ public class ThemeForgeController : ControllerBase
         IThemePlacementEngine placementEngine,
         IMediaIdentityResolver identityResolver,
         IToolProvisioner toolProvisioner,
+        ILibraryPolicyResolver policyResolver,
         IThemeForgeLogger<ThemeForgeController> logger)
     {
         _orchestrator = orchestrator;
@@ -68,6 +73,7 @@ public class ThemeForgeController : ControllerBase
         _placementEngine = placementEngine;
         _identityResolver = identityResolver;
         _toolProvisioner = toolProvisioner;
+        _policyResolver = policyResolver;
         _logger = logger;
     }
 
@@ -385,6 +391,37 @@ public class ThemeForgeController : ControllerBase
         await _index.FlushAsync(cancellationToken).ConfigureAwait(false);
         _logger.LogInformation("ThemeForge: bulk theme removal — {Summary}", result.Summary);
         return result;
+    }
+
+    /// <summary>Lists the server's movie and show libraries with their overwrite rules.</summary>
+    /// <returns>One entry per library ThemeForge can act on.</returns>
+    [HttpGet("Libraries")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public ActionResult<IReadOnlyList<LibrarySummary>> GetLibraries() =>
+        _policyResolver.ListLibraries(Plugin.Config).ToList();
+
+    /// <summary>Saves the per-library rules.</summary>
+    /// <param name="policies">The rules to store, one per library.</param>
+    /// <returns>What happened.</returns>
+    [HttpPost("Libraries")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public ActionResult<OperationResult> SaveLibraryPolicies([FromBody] List<LibraryThemePolicy> policies)
+    {
+        ArgumentNullException.ThrowIfNull(policies);
+
+        var configuration = Plugin.Config;
+
+        // Rules that say nothing are not stored, so a library reverting to the default leaves no
+        // stale row behind to puzzle over later.
+        configuration.LibraryPolicies = policies
+            .Where(policy => !string.IsNullOrWhiteSpace(policy.LibraryId))
+            .Where(policy => !policy.Enabled || policy.Overwrite != ThemeOverwritePolicy.UseDefault)
+            .ToList();
+
+        Plugin.Instance?.UpdateConfiguration(configuration);
+        _logger.LogInformation("ThemeForge: saved {Count} per-library rules.", configuration.LibraryPolicies.Count);
+
+        return new OperationResult(true, "Library rules saved.");
     }
 
     /// <summary>Returns the tail of ThemeForge's own log file.</summary>

@@ -154,8 +154,22 @@ public class PluginConfiguration : BasePluginConfiguration
 
     // ---- Placement -----------------------------------------------------------------
 
-    /// <summary>Gets or sets a value indicating whether an existing theme file may be replaced.</summary>
-    public bool OverwriteExisting { get; set; }
+    /// <summary>
+    /// Gets or sets what ThemeForge may do about an existing theme, for libraries with no rule
+    /// of their own.
+    /// </summary>
+    public ThemeOverwritePolicy DefaultOverwritePolicy { get; set; } = ThemeOverwritePolicy.Never;
+
+    /// <summary>
+    /// Gets or sets per-library overrides.
+    /// </summary>
+    /// <remarks>
+    /// Overwrite behaviour differs by library in practice: a shows library is usually worth
+    /// re-running as scoring improves, while a curated film library may hold themes chosen by
+    /// hand that should never be touched. One server-wide switch forces the more cautious
+    /// setting onto both.
+    /// </remarks>
+    public List<LibraryThemePolicy> LibraryPolicies { get; set; } = new();
 
     /// <summary>Gets or sets a value indicating whether a pre-existing theme is backed up before being replaced.</summary>
     public bool BackupExistingThemes { get; set; } = true;
@@ -186,9 +200,6 @@ public class PluginConfiguration : BasePluginConfiguration
 
     /// <summary>Gets or sets a value indicating whether series are processed.</summary>
     public bool ProcessSeries { get; set; } = true;
-
-    /// <summary>Gets or sets a value indicating whether items that already have a theme file are skipped.</summary>
-    public bool SkipItemsWithExistingTheme { get; set; } = true;
 
     // ---- Logging -------------------------------------------------------------------
 

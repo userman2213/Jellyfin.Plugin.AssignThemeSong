@@ -73,6 +73,27 @@ Once this branch is merged, change `claude/jellyfin-theme-song-plugin-e3ko2x` in
   missing. ThemeForge never edits Jellyfin's `index.html` on disk, so a server update cannot
   leave it in a broken state.
 
+## What happens to themes you already have
+
+By default, **nothing**. On its first pass ThemeForge notices that an item already has a
+`theme.*` file or a `theme-music/` folder, marks it `ManualOverride` in its index, and never
+looks at it again. Your existing themes are safe out of the box.
+
+If you want that changed, it is set **per library** on the **Libraries** tab, because shows and
+films usually want different answers:
+
+| Setting | What it does |
+|---|---|
+| **Never replace an existing theme** | Default. An item that has a theme is left alone permanently. |
+| **Replace themes ThemeForge chose** | Re-runs its own picks — useful after tuning the scoring — while leaving anything you placed by hand untouched. It tells the difference using the content hash recorded when it wrote the file. |
+| **Replace any theme, including ones I placed** | Overwrites everything. Use this to hand a whole library over to ThemeForge. |
+
+Each library can also be switched off entirely, so ThemeForge ignores it.
+
+Replaced themes are copied aside first as `theme.mp3.themeforge-backup-<timestamp>` unless you
+turn backups off, and a theme assigned by hand or locked from the Library tab is never touched by
+any of these settings.
+
 ## Logging
 
 ThemeForge keeps its own log at `<jellyfin-data>/themeforge/logs/themeforge.log`, viewable under
