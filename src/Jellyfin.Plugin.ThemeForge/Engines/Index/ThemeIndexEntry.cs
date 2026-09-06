@@ -32,6 +32,16 @@ public sealed class RejectedCandidateRecord
 /// </summary>
 public sealed class ThemeIndexEntry
 {
+    /// <summary>
+    /// The generation of the matcher currently in use.
+    /// </summary>
+    /// <remarks>
+    /// Raised whenever a change makes past decisions untrustworthy rather than merely different.
+    /// Generation 2 replaced a title matcher that scored any substring of a candidate's title as
+    /// a perfect match, so everything it chose has to be looked at again.
+    /// </remarks>
+    public const int CurrentMatcher = 2;
+
     /// <summary>Gets or sets the Jellyfin item id.</summary>
     public Guid ItemId { get; set; }
 
@@ -105,6 +115,25 @@ public sealed class ThemeIndexEntry
 
     /// <summary>Gets or sets when <see cref="LastSkipReason"/> was recorded.</summary>
     public DateTime? LastSkipUtc { get; set; }
+
+    /// <summary>
+    /// Gets or sets which generation of the matcher produced this decision.
+    /// </summary>
+    /// <remarks>
+    /// A recorded decision is only as good as the code that made it, and nothing in the record
+    /// itself says whether the matcher that produced it was the one that treated any substring of
+    /// a title as a perfect match. Stamping the generation makes that visible, so a library can be
+    /// told it is carrying decisions worth discarding rather than quietly keeping them for good.
+    /// Zero means it predates the stamp, which is to say it predates the rewrite.
+    /// </remarks>
+    public int DecidedByMatcher { get; set; }
+
+    /// <summary>
+    /// Gets a value indicating whether this decision was made by a matcher no longer in use.
+    /// </summary>
+    public bool IsStale =>
+        DecidedByMatcher < CurrentMatcher
+        && State is ThemeItemState.AutoAssigned or ThemeItemState.PendingReview or ThemeItemState.Failed;
 
     /// <summary>
     /// Gets or sets the music-versus-speech measure taken on the downloaded audio.

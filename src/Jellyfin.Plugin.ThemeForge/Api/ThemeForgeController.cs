@@ -94,6 +94,7 @@ public class ThemeForgeController : ControllerBase
             Assigned = entries.Count(e => e.State is ThemeItemState.AutoAssigned or ThemeItemState.Approved),
             Failed = entries.Count(e => e.State == ThemeItemState.Failed),
             Indexed = entries.Count,
+            StaleDecisions = entries.Count(e => e.IsStale),
         };
 
         var lastRun = _orchestrator.LastRun;
@@ -365,6 +366,24 @@ public class ThemeForgeController : ControllerBase
         }
 
         await _index.LoadAsync(cancellationToken).ConfigureAwait(false);
+        var result = await RemoveWrittenThemesAsync(cancellationToken).ConfigureAwait(false);
+
+        await _index.FlushAsync(cancellationToken).ConfigureAwait(false);
+        _logger.LogInformation("ThemeForge: bulk theme removal — {Summary}", result.Summary);
+        return result;
+    }
+
+    /// <summary>
+    /// Deletes the theme files ThemeForge wrote, leaving anything changed since alone.
+    /// </summary>
+    /// <remarks>
+    /// The index must already be loaded, and the caller flushes: this is shared between deleting
+    /// the themes and starting over, and neither wants the save happening twice.
+    /// </remarks>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>What was deleted, kept and already gone.</returns>
+    private async Task<ThemeRemovalResult> RemoveWrittenThemesAsync(CancellationToken cancellationToken)
+    {
         var result = new ThemeRemovalResult();
 
         foreach (var entry in _index.All())
@@ -409,8 +428,66 @@ public class ThemeForgeController : ControllerBase
             }
         }
 
+        return result;
+    }
+
+    /// <summary>
+    /// Throws away everything ThemeForge has decided, so the library is looked at again from
+    /// nothing.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Needed because a recorded decision is only as good as the code that made it. Decisions
+    /// taken by an earlier version of the matcher are not merely stale — several of the states
+    /// they are recorded in, such as "rejected" or "locked", are treated as human judgements and
+    /// would never be revisited. Clearing the file is the only way a library that was scored
+    /// badly gets scored again.
+    /// </para>
+    /// <para>
+    /// Deleting the theme files is separate and optional. Each one is checked against the
+    /// contents recorded when it was written, so anything replaced by hand since is kept: a
+    /// fresh start has no business destroying a deliberate choice.
+    /// </para>
+    /// </remarks>
+    /// <param name="confirm">Must be true. Present so this cannot be triggered by accident.</param>
+    /// <param name="deleteThemes">Whether to also delete the theme files ThemeForge wrote.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>What was cleared.</returns>
+    [HttpPost("Reset")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<ActionResult<ResetResult>> Reset(
+        [FromQuery] bool confirm,
+        [FromQuery] bool deleteThemes,
+        CancellationToken cancellationToken)
+    {
+        if (!confirm)
+        {
+            return BadRequest("This discards every decision ThemeForge has recorded. Pass confirm=true to proceed.");
+        }
+
+        await _index.LoadAsync(cancellationToken).ConfigureAwait(false);
+        var result = new ResetResult();
+
+        if (deleteThemes)
+        {
+            var removal = await RemoveWrittenThemesAsync(cancellationToken).ConfigureAwait(false);
+            result.ThemesDeleted = removal.Deleted;
+            result.ThemesKept = removal.SkippedModified;
+        }
+
+        foreach (var entry in _index.All().ToList())
+        {
+            _index.Remove(entry.ItemId);
+            result.DecisionsCleared++;
+        }
+
         await _index.FlushAsync(cancellationToken).ConfigureAwait(false);
-        _logger.LogInformation("ThemeForge: bulk theme removal — {Summary}", result.Summary);
+
+        result.Summary = deleteThemes
+            ? $"Deleted {result.ThemesDeleted} theme files, kept {result.ThemesKept} you had changed, and discarded {result.DecisionsCleared} recorded decisions."
+            : $"Discarded {result.DecisionsCleared} recorded decisions. Theme files were left where they are.";
+
+        _logger.LogInformation("ThemeForge: reset — {Summary}", result.Summary);
         return result;
     }
 

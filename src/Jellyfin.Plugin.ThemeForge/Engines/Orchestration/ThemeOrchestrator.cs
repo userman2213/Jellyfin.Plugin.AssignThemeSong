@@ -764,6 +764,8 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
     /// </summary>
     private static void RecordCandidates(ThemeIndexEntry entry, IReadOnlyList<ScoreResult> ranked, ThemeDecision decision)
     {
+        entry.DecidedByMatcher = ThemeIndexEntry.CurrentMatcher;
+
         var best = decision.Best;
         if (best is not null)
         {

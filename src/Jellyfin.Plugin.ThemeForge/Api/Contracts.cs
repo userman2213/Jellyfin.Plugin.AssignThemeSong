@@ -150,6 +150,16 @@ public sealed class StatusDto
     /// did nothing.
     /// </remarks>
     public IReadOnlyList<string> ConfigurationProblems { get; set; } = Array.Empty<string>();
+
+    /// <summary>
+    /// Gets or sets how many recorded decisions were made by a matcher no longer in use.
+    /// </summary>
+    /// <remarks>
+    /// Surfaced rather than cleared automatically. Throwing away someone's whole history on an
+    /// upgrade is not a decision a plugin should make for them, but leaving it invisible means a
+    /// library carries assignments from a matcher that is gone and nothing ever says so.
+    /// </remarks>
+    public int StaleDecisions { get; set; }
 }
 
 /// <summary>A request to set an item's theme from a specific URL.</summary>
@@ -163,6 +173,22 @@ public sealed class AssignRequest
 /// <param name="Success">Whether it worked.</param>
 /// <param name="Message">What to tell the user.</param>
 public sealed record OperationResult(bool Success, string Message);
+
+/// <summary>What a fresh start actually did.</summary>
+public sealed class ResetResult
+{
+    /// <summary>Gets or sets how many theme files were deleted.</summary>
+    public int ThemesDeleted { get; set; }
+
+    /// <summary>Gets or sets how many theme files were left alone because they had been changed by hand.</summary>
+    public int ThemesKept { get; set; }
+
+    /// <summary>Gets or sets how many recorded decisions were discarded.</summary>
+    public int DecisionsCleared { get; set; }
+
+    /// <summary>Gets or sets a sentence describing the outcome.</summary>
+    public string Summary { get; set; } = string.Empty;
+}
 
 /// <summary>The outcome of removing every theme ThemeForge wrote.</summary>
 public sealed class ThemeRemovalResult

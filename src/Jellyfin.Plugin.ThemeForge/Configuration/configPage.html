@@ -376,6 +376,24 @@
                         leaves your theme files where they are.
                     </div>
                     <button is="emby-button" type="button" id="tfRemoveAll" class="raised block"><span>Remove all ThemeForge themes</span></button>
+
+                    <h3 class="checkboxListLabel" style="color:#e8a33d;margin-top:2em;">Starting over</h3>
+                    <div class="fieldDescription" style="margin-bottom:1em;">
+                        Throws away every decision ThemeForge has recorded, so your library is looked at again
+                        from nothing. Worth doing after an upgrade that changes how matches are chosen: a
+                        recorded decision is only as good as the code that made it, and several of the states
+                        they are kept in &mdash; rejected, locked &mdash; are treated as your judgement and
+                        would never be revisited on their own.
+                        <br /><br />
+                        Ticking the box also deletes the theme files ThemeForge wrote. Anything you have
+                        replaced by hand since is kept either way.
+                    </div>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="tfResetThemes" />
+                        <span>Also delete the theme files ThemeForge wrote</span>
+                    </label>
+                    <br />
+                    <button is="emby-button" type="button" id="tfReset" class="raised block"><span>Start over</span></button>
                 </div>
             </div>
 
@@ -461,6 +479,12 @@
                     lines.push('ffmpeg: ' + esc(status.FfmpegPath || 'not resolved'));
                     if (status.ToolProblem) {
                         lines.push('<span style="color:#ff5f56;">Tooling problem: ' + esc(status.ToolProblem) + '</span>');
+                    }
+                    if (status.StaleDecisions > 0) {
+                        lines.push('<span style="color:#e8a33d;">' + status.StaleDecisions +
+                            ' assignments and queued candidates were chosen by an older matcher. ' +
+                            'They are kept until you say otherwise &mdash; "Start over", at the bottom of ' +
+                            'Settings, discards them so your library is looked at again.</span>');
                     }
                     (status.ConfigurationProblems || []).forEach(function (problem) {
                         lines.push('<span style="color:#e0a030;">Settings: ' + esc(problem) +
@@ -604,6 +628,29 @@
                         message += '\n\nCould not delete:\n' + result.Failures.join('\n');
                     }
                     Dashboard.alert(message);
+                }, function () {
+                    Dashboard.hideLoadingMsg();
+                    Dashboard.alert('That did not work. Check the log.');
+                });
+            });
+
+            el('tfReset').addEventListener('click', function () {
+                var alsoThemes = el('tfResetThemes').checked;
+                var question = 'Throw away every decision ThemeForge has recorded?\n\n' +
+                               (alsoThemes
+                                   ? 'The theme files ThemeForge wrote will also be deleted. Themes you replaced by hand are kept.\n\n'
+                                   : 'Theme files stay where they are.\n\n') +
+                               'This cannot be undone.';
+
+                if (!window.confirm(question)) {
+                    return;
+                }
+
+                Dashboard.showLoadingMsg();
+                api('POST', 'Reset?confirm=true&deleteThemes=' + (alsoThemes ? 'true' : 'false')).then(function (result) {
+                    Dashboard.hideLoadingMsg();
+                    Dashboard.alert(result.Summary);
+                    loadStatus();
                 }, function () {
                     Dashboard.hideLoadingMsg();
                     Dashboard.alert('That did not work. Check the log.');

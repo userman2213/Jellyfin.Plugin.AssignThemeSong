@@ -189,3 +189,50 @@ public class ThemeIndexTests : IDisposable
         await Task.CompletedTask;
     }
 }
+
+
+/// <summary>
+/// Covers the stamp that says which matcher produced a decision.
+/// </summary>
+/// <remarks>
+/// A decision carries no evidence of the code that made it, so an upgrade that changes how
+/// matches are chosen leaves a library full of records that look exactly as trustworthy as new
+/// ones. The stamp is what lets the plugin say "these came from the old matcher" instead of
+/// keeping them silently.
+/// </remarks>
+public class MatcherGenerationTests
+{
+    private static ThemeIndexEntry Entry(ThemeItemState state, int matcher) => new()
+    {
+        ItemId = System.Guid.NewGuid(),
+        Label = "Something",
+        State = state,
+        DecidedByMatcher = matcher,
+    };
+
+    [Theory]
+    [InlineData(ThemeItemState.AutoAssigned)]
+    [InlineData(ThemeItemState.PendingReview)]
+    [InlineData(ThemeItemState.Failed)]
+    public void ADecisionFromAnOlderMatcherIsStale(ThemeItemState state) =>
+        Assert.True(Entry(state, 0).IsStale);
+
+    [Theory]
+    [InlineData(ThemeItemState.AutoAssigned)]
+    [InlineData(ThemeItemState.PendingReview)]
+    [InlineData(ThemeItemState.Failed)]
+    public void ADecisionFromTheCurrentMatcherIsNot(ThemeItemState state) =>
+        Assert.False(Entry(state, ThemeIndexEntry.CurrentMatcher).IsStale);
+
+    [Theory]
+    [InlineData(ThemeItemState.Locked)]
+    [InlineData(ThemeItemState.Rejected)]
+    [InlineData(ThemeItemState.Approved)]
+    [InlineData(ThemeItemState.ManualOverride)]
+    [InlineData(ThemeItemState.Unprocessed)]
+    public void AHumanDecisionIsNeverStale(ThemeItemState state)
+    {
+        // A person rejecting a candidate is still right about that candidate, whatever chose it.
+        Assert.False(Entry(state, 0).IsStale);
+    }
+}
