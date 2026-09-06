@@ -154,6 +154,11 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         {
             await _index.LoadAsync(cancellationToken).ConfigureAwait(false);
 
+            // Stated up front, every run: the rule the pipeline will actually apply to each
+            // library, and any rule stored against a library that no longer exists. A settings
+            // page can only show what was typed into it; this shows what the engine resolved.
+            _policyResolver.LogEffectiveRules(configuration);
+
             var items = GetLibraryItems(configuration);
             report.Considered = items.Count;
             _logger.LogInformation(
@@ -245,9 +250,18 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         var skipReason = ShouldSkip(item, entry, configuration, policy);
         if (skipReason is not null)
         {
+            // Recorded rather than only logged: "why was this skipped" is the first question asked
+            // when a settings change appears to do nothing, and the log is not where people look.
+            entry.LastSkipReason = skipReason;
+            entry.LastSkipUtc = DateTime.UtcNow;
+            _index.Put(entry);
+
             _logger.LogDebug("ThemeForge: skipping \"{Item}\" — {Reason}.", identity.Label, skipReason);
             return ItemOutcome.Skipped;
         }
+
+        entry.LastSkipReason = null;
+        entry.LastSkipUtc = null;
 
         try
         {
@@ -587,14 +601,16 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
 
         // A theme file already on disk that ThemeForge did not write belongs to the user, and is
         // only replaced when the library is explicitly set to replace anything.
+        //
+        // This is deliberately NOT recorded as a state. It used to latch the item to
+        // ManualOverride, which is checked before the policy, so the item could never be
+        // reconsidered no matter how the library rule changed afterwards. Whether a theme file
+        // exists is a fact about right now; it is re-read on every run and judged against the
+        // policy in force at the time.
         if (policy.Overwrite != ThemeOverwritePolicy.ReplaceAny
-            && entry.State == ThemeItemState.Unprocessed
             && _placementEngine.HasExistingTheme(item, configuration))
         {
-            entry.State = ThemeItemState.ManualOverride;
-            entry.LastError = null;
-            _index.Put(entry);
-            return "it already has a theme that ThemeForge did not write";
+            return "it already has a theme that ThemeForge did not write, and this library is not set to replace those";
         }
 
         return null;

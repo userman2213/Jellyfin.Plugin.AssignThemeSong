@@ -448,6 +448,12 @@ public class ThemeForgeController : ControllerBase
         _policyResolver.ListLibraries(Plugin.Config).ToList();
 
     /// <summary>Saves the per-library rules.</summary>
+    /// <remarks>
+    /// The saved configuration is read back and compared against what was asked for, and the
+    /// answer describes what is actually stored. "Saved" reported from the request body proves
+    /// only that the request arrived; the user's report of a rule that would not stay saved is
+    /// exactly the case that message cannot distinguish from success.
+    /// </remarks>
     /// <param name="policies">The rules to store, one per library.</param>
     /// <returns>What happened.</returns>
     [HttpPost("Libraries")]
@@ -460,15 +466,96 @@ public class ThemeForgeController : ControllerBase
 
         // Rules that say nothing are not stored, so a library reverting to the default leaves no
         // stale row behind to puzzle over later.
-        configuration.LibraryPolicies = policies
-            .Where(policy => !string.IsNullOrWhiteSpace(policy.LibraryId))
+        var meaningful = policies
             .Where(policy => !policy.Enabled || policy.Overwrite != ThemeOverwritePolicy.UseDefault)
             .ToList();
 
-        Plugin.Instance?.UpdateConfiguration(configuration);
-        _logger.LogInformation("ThemeForge: saved {Count} per-library rules.", configuration.LibraryPolicies.Count);
+        // A rule whose library id is missing or unparseable can never match an item, so storing
+        // it would produce a settings page that shows the rule and an engine that ignores it.
+        // Dropping it silently is what made this failure invisible; it is now an error.
+        var unusable = meaningful
+            .Where(policy => LibraryPolicyResolver.ParseId(policy.LibraryId) == Guid.Empty)
+            .ToList();
 
-        return new OperationResult(true, "Library rules saved.");
+        if (unusable.Count > 0)
+        {
+            var names = string.Join(", ", unusable.Select(rule =>
+                string.IsNullOrWhiteSpace(rule.LibraryName) ? "(unnamed)" : rule.LibraryName));
+
+            _logger.LogError(
+                "ThemeForge: refused to save rules for {Names} because Jellyfin reported no id for those libraries.",
+                names);
+
+            return new OperationResult(
+                false,
+                $"Jellyfin did not report an id for {names}, so a rule saved against it could never be applied. "
+                + "Nothing was saved. Reload the page and try again.");
+        }
+
+        var wanted = meaningful
+            .Select(policy => new LibraryThemePolicy
+            {
+                // Stored in one canonical form so a value read back compares equal to the id the
+                // resolver produces, whatever form the browser sent.
+                LibraryId = LibraryPolicyResolver.CanonicalId(LibraryPolicyResolver.ParseId(policy.LibraryId)),
+                LibraryName = policy.LibraryName,
+                Enabled = policy.Enabled,
+                Overwrite = policy.Overwrite,
+            })
+            .ToList();
+
+        configuration.LibraryPolicies = wanted;
+        Plugin.Instance?.UpdateConfiguration(configuration);
+
+        // Read back from the file Jellyfin wrote, not from the object just handed to it. The
+        // in-memory configuration is the same instance that was mutated, so checking it would
+        // prove nothing; only what reached the disk survives a restart.
+        var persisted = Plugin.Instance?.ReadPersistedConfiguration();
+        if (persisted is null)
+        {
+            _logger.LogError("ThemeForge: the library rules could not be read back after saving.");
+            return new OperationResult(
+                false,
+                "The rules were applied for this session but could not be read back from disk, so they may not survive a restart. Check the server log.");
+        }
+
+        var stored = persisted.LibraryPolicies ?? new List<LibraryThemePolicy>();
+        var missing = wanted
+            .Where(want => !stored.Any(have =>
+                LibraryPolicyResolver.ParseId(have.LibraryId) == LibraryPolicyResolver.ParseId(want.LibraryId)
+                && have.Enabled == want.Enabled
+                && have.Overwrite == want.Overwrite))
+            .ToList();
+
+        if (missing.Count > 0)
+        {
+            _logger.LogError(
+                "ThemeForge: {Count} of {Total} library rules did not survive being written to {Path}.",
+                missing.Count,
+                wanted.Count,
+                Plugin.Instance?.ConfigurationFilePath);
+
+            return new OperationResult(
+                false,
+                $"{missing.Count} of {wanted.Count} rules did not persist: {string.Join(", ", missing.Select(rule => rule.LibraryName))}. "
+                + "Jellyfin may not be able to write its plugin configuration directory.");
+        }
+
+        _logger.LogInformation("ThemeForge: saved and verified {Count} per-library rules.", stored.Count);
+
+        var audit = _policyResolver.Audit(Plugin.Config);
+        foreach (var problem in audit.Problems)
+        {
+            _logger.LogWarning("ThemeForge: {Problem}", problem);
+        }
+
+        return new OperationResult(
+            true,
+            audit.Problems.Count == 0
+                ? (stored.Count == 0
+                    ? "Every library now follows the server-wide default."
+                    : $"{stored.Count} library rules saved and verified.")
+                : $"Saved, but: {string.Join(" ", audit.Problems)}");
     }
 
     /// <summary>Returns the tail of ThemeForge's own log file.</summary>

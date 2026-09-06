@@ -166,7 +166,16 @@ public sealed class JsonThemeIndex : IThemeIndex, IDisposable
                 _entries[entry.ItemId] = entry;
             }
 
+            var repaired = RepairScannerLatches();
             _logger.LogInformation("ThemeForge: loaded {Count} index entries.", _entries.Count);
+
+            if (repaired > 0)
+            {
+                _logger.LogInformation(
+                    "ThemeForge: released {Count} items that an earlier version had marked as manually overridden merely because a theme file was present. They will be reconsidered against the current library rules.",
+                    repaired);
+                MarkDirty();
+            }
         }
         catch (Exception ex) when (ex is JsonException or IOException)
         {
@@ -242,6 +251,37 @@ public sealed class JsonThemeIndex : IThemeIndex, IDisposable
     }
 
     private void MarkDirty() => Interlocked.Exchange(ref _dirty, 1);
+
+    /// <summary>
+    /// Undoes the state an earlier version wrote when it merely observed an existing theme file.
+    /// </summary>
+    /// <remarks>
+    /// That version set <see cref="ThemeItemState.ManualOverride"/> on any item that already had a
+    /// theme, which is checked before the library's overwrite policy and so made the policy
+    /// permanently unreachable for those items. A genuine manual assignment always records a
+    /// <see cref="ThemeIndexEntry.ThemePath"/>; the latch never did, which is what tells them
+    /// apart. Everything else about the entry is preserved.
+    /// </remarks>
+    /// <returns>How many entries were released.</returns>
+    private int RepairScannerLatches()
+    {
+        var repaired = 0;
+
+        foreach (var entry in _entries.Values)
+        {
+            if (entry.State != ThemeItemState.ManualOverride || entry.ThemePath is not null)
+            {
+                continue;
+            }
+
+            entry.State = ThemeItemState.Unprocessed;
+            entry.LastSkipReason = null;
+            entry.LastSkipUtc = null;
+            repaired++;
+        }
+
+        return repaired;
+    }
 
     /// <summary>Keeps a corrupt index aside so it can be inspected rather than silently lost.</summary>
     private void TryPreserveCorruptIndex(string path)

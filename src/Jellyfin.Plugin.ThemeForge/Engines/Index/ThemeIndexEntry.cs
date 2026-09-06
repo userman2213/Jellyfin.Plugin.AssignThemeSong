@@ -95,10 +95,36 @@ public sealed class ThemeIndexEntry
     /// <summary>Gets or sets the earliest time a retry should be attempted.</summary>
     public DateTime? NextRetryUtc { get; set; }
 
+    /// <summary>Gets or sets why the last run left this item alone, for the diagnostics view.</summary>
+    /// <remarks>
+    /// The orchestrator computes this sentence anyway and previously discarded it outside the log.
+    /// Recording it is what lets a user see why an item was skipped without reading the log, which
+    /// is the only way to tell "the rule did not apply" from "the rule applied and said no".
+    /// </remarks>
+    public string? LastSkipReason { get; set; }
+
+    /// <summary>Gets or sets when <see cref="LastSkipReason"/> was recorded.</summary>
+    public DateTime? LastSkipUtc { get; set; }
+
     /// <summary>
-    /// Gets a value indicating whether an automated run may touch this item. A human decision
-    /// always outranks the pipeline.
+    /// Gets a value indicating whether an automated run may touch this item, because a person
+    /// decided it.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Deliberately narrow. This must only be true when a human really did act — assigned a theme
+    /// by hand, locked the item, or rejected every suggestion. It previously also became true when
+    /// the scanner merely <em>noticed</em> a theme file it had not written, latching the item to
+    /// <see cref="ThemeItemState.ManualOverride"/> permanently. Since this is tested before the
+    /// library's overwrite policy is consulted, that made the policy unreachable: changing a
+    /// library to "replace any theme" could never affect an item that had already been latched.
+    /// </para>
+    /// <para>
+    /// "A theme file exists on disk" is an observation about the world right now, not a decision,
+    /// and it is re-evaluated on every run against the current policy instead of being stored.
+    /// </para>
+    /// </remarks>
     public bool IsSettledByHuman =>
-        State is ThemeItemState.Locked or ThemeItemState.ManualOverride or ThemeItemState.Rejected;
+        State is ThemeItemState.Locked or ThemeItemState.Rejected
+        || (State == ThemeItemState.ManualOverride && ThemePath is not null);
 }

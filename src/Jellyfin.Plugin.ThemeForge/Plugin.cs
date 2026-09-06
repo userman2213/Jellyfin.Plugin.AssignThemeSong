@@ -105,6 +105,37 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     public static PluginConfiguration Config => Instance?.Configuration ?? new PluginConfiguration();
 
     /// <summary>
+    /// Reads the configuration back from the file Jellyfin wrote, bypassing the in-memory copy.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Config"/> returns the object the plugin is holding, which is the same object a
+    /// save was handed, so comparing a save against it proves only that assignment works. This
+    /// reads what is actually on disk, which is what survives a restart — so a save that never
+    /// reached the disk (a read-only configuration directory, a full disk, a property
+    /// <c>XmlSerializer</c> cannot round-trip) is reported at the moment it fails instead of
+    /// looking like success until the setting quietly reverts.
+    /// </remarks>
+    /// <returns>The configuration as stored, or <see langword="null"/> if it could not be read.</returns>
+    public PluginConfiguration? ReadPersistedConfiguration()
+    {
+        try
+        {
+            if (!File.Exists(ConfigurationFilePath))
+            {
+                return null;
+            }
+
+            return XmlSerializer.DeserializeFromFile(typeof(PluginConfiguration), ConfigurationFilePath)
+                as PluginConfiguration;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "ThemeForge: could not read the saved configuration back from {Path}.", ConfigurationFilePath);
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Removes everything ThemeForge has written outside the plugin folder, just before Jellyfin
     /// uninstalls it.
     /// </summary>

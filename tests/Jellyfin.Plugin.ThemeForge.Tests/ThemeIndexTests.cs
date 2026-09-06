@@ -155,13 +155,26 @@ public class ThemeIndexTests : IDisposable
 
     [Theory]
     [InlineData(ThemeItemState.Locked, true)]
-    [InlineData(ThemeItemState.ManualOverride, true)]
     [InlineData(ThemeItemState.Rejected, true)]
     [InlineData(ThemeItemState.AutoAssigned, false)]
     [InlineData(ThemeItemState.Failed, false)]
     [InlineData(ThemeItemState.Unprocessed, false)]
     public void HumanDecisionsAreRecognisedAsSettled(ThemeItemState state, bool expected) =>
         Assert.Equal(expected, Entry("X", state).IsSettledByHuman);
+
+    [Fact]
+    public void ManualOverrideCountsOnlyWhenAFileWasActuallyAssigned()
+    {
+        // ManualOverride without a recorded path is the footprint an older version left when the
+        // scanner merely noticed an existing theme. Treating that as a human decision is what made
+        // the library overwrite rule unreachable, so it must not count.
+        var latched = Entry("X", ThemeItemState.ManualOverride);
+        Assert.Null(latched.ThemePath);
+        Assert.False(latched.IsSettledByHuman);
+
+        latched.ThemePath = "/media/X/theme.mp3";
+        Assert.True(latched.IsSettledByHuman);
+    }
 
     [Fact]
     public async Task RemoveDeletesAnEntry()
