@@ -21,6 +21,16 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <summary>Gets or sets an explicit ffmpeg path. Empty means auto-detect, preferring Jellyfin's own build.</summary>
     public string FfmpegPath { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Gets or sets how old the managed yt-dlp may get before it is replaced automatically.
+    /// </summary>
+    /// <remarks>
+    /// A stale yt-dlp fails in a confusing way: searching and metadata keep working, and only the
+    /// media download returns HTTP 403, so it looks like a network or permissions problem rather
+    /// than an out-of-date tool. Zero disables the check.
+    /// </remarks>
+    public int MaxYtDlpAgeDays { get; set; } = 30;
+
     // ---- Discovery -----------------------------------------------------------------
 
     /// <summary>Gets or sets how many results to pull per search query.</summary>

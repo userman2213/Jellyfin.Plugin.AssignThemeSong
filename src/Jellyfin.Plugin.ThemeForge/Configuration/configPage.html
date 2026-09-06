@@ -40,6 +40,13 @@
                     <button is="emby-button" type="button" id="tfRefreshStatus" class="raised block">
                         <span>Refresh</span>
                     </button>
+                    <button is="emby-button" type="button" id="tfRetryFailed" class="raised block">
+                        <span>Retry failed items</span>
+                    </button>
+                    <div class="fieldDescription">
+                        Failures back off for hours before being retried. Use this after fixing whatever
+                        was breaking the run, so you do not have to wait it out.
+                    </div>
                 </div>
             </div>
 
@@ -390,6 +397,9 @@
                     if (status.ToolProblem) {
                         lines.push('<span style="color:#ff5f56;">Tooling problem: ' + esc(status.ToolProblem) + '</span>');
                     }
+                    if (status.ToolWarning) {
+                        lines.push('<span style="color:#e8a33d;">' + esc(status.ToolWarning) + '</span>');
+                    }
                     lines.push('Indexed: ' + status.Indexed +
                                ' &middot; assigned: ' + status.Assigned +
                                ' &middot; awaiting review: ' + status.PendingReview +
@@ -407,6 +417,18 @@
             }
 
             el('tfRefreshStatus').addEventListener('click', loadStatus);
+
+            el('tfRetryFailed').addEventListener('click', function () {
+                Dashboard.showLoadingMsg();
+                api('POST', 'RetryFailed').then(function (result) {
+                    Dashboard.hideLoadingMsg();
+                    Dashboard.alert(result.Message);
+                    loadStatus();
+                }, function () {
+                    Dashboard.hideLoadingMsg();
+                    Dashboard.alert('Could not clear the retry backoff.');
+                });
+            });
 
             // ------------------------------------------------------------------ log
             function loadLog() {

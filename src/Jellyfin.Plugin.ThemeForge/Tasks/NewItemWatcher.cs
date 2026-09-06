@@ -158,7 +158,8 @@ public sealed class NewItemWatcher : IHostedService, IDisposable
             return;
         }
 
-        var report = new RunReport();
+        var configuration = Plugin.Config.ShallowCopy();
+        var report = new RunReport { WasDryRun = configuration.DryRun };
         var processed = 0;
 
         while (_pending.TryDequeue(out var itemId))
@@ -171,7 +172,7 @@ public sealed class NewItemWatcher : IHostedService, IDisposable
                 continue;
             }
 
-            await _orchestrator.ProcessItemAsync(item, report, cancellationToken).ConfigureAwait(false);
+            await _orchestrator.ProcessItemAsync(item, report, configuration, cancellationToken).ConfigureAwait(false);
             processed++;
         }
 

@@ -91,6 +91,15 @@ public sealed class StatusDto
     /// <summary>Gets or sets a description of any tooling problem.</summary>
     public string? ToolProblem { get; set; }
 
+    /// <summary>
+    /// Gets or sets a warning when yt-dlp is old enough to be the cause of failing downloads.
+    /// </summary>
+    /// <remarks>
+    /// Worth its own field because the symptom points somewhere else entirely: search and
+    /// metadata keep working and only the download fails, with HTTP 403.
+    /// </remarks>
+    public string? ToolWarning { get; set; }
+
     /// <summary>Gets or sets how many items are awaiting review.</summary>
     public int PendingReview { get; set; }
 

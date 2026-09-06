@@ -113,6 +113,15 @@ public class ThemeForgeController : ControllerBase
             var tools = await _toolProvisioner.EnsureToolsAsync(cancellationToken).ConfigureAwait(false);
             status.YtDlpVersion = tools.YtDlpVersion;
             status.FfmpegPath = tools.Ffmpeg;
+
+            var configuration = Plugin.Config;
+            if (Engines.Tooling.YtDlpProvisioner.IsStale(tools.YtDlpVersion, configuration.MaxYtDlpAgeDays))
+            {
+                status.ToolWarning =
+                    $"yt-dlp {tools.YtDlpVersion} is more than {configuration.MaxYtDlpAgeDays} days old. "
+                    + "That is the usual cause of downloads failing with HTTP 403 while searching still works. "
+                    + "Run the \"Update yt-dlp\" scheduled task, or clear the yt-dlp path so the plugin manages its own copy.";
+            }
         }
         catch (Exception ex)
         {
@@ -391,6 +400,44 @@ public class ThemeForgeController : ControllerBase
         await _index.FlushAsync(cancellationToken).ConfigureAwait(false);
         _logger.LogInformation("ThemeForge: bulk theme removal — {Summary}", result.Summary);
         return result;
+    }
+
+    /// <summary>
+    /// Clears the retry backoff on failed items so the next run tries them again straight away.
+    /// </summary>
+    /// <remarks>
+    /// Failures back off exponentially, which is right when a title genuinely has no theme on
+    /// YouTube but wrong after fixing whatever was breaking the run. Without this, a run that
+    /// failed for an environmental reason — a stale yt-dlp, no network, a full disk — leaves
+    /// every affected item untouchable for hours or days after the cause is gone.
+    /// </remarks>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>How many items were released.</returns>
+    [HttpPost("RetryFailed")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<ActionResult<OperationResult>> RetryFailed(CancellationToken cancellationToken)
+    {
+        await _index.LoadAsync(cancellationToken).ConfigureAwait(false);
+
+        var released = 0;
+        foreach (var entry in _index.All().Where(e => e.State == ThemeItemState.Failed))
+        {
+            entry.State = ThemeItemState.Unprocessed;
+            entry.Attempts = 0;
+            entry.NextRetryUtc = null;
+            entry.LastError = null;
+            _index.Put(entry);
+            released++;
+        }
+
+        await _index.FlushAsync(cancellationToken).ConfigureAwait(false);
+        _logger.LogInformation("ThemeForge: cleared the retry backoff on {Count} failed items.", released);
+
+        return new OperationResult(
+            true,
+            released == 0
+                ? "No failed items to retry."
+                : $"{released} items will be tried again on the next run.");
     }
 
     /// <summary>Lists the server's movie and show libraries with their overwrite rules.</summary>

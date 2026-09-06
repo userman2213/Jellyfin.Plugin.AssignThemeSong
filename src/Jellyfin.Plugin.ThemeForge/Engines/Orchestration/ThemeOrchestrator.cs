@@ -34,9 +34,13 @@ public interface IThemeOrchestrator
     /// <summary>Processes a single item.</summary>
     /// <param name="item">The item.</param>
     /// <param name="report">Report to record the outcome in.</param>
+    /// <param name="configuration">
+    /// The settings to use. Passed in rather than read here so that every item in a run sees the
+    /// same configuration, even if it is edited while the run is going.
+    /// </param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>What happened to the item.</returns>
-    Task<ItemOutcome> ProcessItemAsync(BaseItem item, RunReport report, CancellationToken cancellationToken);
+    Task<ItemOutcome> ProcessItemAsync(BaseItem item, RunReport report, PluginConfiguration configuration, CancellationToken cancellationToken);
 
     /// <summary>Gets the most recent run's report, if there has been one.</summary>
     RunReport? LastRun { get; }
@@ -139,7 +143,10 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
             throw new InvalidOperationException("A ThemeForge run is already in progress.");
         }
 
-        var configuration = Plugin.Config;
+        // Taken once. Reading it per item meant a settings change mid-run applied to some items
+        // and not others, and the run's own report could contradict what actually happened --
+        // a dry run that reported writing nothing while items were being downloaded and assigned.
+        var configuration = Plugin.Config.ShallowCopy();
         var report = new RunReport { WasDryRun = configuration.DryRun };
         LastRun = report;
 
@@ -162,7 +169,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
                 await concurrency.WaitAsync(cancellationToken).ConfigureAwait(false);
                 try
                 {
-                    var outcome = await ProcessItemAsync(item, report, cancellationToken).ConfigureAwait(false);
+                    var outcome = await ProcessItemAsync(item, report, configuration, cancellationToken).ConfigureAwait(false);
                     lock (report)
                     {
                         report.Record(outcome);
@@ -211,12 +218,15 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
     }
 
     /// <inheritdoc />
-    public async Task<ItemOutcome> ProcessItemAsync(BaseItem item, RunReport report, CancellationToken cancellationToken)
+    public async Task<ItemOutcome> ProcessItemAsync(
+        BaseItem item,
+        RunReport report,
+        PluginConfiguration configuration,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(item);
         ArgumentNullException.ThrowIfNull(report);
-
-        var configuration = Plugin.Config;
+        ArgumentNullException.ThrowIfNull(configuration);
 
         var identity = _identityResolver.Resolve(item);
         if (identity is null)

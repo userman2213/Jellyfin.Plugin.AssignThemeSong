@@ -47,6 +47,33 @@ public class ToolProvisionerTests
         }
     }
 
+    [Theory]
+    // yt-dlp versions are release dates, so age reads straight off the version string.
+    [InlineData("2026.08.19", 30, "2026-09-06", false)]
+    [InlineData("2026.03.17", 30, "2026-09-06", true)]
+    [InlineData("2026.08.01", 30, "2026-09-06", true)]
+    [InlineData("2026.08.19.232109", 30, "2026-09-06", false)]
+    public void StalenessIsReadFromTheVersionDate(string version, int maxAgeDays, string today, bool expected)
+    {
+        var now = DateTime.ParseExact(today, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        Assert.Equal(expected, YtDlpProvisioner.IsStale(version, maxAgeDays, now));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("not-a-version")]
+    [InlineData("2026.08")]
+    public void AnUnreadableVersionIsNotTreatedAsStale(string? version)
+    {
+        // Guessing "stale" here would re-download yt-dlp on every single run.
+        Assert.False(YtDlpProvisioner.IsStale(version, 30));
+    }
+
+    [Fact]
+    public void TheCheckCanBeTurnedOff() =>
+        Assert.False(YtDlpProvisioner.IsStale("2020.01.01", 0));
+
     [NetworkFact]
     public async Task DownloadsYtDlpAndItRuns()
     {

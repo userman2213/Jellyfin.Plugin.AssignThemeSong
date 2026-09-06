@@ -1,6 +1,7 @@
 using Jellyfin.Plugin.ThemeForge.Logging;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Net.Http;
 using System.Runtime.InteropServices;
@@ -114,6 +115,8 @@ public sealed class YtDlpProvisioner : IToolProvisioner
                 ?? throw new InvalidOperationException(
                     $"yt-dlp was found at '{ytDlp}' but would not run. Check that the file is executable and not blocked.");
 
+            version = await RefreshIfStaleAsync(ytDlp, version, cancellationToken).ConfigureAwait(false);
+
             _cached = new ToolPaths(ytDlp, _ffmpegLocator.ResolveFfmpeg(), _ffmpegLocator.ResolveFfprobe(), version);
             _logger.LogInformation("ThemeForge: using yt-dlp {Version} at {Path}.", version, ytDlp);
             return _cached;
@@ -165,7 +168,9 @@ public sealed class YtDlpProvisioner : IToolProvisioner
 
     private async Task<string> ResolveYtDlpAsync(CancellationToken cancellationToken)
     {
-        var configured = Plugin.Config.YtDlpPath;
+        var configuration = Plugin.Config;
+        var configured = configuration.YtDlpPath;
+
         if (!string.IsNullOrWhiteSpace(configured))
         {
             if (File.Exists(configured))
@@ -177,28 +182,132 @@ public sealed class YtDlpProvisioner : IToolProvisioner
                 $"The configured yt-dlp path '{configured}' does not exist. Correct it in the ThemeForge settings, or clear it to let the plugin provision yt-dlp itself.");
         }
 
+        var provisioned = ProvisionedPath;
+
+        if (configuration.AutoProvisionYtDlp)
+        {
+            // The plugin's own copy is preferred over one found on PATH, for two reasons. A copy
+            // that came with a distribution or a container image is routinely months old, and
+            // YouTube stops serving media to older yt-dlp releases — searching keeps working
+            // while every download fails with HTTP 403. More importantly, the update task can
+            // only replace this copy: preferring PATH meant the task downloaded a current
+            // yt-dlp, reported success, and the stale one carried on being used.
+            if (!File.Exists(provisioned))
+            {
+                _logger.LogInformation("ThemeForge: downloading {Asset} into {Path}.", AssetName, provisioned);
+
+                try
+                {
+                    await DownloadAsync(provisioned, cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    var fallback = FindOnPath(OperatingSystem.IsWindows() ? "yt-dlp.exe" : "yt-dlp");
+                    if (fallback is null)
+                    {
+                        throw;
+                    }
+
+                    _logger.LogWarning(
+                        ex,
+                        "ThemeForge: could not download yt-dlp; falling back to {Path}. If downloads fail with HTTP 403, that copy is probably too old.",
+                        fallback);
+                    return fallback;
+                }
+            }
+
+            return provisioned;
+        }
+
         var onPath = FindOnPath(OperatingSystem.IsWindows() ? "yt-dlp.exe" : "yt-dlp");
         if (onPath is not null)
         {
-            _logger.LogDebug("ThemeForge: found yt-dlp on the PATH at {Path}.", onPath);
+            _logger.LogDebug("ThemeForge: using yt-dlp from the PATH at {Path}.", onPath);
             return onPath;
         }
 
-        var provisioned = ProvisionedPath;
         if (File.Exists(provisioned))
         {
             return provisioned;
         }
 
-        if (!Plugin.Config.AutoProvisionYtDlp)
+        throw new InvalidOperationException(
+            "yt-dlp was not found and automatic provisioning is disabled. Install yt-dlp, set its path in the ThemeForge settings, or re-enable automatic provisioning.");
+    }
+
+    /// <summary>
+    /// Reports whether a yt-dlp version is old enough to be a problem.
+    /// </summary>
+    /// <remarks>
+    /// yt-dlp versions are release dates, so age is readable straight off the version string.
+    /// This matters because a stale copy fails in a way that looks like something else entirely:
+    /// searching and metadata keep working, and only the media download returns HTTP 403.
+    /// </remarks>
+    /// <param name="version">The version yt-dlp reported, for example "2026.08.19".</param>
+    /// <param name="maxAgeDays">How old is acceptable.</param>
+    /// <param name="now">The current date, injectable for tests.</param>
+    /// <returns><c>true</c> when the release is older than <paramref name="maxAgeDays"/>.</returns>
+    public static bool IsStale(string? version, int maxAgeDays, DateTime? now = null)
+    {
+        if (string.IsNullOrWhiteSpace(version) || maxAgeDays <= 0)
         {
-            throw new InvalidOperationException(
-                "yt-dlp was not found and automatic provisioning is disabled. Install yt-dlp, set its path in the ThemeForge settings, or re-enable automatic provisioning.");
+            return false;
         }
 
-        _logger.LogInformation("ThemeForge: yt-dlp was not found; downloading {Asset} into {Path}.", AssetName, provisioned);
-        await DownloadAsync(provisioned, cancellationToken).ConfigureAwait(false);
-        return provisioned;
+        // Nightly builds carry a fourth component; only the date matters.
+        var parts = version.Trim().Split('.');
+        if (parts.Length < 3)
+        {
+            return false;
+        }
+
+        var date = string.Join('.', parts[0], parts[1], parts[2]);
+        if (!DateTime.TryParseExact(date, "yyyy.MM.dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var released))
+        {
+            return false;
+        }
+
+        return ((now ?? DateTime.UtcNow) - released).TotalDays > maxAgeDays;
+    }
+
+    /// <summary>
+    /// Replaces the managed copy when it has aged out, so a long-running server does not quietly
+    /// drift into the state where every download fails.
+    /// </summary>
+    private async Task<string> RefreshIfStaleAsync(string path, string version, CancellationToken cancellationToken)
+    {
+        var configuration = Plugin.Config;
+
+        if (!configuration.AutoProvisionYtDlp
+            || !string.IsNullOrWhiteSpace(configuration.YtDlpPath)
+            || !string.Equals(path, ProvisionedPath, StringComparison.Ordinal)
+            || !IsStale(version, configuration.MaxYtDlpAgeDays))
+        {
+            return version;
+        }
+
+        _logger.LogWarning(
+            "ThemeForge: yt-dlp {Version} is more than {Days} days old, which is the usual cause of downloads failing with HTTP 403. Fetching the current release.",
+            version,
+            configuration.MaxYtDlpAgeDays);
+
+        try
+        {
+            await DownloadAsync(path, cancellationToken).ConfigureAwait(false);
+            var updated = await GetVersionAsync(path, cancellationToken).ConfigureAwait(false);
+
+            if (updated is not null)
+            {
+                _logger.LogInformation("ThemeForge: yt-dlp refreshed to {Version}.", updated);
+                return updated;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "ThemeForge: could not refresh yt-dlp; continuing with {Version}.", version);
+        }
+
+        return version;
     }
 
     /// <summary>
