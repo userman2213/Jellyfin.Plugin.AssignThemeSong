@@ -1,7 +1,7 @@
 {
     "name": "ThemeForge",
     "guid": "bfb42f2f-93f8-4d6b-97e6-1750035c211f",
-    "version": "1.2.0.0",
+    "version": "2.0.0.0",
     "targetAbi": "10.11.0.0",
     "framework": "net9.0",
     "owner": "userman2213",
