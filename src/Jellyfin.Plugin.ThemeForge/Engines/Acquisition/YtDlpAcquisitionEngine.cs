@@ -4,12 +4,14 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.ThemeForge.Configuration;
 using Jellyfin.Plugin.ThemeForge.Engines.Discovery;
 using Jellyfin.Plugin.ThemeForge.Engines.Tooling;
+using MediaBrowser.Common.Net;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.ThemeForge.Engines.Acquisition;
@@ -42,10 +44,14 @@ public sealed class YtDlpAcquisitionEngine : IAcquisitionEngine
 {
     private static readonly TimeSpan DownloadTimeout = TimeSpan.FromMinutes(15);
 
+    /// <summary>A theme is a couple of megabytes; anything far larger is not one.</summary>
+    private const long MaxDirectDownloadBytes = 64L * 1024 * 1024;
+
     private readonly IToolProvisioner _toolProvisioner;
     private readonly IProcessRunner _processRunner;
     private readonly ILoudnessNormalizer _normalizer;
     private readonly IAudioProbe _probe;
+    private readonly IHttpClientFactory _httpClientFactory;
     private readonly IThemeForgeLogger<YtDlpAcquisitionEngine> _logger;
 
     /// <summary>Initializes a new instance of the <see cref="YtDlpAcquisitionEngine"/> class.</summary>
@@ -53,18 +59,21 @@ public sealed class YtDlpAcquisitionEngine : IAcquisitionEngine
     /// <param name="processRunner">Runs yt-dlp.</param>
     /// <param name="normalizer">Encodes the finished theme.</param>
     /// <param name="probe">Verifies the finished theme.</param>
+    /// <param name="httpClientFactory">Fetches candidates that are already audio files.</param>
     /// <param name="logger">Logger.</param>
     public YtDlpAcquisitionEngine(
         IToolProvisioner toolProvisioner,
         IProcessRunner processRunner,
         ILoudnessNormalizer normalizer,
         IAudioProbe probe,
+        IHttpClientFactory httpClientFactory,
         IThemeForgeLogger<YtDlpAcquisitionEngine> logger)
     {
         _toolProvisioner = toolProvisioner;
         _processRunner = processRunner;
         _normalizer = normalizer;
         _probe = probe;
+        _httpClientFactory = httpClientFactory;
         _logger = logger;
     }
 
@@ -83,7 +92,9 @@ public sealed class YtDlpAcquisitionEngine : IAcquisitionEngine
 
         try
         {
-            var downloaded = await DownloadAsync(candidate, workingDirectory, cancellationToken).ConfigureAwait(false);
+            var downloaded = candidate.IsDirectAudio
+                ? await FetchAsync(candidate, workingDirectory, cancellationToken).ConfigureAwait(false)
+                : await DownloadAsync(candidate, workingDirectory, cancellationToken).ConfigureAwait(false);
 
             var sourceProbe = await _probe.ProbeAsync(downloaded, cancellationToken).ConfigureAwait(false);
             if (!sourceProbe.IsValid)
@@ -179,6 +190,61 @@ public sealed class YtDlpAcquisitionEngine : IAcquisitionEngine
         return produced;
     }
 
+
+    /// <summary>
+    /// Fetches a candidate that is already an audio file.
+    /// </summary>
+    /// <remarks>
+    /// A catalogue that serves the audio itself has no page to extract from, so running yt-dlp
+    /// over it would only add a process launch and a dependency to a plain HTTP GET. The file
+    /// still goes through the same probe, normalisation and verification as everything else.
+    /// </remarks>
+    private async Task<string> FetchAsync(Candidate candidate, string workingDirectory, CancellationToken cancellationToken)
+    {
+        if (!Uri.TryCreate(candidate.Url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
+        {
+            throw new InvalidOperationException($"\"{candidate.Url}\" is not an https address");
+        }
+
+        var client = _httpClientFactory.CreateClient(NamedClient.Default);
+        using var response = await client
+            .GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"the source answered {(int)response.StatusCode} {response.ReasonPhrase}");
+        }
+
+        if (response.Content.Headers.ContentLength > MaxDirectDownloadBytes)
+        {
+            throw new InvalidOperationException(
+                $"the source offered {response.Content.Headers.ContentLength:N0} bytes, which is far too large for a theme");
+        }
+
+        var path = Path.Combine(workingDirectory, "source.mp3");
+
+        await using (var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false))
+        await using (var file = File.Create(path))
+        {
+            await stream.CopyToAsync(file, cancellationToken).ConfigureAwait(false);
+        }
+
+        var length = new FileInfo(path).Length;
+        if (length == 0)
+        {
+            throw new InvalidOperationException("the source returned an empty file");
+        }
+
+        if (length > MaxDirectDownloadBytes)
+        {
+            // Checked again after the fact: a chunked response has no length to check up front.
+            throw new InvalidOperationException($"the source returned {length:N0} bytes, which is far too large for a theme");
+        }
+
+        _logger.LogDebug("ThemeForge: fetched {Bytes:N0} bytes directly from {Url}.", length, candidate.Url);
+        return path;
+    }
 
     private void TryCleanUp(string directory)
     {

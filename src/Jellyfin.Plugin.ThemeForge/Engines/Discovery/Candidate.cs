@@ -55,6 +55,24 @@ public sealed record Candidate
     /// </summary>
     public bool IsHydrated { get; init; }
 
+    /// <summary>
+    /// Gets the name of the catalogue this came from when it was looked up by the item's own
+    /// database id rather than found by searching, or null when it came from a search.
+    /// </summary>
+    /// <remarks>
+    /// A catalogue keyed on the TVDB or TMDB id answers "the theme for this exact work", which
+    /// is a different and far stronger claim than "a video whose title looks right". Scoring such
+    /// an answer against a weighted sum of guesses could only make it worse, so it is assigned on
+    /// where it came from instead.
+    /// </remarks>
+    public string? Provenance { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether <see cref="Url"/> is an audio file rather than a page
+    /// something has to extract audio from.
+    /// </summary>
+    public bool IsDirectAudio { get; init; }
+
     /// <summary>Gets the title and description as one lower-cased haystack for keyword matching.</summary>
     public string SearchableText =>
         string.Join(' ', Title, Channel ?? string.Empty, Description ?? string.Empty, string.Join(' ', Tags))

@@ -47,6 +47,11 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<IMediaIdentityResolver, MediaIdentityResolver>();
         serviceCollection.AddSingleton<IQueryPlanner, QueryPlanner>();
         serviceCollection.AddSingleton<ICandidateSource, YtDlpCandidateSource>();
+
+        // Catalogues keyed on the item's own database id, asked before any searching. Registered
+        // as a collection, and each one decides for itself whether the user has enabled it.
+        serviceCollection.AddSingleton<IThemeProvenanceSource, ThemerrDbSource>();
+        serviceCollection.AddSingleton<IThemeProvenanceSource, PlexTvThemeSource>();
         serviceCollection.AddSingleton<IDecisionPolicy, DecisionPolicy>();
         serviceCollection.AddSingleton<IAudioProbe, AudioProbe>();
         serviceCollection.AddSingleton<ILoudnessNormalizer, LoudnessNormalizer>();

@@ -77,6 +77,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
     private readonly IMediaIdentityResolver _identityResolver;
     private readonly IQueryPlanner _queryPlanner;
     private readonly ICandidateSource _candidateSource;
+    private readonly IReadOnlyList<IThemeProvenanceSource> _provenanceSources;
     private readonly IScoringEngine _scoringEngine;
     private readonly IDecisionPolicy _decisionPolicy;
     private readonly IAcquisitionEngine _acquisitionEngine;
@@ -96,6 +97,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
     /// <param name="identityResolver">Resolves item identity.</param>
     /// <param name="queryPlanner">Plans the search ladder.</param>
     /// <param name="candidateSource">Finds candidates.</param>
+    /// <param name="provenanceSources">Catalogues that answer by the item's own database id.</param>
     /// <param name="scoringEngine">Ranks candidates.</param>
     /// <param name="decisionPolicy">Decides what to do with the best candidate.</param>
     /// <param name="acquisitionEngine">Downloads and normalises the chosen candidate.</param>
@@ -108,6 +110,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         IMediaIdentityResolver identityResolver,
         IQueryPlanner queryPlanner,
         ICandidateSource candidateSource,
+        IEnumerable<IThemeProvenanceSource> provenanceSources,
         IScoringEngine scoringEngine,
         IDecisionPolicy decisionPolicy,
         IAcquisitionEngine acquisitionEngine,
@@ -120,6 +123,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         _identityResolver = identityResolver;
         _queryPlanner = queryPlanner;
         _candidateSource = candidateSource;
+        _provenanceSources = provenanceSources.ToList();
         _scoringEngine = scoringEngine;
         _decisionPolicy = decisionPolicy;
         _acquisitionEngine = acquisitionEngine;
@@ -265,6 +269,22 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
 
         try
         {
+            // Asked first, and on a hit nothing else runs. A catalogue keyed on the item's own
+            // TVDB or TMDB id answers "the theme for this work"; a search answers "videos whose
+            // titles look right". Scoring the first against the second's yardstick could only
+            // make it worse, so a hit is applied on where it came from.
+            var known = await LookUpAsync(identity, configuration, cancellationToken).ConfigureAwait(false);
+            if (known is not null)
+            {
+                var certain = new ThemeDecision(
+                    DecisionOutcome.AutoAssign,
+                    Certain(known),
+                    $"listed in {known.Provenance} against this title's own database id");
+
+                RecordCandidates(entry, new[] { certain.Best! }, certain);
+                return await AssignAsync(item, identity, entry, certain, configuration, policy, report, cancellationToken).ConfigureAwait(false);
+            }
+
             var ranked = await SearchAndRankAsync(identity, configuration, cancellationToken).ConfigureAwait(false);
             var decision = _decisionPolicy.Decide(ranked, configuration);
 
@@ -412,6 +432,71 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
 
     /// <inheritdoc />
     public void Dispose() => _throttle.Dispose();
+
+    /// <summary>
+    /// Asks each enabled catalogue whether it holds the theme for this exact work.
+    /// </summary>
+    /// <remarks>
+    /// One request per catalogue per item, and only for items that carry the id the catalogue is
+    /// keyed on. A catalogue that is unreachable or has nothing returns nothing, and the search
+    /// ladder runs as it always did.
+    /// </remarks>
+    private async Task<Candidate?> LookUpAsync(
+        MediaIdentity identity,
+        PluginConfiguration configuration,
+        CancellationToken cancellationToken)
+    {
+        foreach (var source in _provenanceSources)
+        {
+            if (!source.IsEnabled(configuration))
+            {
+                continue;
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            Candidate? found;
+            try
+            {
+                found = await source.FindAsync(identity, configuration, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // A catalogue failing is not this item's failure: the search still runs.
+                _logger.LogWarning(ex, "ThemeForge: {Source} failed for \"{Item}\".", source.Name, identity.Label);
+                continue;
+            }
+
+            if (found is not null)
+            {
+                return found;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Wraps a catalogue answer as a full-marks result, so the index and the review queue can
+    /// describe it the same way they describe everything else.
+    /// </summary>
+    private static ScoreResult Certain(Candidate candidate) => new()
+    {
+        Candidate = candidate,
+        Total = 100,
+        Breakdown = new[]
+        {
+            new Signal(
+                "Provenance",
+                1,
+                100,
+                $"listed in {candidate.Provenance} against this title's own database id, so it was not scored"),
+        },
+    };
 
     /// <summary>
     /// Walks the search ladder, stopping as soon as a candidate is good enough to assign.

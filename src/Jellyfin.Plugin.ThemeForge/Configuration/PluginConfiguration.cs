@@ -40,6 +40,34 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </remarks>
     public int MaxYtDlpAgeDays { get; set; } = 30;
 
+    // ---- Catalogues ----------------------------------------------------------------
+
+    /// <summary>
+    /// Gets or sets a value indicating whether films are looked up in ThemerrDB by their TMDB id
+    /// before any searching is attempted.
+    /// </summary>
+    /// <remarks>
+    /// A community-curated index mapping a film's TMDB id to the video someone chose as its
+    /// theme. It supplies a link, not audio, so the download is unchanged — but the link was
+    /// picked by a person for that exact film, which no search can match. On by default: it costs
+    /// one request per film and removes the guesswork entirely when it has an answer.
+    /// </remarks>
+    public bool UseThemerrDb { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether series are looked up in Plex's television theme
+    /// archive by their TheTVDB id.
+    /// </summary>
+    /// <remarks>
+    /// Off by default, and deliberately so. The archive is keyed on the same id Jellyfin holds,
+    /// so a hit is certain in a way no search result is, and coverage is around 43% for American
+    /// series. But the files are hosted by Plex for Plex's own clients, and the fair-use rationale
+    /// Plex publishes for them — thirty-second clips served to their own software — is theirs and
+    /// does not extend to this plugin. Turning it on is the server owner's decision to make
+    /// knowingly.
+    /// </remarks>
+    public bool UsePlexThemeArchive { get; set; }
+
     // ---- Discovery -----------------------------------------------------------------
 
     /// <summary>Gets or sets how many results to pull per search query.</summary>

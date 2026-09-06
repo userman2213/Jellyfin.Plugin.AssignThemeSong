@@ -210,6 +210,32 @@
                         <input is="emby-input" type="number" id="FadeOutSeconds" min="0" max="30" step="0.5" label="Fade out (seconds)" />
                     </div>
 
+                    <h3 class="checkboxListLabel">Catalogues</h3>
+                    <p class="fieldDescription" style="margin-bottom:1em;">
+                        A catalogue is asked before any searching, using the item's own TMDB or TheTVDB id.
+                        It either has the theme for that exact title or it does not &mdash; there is nothing to
+                        score and nothing to get wrong &mdash; so a hit is used as it stands.
+                    </p>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="UseThemerrDb" />
+                        <span>Look films up in ThemerrDB by their TMDB id</span>
+                    </label>
+                    <div class="fieldDescription" style="margin:.25em 0 1em 0;">
+                        A community-curated index that maps a film to the video someone chose as its theme.
+                        It supplies a link, so the download is unchanged.
+                    </div>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="UsePlexThemeArchive" />
+                        <span>Look series up in Plex's television theme archive by their TheTVDB id</span>
+                    </label>
+                    <div class="fieldDescription" style="margin:.25em 0 1em 0;color:#e8a33d;">
+                        Off by default, and worth a moment's thought before turning on. Coverage is good
+                        &mdash; roughly 43% of American series &mdash; and a hit is certain in a way no search
+                        result is. But these files are hosted by Plex for Plex's own clients, and the fair-use
+                        rationale Plex publishes for them covers their software, not this plugin. Whether that
+                        is acceptable on your server is your decision, not ours to make for you.
+                    </div>
+
                     <h3 class="checkboxListLabel">Searching</h3>
                     <div class="inputContainer">
                         <input is="emby-input" type="number" id="SearchResultsPerQuery" min="1" max="50" step="1" label="Results per search" />
@@ -343,7 +369,7 @@
                 'AutoProvisionYtDlp', 'ProcessSeries', 'ProcessMovies',
                 'BackupExistingThemes', 'RequireDedicatedFolder', 'DryRun',
                 'EnableLoudnessNormalization', 'StopLadderOnConfidentHit', 'TrustTopicChannels',
-                'EnableFileLogging'
+                'EnableFileLogging', 'UseThemerrDb', 'UsePlexThemeArchive'
             ];
             var NUMBERS = [
                 'AutoAssignThreshold', 'ReviewThreshold', 'MinimumTitleSimilarity', 'AudioBitrate',
