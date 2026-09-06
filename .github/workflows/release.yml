@@ -40,19 +40,23 @@ jobs:
 
       - name: Build
         run: |
-          dotnet publish src/Jellyfin.Plugin.ThemeForge/Jellyfin.Plugin.ThemeForge.csproj \
-            -c Release -o publish \
+          dotnet build src/Jellyfin.Plugin.ThemeForge/Jellyfin.Plugin.ThemeForge.csproj \
+            -c Release \
             -p:ThemeForgeVersion=${{ steps.version.outputs.version }}
 
       - name: Test
         run: dotnet test Jellyfin.Plugin.ThemeForge.sln -c Release
 
+      # Packaged from the build output rather than a publish folder, so the released archive is
+      # byte-for-byte the same shape as a local build: the plugin assembly and its manifest,
+      # with nothing the Jellyfin host already provides.
       - name: Package
         id: package
         run: |
+          OUT=src/Jellyfin.Plugin.ThemeForge/bin/Release/net9.0
+          cp src/Jellyfin.Plugin.ThemeForge/images/icon.png "$OUT/"
           mkdir -p artifacts
-          cp src/Jellyfin.Plugin.ThemeForge/images/icon.png publish/ || true
-          ( cd publish && zip -r "../artifacts/themeforge_${{ steps.version.outputs.version }}.zip" . )
+          ( cd "$OUT" && zip -r "$GITHUB_WORKSPACE/artifacts/themeforge_${{ steps.version.outputs.version }}.zip" . )
           CHECKSUM=$(md5sum "artifacts/themeforge_${{ steps.version.outputs.version }}.zip" | cut -d' ' -f1)
           echo "checksum=$CHECKSUM" >> "$GITHUB_OUTPUT"
           echo "ThemeForge ${{ steps.version.outputs.version }} md5: $CHECKSUM"

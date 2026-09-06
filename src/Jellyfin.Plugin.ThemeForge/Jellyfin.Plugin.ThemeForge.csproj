@@ -10,13 +10,15 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Provided by the Jellyfin host at runtime; referenced for compilation only. -->
-    <PackageReference Include="Jellyfin.Controller" Version="10.11.0">
-      <PrivateAssets>All</PrivateAssets>
-    </PackageReference>
-    <PackageReference Include="Jellyfin.Model" Version="10.11.0">
-      <PrivateAssets>All</PrivateAssets>
-    </PackageReference>
+    <!--
+      Referenced for compilation only. ExcludeAssets="runtime" is what keeps these and their
+      transitive dependencies out of the plugin output: the Jellyfin host already has them
+      loaded, and shipping a second copy invites assembly-identity conflicts. Deleting them
+      after the fact from a hand-written list is not equivalent, because every Jellyfin release
+      can add a transitive package the list has never heard of.
+    -->
+    <PackageReference Include="Jellyfin.Controller" Version="10.11.0" PrivateAssets="all" ExcludeAssets="runtime" />
+    <PackageReference Include="Jellyfin.Model" Version="10.11.0" PrivateAssets="all" ExcludeAssets="runtime" />
   </ItemGroup>
 
   <ItemGroup>
@@ -29,32 +31,14 @@
     <InternalsVisibleTo Include="Jellyfin.Plugin.ThemeForge.Tests" />
   </ItemGroup>
 
-  <!--
-    Jellyfin loads the plugin into a process that already provides the framework and
-    host assemblies. Shipping our own copies causes assembly-identity conflicts, so
-    everything the host supplies is removed from the plugin output.
-  -->
-  <Target Name="RemoveHostProvidedAssemblies" AfterTargets="Build">
+  <!-- The build output is the plugin package, so keep it free of anything not needed. -->
+  <Target Name="TrimPluginOutput" AfterTargets="Build">
     <ItemGroup>
-      <HostProvided Include="$(OutputPath)Jellyfin.Controller.dll" />
-      <HostProvided Include="$(OutputPath)Jellyfin.Model.dll" />
-      <HostProvided Include="$(OutputPath)Jellyfin.Data.dll" />
-      <HostProvided Include="$(OutputPath)Jellyfin.Extensions.dll" />
-      <HostProvided Include="$(OutputPath)Jellyfin.Networking.dll" />
-      <HostProvided Include="$(OutputPath)Jellyfin.MediaEncoding.dll" />
-      <HostProvided Include="$(OutputPath)MediaBrowser.*.dll" />
-      <HostProvided Include="$(OutputPath)Emby.*.dll" />
-      <HostProvided Include="$(OutputPath)System.*.dll" />
-      <HostProvided Include="$(OutputPath)Microsoft.*.dll" />
-      <HostProvided Include="$(OutputPath)Newtonsoft.Json.dll" />
-      <HostProvided Include="$(OutputPath)ICU4N*.dll" />
-      <HostProvided Include="$(OutputPath)J2N.dll" />
-      <HostProvided Include="$(OutputPath)Diacritics.dll" />
-      <HostProvided Include="$(OutputPath)*.pdb" />
-      <HostProvided Include="$(OutputPath)*.xml" />
-      <HostProvided Include="$(OutputPath)*.runtimeconfig.json" />
+      <NotShipped Include="$(OutputPath)*.pdb" />
+      <NotShipped Include="$(OutputPath)*.xml" />
+      <NotShipped Include="$(OutputPath)*.runtimeconfig.json" />
     </ItemGroup>
-    <Delete Files="@(HostProvided)" />
+    <Delete Files="@(NotShipped)" />
   </Target>
 
 </Project>
