@@ -241,11 +241,30 @@
                     </p>
                     <label class="emby-checkbox-label">
                         <input is="emby-checkbox" type="checkbox" id="UseThemerrDb" />
-                        <span>Look films up in ThemerrDB by their TMDB id</span>
+                        <span>Look films, shows and collections up in ThemerrDB</span>
                     </label>
                     <div class="fieldDescription" style="margin:.25em 0 1em 0;">
-                        A community-curated index that maps a film to the video someone chose as its theme.
-                        It supplies a link, so the download is unchanged.
+                        A community-curated index that maps a work's TMDB id to the video someone chose as its
+                        theme &mdash; roughly 4400 films, 1300 shows and 140 film collections. Asked first for
+                        everything. A film with no theme of its own inherits its collection's, so Alien&sup3;
+                        gets the Alien Collection theme. It supplies a link, so the download is unchanged.
+                    </div>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="SyncThemerrDb" />
+                        <span>Keep a local copy of what ThemerrDB has, refreshed daily</span>
+                    </label>
+                    <div class="fieldDescription" style="margin:.25em 0 1em 0;">
+                        ThemerrDB publishes once a day at 12:00 UTC, and the scheduled task reads it an hour
+                        later. Without the local copy, every title in your library costs one request just to
+                        find out it is not in the database &mdash; and most are not. With it, a miss costs
+                        nothing. Turning this off does not disable ThemerrDB; it goes back to asking about
+                        each item directly.
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="ThemerrDbMaxAgeDays" min="1" max="30" step="1" label="Refresh before a run if the copy is older than (days)" />
+                        <div class="fieldDescription">
+                            The safety net for a server that was switched off when the task was due.
+                        </div>
                     </div>
                     <label class="emby-checkbox-label">
                         <input is="emby-checkbox" type="checkbox" id="UsePlexThemeArchive" />
@@ -410,7 +429,8 @@
                 'AutoProvisionYtDlp', 'ProcessSeries', 'ProcessMovies',
                 'BackupExistingThemes', 'RequireDedicatedFolder', 'DryRun',
                 'EnableLoudnessNormalization', 'StopLadderOnConfidentHit', 'TrustTopicChannels',
-                'EnableFileLogging', 'UseThemerrDb', 'UsePlexThemeArchive', 'RejectNonMusic'
+                'EnableFileLogging', 'UseThemerrDb', 'UsePlexThemeArchive', 'RejectNonMusic',
+                'SyncThemerrDb'
             ];
             var NUMBERS = [
                 'AutoAssignThreshold', 'ReviewThreshold', 'MinimumTitleSimilarity', 'AudioBitrate',
@@ -419,7 +439,7 @@
                 'MovieIdealMinSeconds', 'MovieIdealMaxSeconds', 'HardMinSeconds', 'HardMaxSeconds',
                 'MaxConcurrency', 'RequestDelayMs', 'MaxAttempts',
                 'MaxLogFileSizeMb', 'MaxLogFiles', 'FileLogLevel',
-                'MusicThreshold', 'SpeechThreshold'
+                'MusicThreshold', 'SpeechThreshold', 'ThemerrDbMaxAgeDays'
             ];
             var TEXTS = ['YtDlpPath', 'FfmpegPath'];
             var LISTS = [
@@ -479,6 +499,16 @@
                     lines.push('ffmpeg: ' + esc(status.FfmpegPath || 'not resolved'));
                     if (status.ToolProblem) {
                         lines.push('<span style="color:#ff5f56;">Tooling problem: ' + esc(status.ToolProblem) + '</span>');
+                    }
+                    var themerr = status.Themerr || {};
+                    if (themerr.UpdatedUtc) {
+                        lines.push('ThemerrDB: ' + themerr.Movies + ' films, ' + themerr.Shows + ' shows, ' +
+                            themerr.Collections + ' collections &mdash; read ' +
+                            (themerr.AgeHours < 1 ? 'just now' : Math.round(themerr.AgeHours) + ' hours ago'));
+                    } else {
+                        lines.push('<span style="color:#e8a33d;">ThemerrDB: not read yet. ' +
+                            'Run the "Update the ThemerrDB catalogue" scheduled task, or start a scan and it ' +
+                            'will read it first.</span>');
                     }
                     if (status.StaleDecisions > 0) {
                         lines.push('<span style="color:#e8a33d;">' + status.StaleDecisions +
@@ -819,6 +849,12 @@
                         'Settings file: ' + esc(d.ConfigurationFilePath) +
                         (d.ConfigurationReadable ? '' : ' <span style="color:#ff5f56;">(could not be read)</span>') + '<br />' +
                         'Last written: ' + (d.ConfigurationSavedUtc ? esc(new Date(d.ConfigurationSavedUtc).toLocaleString()) : 'never') + '<br />' +
+                        'ThemerrDB copy: ' + esc(d.ThemerrPath) +
+                        (d.Themerr && d.Themerr.UpdatedUtc
+                            ? ' &mdash; ' + d.Themerr.Movies + ' films, ' + d.Themerr.Shows + ' shows, ' +
+                              d.Themerr.Collections + ' collections, read ' +
+                              esc(new Date(d.Themerr.UpdatedUtc).toLocaleString())
+                            : ' <span style="color:#e8a33d;">(never read)</span>') + '<br />' +
                         'Index: ' + esc(d.IndexPath) + '<br />' +
                         'Log: ' + esc(d.LogPath) + '<br />' +
                         'Data: ' + esc(d.DataPath) +

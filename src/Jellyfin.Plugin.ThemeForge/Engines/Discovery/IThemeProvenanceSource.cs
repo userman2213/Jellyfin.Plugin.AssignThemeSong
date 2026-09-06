@@ -26,6 +26,16 @@ public interface IThemeProvenanceSource
     /// <summary>Gets a short name, shown wherever the theme's origin is reported.</summary>
     string Name { get; }
 
+    /// <summary>
+    /// Gets the position in the queue of catalogues, lowest asked first.
+    /// </summary>
+    /// <remarks>
+    /// Stated rather than left to the order services happen to be registered in. Which catalogue
+    /// answers first decides which theme a library gets, and that is too important to be a
+    /// side effect of the order of lines in a wiring file.
+    /// </remarks>
+    int Order { get; }
+
     /// <summary>Reports whether the user has turned this source on.</summary>
     /// <param name="configuration">The active settings.</param>
     /// <returns><see langword="true"/> when it should be consulted.</returns>

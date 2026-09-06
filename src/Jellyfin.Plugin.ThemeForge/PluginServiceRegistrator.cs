@@ -1,4 +1,5 @@
 using Jellyfin.Plugin.ThemeForge.Engines.Acquisition;
+using Jellyfin.Plugin.ThemeForge.Engines.Catalogue;
 using Jellyfin.Plugin.ThemeForge.Engines.Decision;
 using Jellyfin.Plugin.ThemeForge.Engines.Discovery;
 using Jellyfin.Plugin.ThemeForge.Engines.Identity;
@@ -48,8 +49,10 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<IQueryPlanner, QueryPlanner>();
         serviceCollection.AddSingleton<ICandidateSource, YtDlpCandidateSource>();
 
-        // Catalogues keyed on the item's own database id, asked before any searching. Registered
-        // as a collection, and each one decides for itself whether the user has enabled it.
+        // Catalogues keyed on the item's own database id, asked before any searching. Each one
+        // decides for itself whether the user has enabled it, and the order they are asked in is
+        // their own Order property rather than the order of these lines.
+        serviceCollection.AddSingleton<IThemerrDbCatalogue, ThemerrDbCatalogue>();
         serviceCollection.AddSingleton<IThemeProvenanceSource, ThemerrDbSource>();
         serviceCollection.AddSingleton<IThemeProvenanceSource, PlexTvThemeSource>();
         serviceCollection.AddSingleton<IDecisionPolicy, DecisionPolicy>();
@@ -79,6 +82,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         // Scheduled work and library events
         serviceCollection.AddSingleton<IScheduledTask, DiscoverThemesTask>();
         serviceCollection.AddSingleton<IScheduledTask, UpdateYtDlpTask>();
+        serviceCollection.AddSingleton<IScheduledTask, UpdateThemerrDbTask>();
         serviceCollection.AddHostedService<NewItemWatcher>();
     }
 }

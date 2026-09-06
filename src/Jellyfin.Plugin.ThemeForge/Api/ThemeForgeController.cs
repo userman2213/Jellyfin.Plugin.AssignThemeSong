@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.ThemeForge.Configuration;
 using Jellyfin.Plugin.ThemeForge.Engines.Acquisition;
+using Jellyfin.Plugin.ThemeForge.Engines.Catalogue;
 using Jellyfin.Plugin.ThemeForge.Engines.Identity;
 using Jellyfin.Plugin.ThemeForge.Engines.Index;
 using Jellyfin.Plugin.ThemeForge.Engines.Orchestration;
@@ -46,6 +47,7 @@ public class ThemeForgeController : ControllerBase
     private readonly IMediaIdentityResolver _identityResolver;
     private readonly IToolProvisioner _toolProvisioner;
     private readonly ILibraryPolicyResolver _policyResolver;
+    private readonly IThemerrDbCatalogue _themerrDb;
     private readonly IThemeForgeLogger<ThemeForgeController> _logger;
 
     /// <summary>Initializes a new instance of the <see cref="ThemeForgeController"/> class.</summary>
@@ -56,6 +58,7 @@ public class ThemeForgeController : ControllerBase
     /// <param name="identityResolver">Item identity.</param>
     /// <param name="toolProvisioner">Tool discovery, for the status panel.</param>
     /// <param name="policyResolver">Lists libraries and their overwrite rules.</param>
+    /// <param name="themerrDb">The local ThemerrDB copy, for the status panel.</param>
     /// <param name="logger">Logger.</param>
     public ThemeForgeController(
         IThemeOrchestrator orchestrator,
@@ -65,6 +68,7 @@ public class ThemeForgeController : ControllerBase
         IMediaIdentityResolver identityResolver,
         IToolProvisioner toolProvisioner,
         ILibraryPolicyResolver policyResolver,
+        IThemerrDbCatalogue themerrDb,
         IThemeForgeLogger<ThemeForgeController> logger)
     {
         _orchestrator = orchestrator;
@@ -74,6 +78,7 @@ public class ThemeForgeController : ControllerBase
         _identityResolver = identityResolver;
         _toolProvisioner = toolProvisioner;
         _policyResolver = policyResolver;
+        _themerrDb = themerrDb;
         _logger = logger;
     }
 
@@ -102,11 +107,29 @@ public class ThemeForgeController : ControllerBase
         {
             status.LastRunSummary = lastRun.ToString();
             status.LastRunFinishedUtc = lastRun.FinishedUtc;
+            status.LastRunWasDryRun = lastRun.WasDryRun;
             status.LastRunReasons = lastRun.TopReasons
                 .OrderByDescending(pair => pair.Value)
                 .Take(5)
                 .Select(pair => $"{pair.Value}x {pair.Key}")
                 .ToList();
+        }
+
+        try
+        {
+            var snapshot = await _themerrDb.GetAsync(cancellationToken).ConfigureAwait(false);
+            status.Themerr = new CatalogueStatus
+            {
+                Movies = snapshot.MovieTmdbIds.Count,
+                Shows = snapshot.TvShows.Count,
+                Collections = snapshot.Collections.Count,
+                UpdatedUtc = snapshot.IsUsable ? snapshot.UpdatedUtc : null,
+                AgeHours = snapshot.IsUsable ? snapshot.Age.TotalHours : null,
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "ThemeForge: could not read the ThemerrDB catalogue for the status panel.");
         }
 
         try

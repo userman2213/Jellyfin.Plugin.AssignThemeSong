@@ -167,6 +167,7 @@ public sealed class JsonThemeIndex : IThemeIndex, IDisposable
             }
 
             var repaired = RepairScannerLatches();
+            var dryRunArtefacts = ClearDryRunArtefacts();
             _logger.LogInformation("ThemeForge: loaded {Count} index entries.", _entries.Count);
 
             if (repaired > 0)
@@ -174,6 +175,14 @@ public sealed class JsonThemeIndex : IThemeIndex, IDisposable
                 _logger.LogInformation(
                     "ThemeForge: released {Count} items that an earlier version had marked as manually overridden merely because a theme file was present. They will be reconsidered against the current library rules.",
                     repaired);
+                MarkDirty();
+            }
+
+            if (dryRunArtefacts > 0)
+            {
+                _logger.LogInformation(
+                    "ThemeForge: cleared {Count} review-queue entries that a dry run had left behind. A dry run records nothing now.",
+                    dryRunArtefacts);
                 MarkDirty();
             }
         }
@@ -281,6 +290,51 @@ public sealed class JsonThemeIndex : IThemeIndex, IDisposable
         }
 
         return repaired;
+    }
+
+    /// <summary>
+    /// Removes review-queue entries that an earlier version's dry run left behind.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// That version returned early from the assignment step when the run was a dry run, and did so
+    /// by marking the item as awaiting review — but the winning candidate and its score had
+    /// already been written. The queue therefore filled with items the run would have assigned
+    /// outright, showing the full score they earned, sorted above every genuine suggestion, and
+    /// they survived dry run being switched off.
+    /// </para>
+    /// <para>
+    /// They are identifiable exactly. A genuine review entry scores <i>below</i> the auto-assign
+    /// threshold, because that is the only way the decision policy produces one. An entry queued
+    /// because its audio was ambiguous has been through acquisition, so its attempt count is at
+    /// least one. An entry that is awaiting review, has never been attempted, and scores at or
+    /// above the threshold can only have come from that early return.
+    /// </para>
+    /// </remarks>
+    /// <returns>How many entries were cleared.</returns>
+    private int ClearDryRunArtefacts()
+    {
+        var configuration = Plugin.Config;
+        var autoAssign = Math.Max(configuration.AutoAssignThreshold, configuration.ReviewThreshold);
+        var cleared = 0;
+
+        foreach (var entry in _entries.Values)
+        {
+            if (entry.State != ThemeItemState.PendingReview
+                || entry.Attempts > 0
+                || entry.Score is not { } score
+                || score < autoAssign)
+            {
+                continue;
+            }
+
+            entry.State = ThemeItemState.Unprocessed;
+            entry.LastSkipReason = null;
+            entry.LastSkipUtc = null;
+            cleared++;
+        }
+
+        return cleared;
     }
 
     /// <summary>Keeps a corrupt index aside so it can be inspected rather than silently lost.</summary>

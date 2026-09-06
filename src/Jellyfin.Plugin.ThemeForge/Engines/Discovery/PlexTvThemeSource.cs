@@ -20,6 +20,8 @@ namespace Jellyfin.Plugin.ThemeForge.Engines.Discovery;
 /// The archive is keyed on the same id Jellyfin already holds, so a hit is the theme for that
 /// exact series rather than a video that looked right — which is why it is worth having at all.
 /// Coverage measured against a real library is around 43% for American series and 21% worldwide.
+/// It is asked after ThemerrDB, which also covers shows; this is the fallback for the ones
+/// ThemerrDB does not have.
 /// </para>
 /// <para>
 /// It is <b>off by default and has to be turned on deliberately</b>. The files are hosted by
@@ -47,6 +49,14 @@ public sealed class PlexTvThemeSource : IThemeProvenanceSource
 
     /// <inheritdoc />
     public string Name => "Plex television theme archive";
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// After ThemerrDB, which covers shows too and is keyed on the same TMDB id Jellyfin already
+    /// holds. This one is the fallback for the series ThemerrDB does not have, which is most of
+    /// them: it lists around 1300 shows against this archive's several thousand.
+    /// </remarks>
+    public int Order => 10;
 
     /// <inheritdoc />
     public bool IsEnabled(PluginConfiguration configuration) =>

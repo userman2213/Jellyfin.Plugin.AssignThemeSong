@@ -9,6 +9,7 @@ using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.ThemeForge.Configuration;
+using Jellyfin.Plugin.ThemeForge.Engines.Catalogue;
 using Jellyfin.Plugin.ThemeForge.Engines.Index;
 using Jellyfin.Plugin.ThemeForge.Engines.Policy;
 using Jellyfin.Plugin.ThemeForge.Logging;
@@ -69,6 +70,12 @@ public sealed class DiagnosticsDto
 
     /// <summary>Gets or sets the log file's path.</summary>
     public string LogPath { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets what the local ThemerrDB copy holds.</summary>
+    public CatalogueStatus Themerr { get; set; } = new();
+
+    /// <summary>Gets or sets where that copy is kept.</summary>
+    public string ThemerrPath { get; set; } = string.Empty;
 }
 
 /// <summary>
@@ -92,14 +99,20 @@ public class DiagnosticsController : ControllerBase
 
     private readonly IThemeIndex _index;
     private readonly ILibraryPolicyResolver _policyResolver;
+    private readonly IThemerrDbCatalogue _themerrDb;
 
     /// <summary>Initializes a new instance of the <see cref="DiagnosticsController"/> class.</summary>
     /// <param name="index">The decision index, for recorded skip reasons.</param>
     /// <param name="policyResolver">Resolves libraries and their rules.</param>
-    public DiagnosticsController(IThemeIndex index, ILibraryPolicyResolver policyResolver)
+    /// <param name="themerrDb">The local ThemerrDB copy.</param>
+    public DiagnosticsController(
+        IThemeIndex index,
+        ILibraryPolicyResolver policyResolver,
+        IThemerrDbCatalogue themerrDb)
     {
         _index = index;
         _policyResolver = policyResolver;
+        _themerrDb = themerrDb;
     }
 
     /// <summary>Reports the configuration in force, the resolved library rules and why items were skipped.</summary>
@@ -134,6 +147,14 @@ public class DiagnosticsController : ControllerBase
         var audit = _policyResolver.Audit(inUse);
         problems.AddRange(audit.Problems);
 
+        var themerr = await _themerrDb.GetAsync(cancellationToken).ConfigureAwait(false);
+        if (inUse.UseThemerrDb && inUse.SyncThemerrDb && !themerr.IsUsable)
+        {
+            problems.Add(
+                "The local copy of ThemerrDB is empty, so every title in the library will cost a request just "
+                + "to discover it is not in the database. Run the \"Update the ThemerrDB catalogue\" scheduled task.");
+        }
+
         return new DiagnosticsDto
         {
             ConfigurationFilePath = Plugin.Instance?.ConfigurationFilePath ?? string.Empty,
@@ -148,6 +169,15 @@ public class DiagnosticsController : ControllerBase
             DataPath = Plugin.Instance?.DataPath ?? string.Empty,
             IndexPath = Plugin.Instance?.IndexPath ?? string.Empty,
             LogPath = ThemeForgeLogFile.Shared.CurrentPath ?? "(file logging is off)",
+            ThemerrPath = ThemerrDbCatalogue.SnapshotPath,
+            Themerr = new CatalogueStatus
+            {
+                Movies = themerr.MovieTmdbIds.Count,
+                Shows = themerr.TvShows.Count,
+                Collections = themerr.Collections.Count,
+                UpdatedUtc = themerr.IsUsable ? themerr.UpdatedUtc : null,
+                AgeHours = themerr.IsUsable ? themerr.Age.TotalHours : null,
+            },
         };
     }
 

@@ -21,6 +21,16 @@ public enum ItemOutcome
 
     /// <summary>Something went wrong; the item is eligible for retry.</summary>
     Failed = 4,
+
+    /// <summary>
+    /// A dry run found a theme it would have written. Nothing was recorded.
+    /// </summary>
+    /// <remarks>
+    /// Kept distinct from <see cref="Queued"/>, which means a human has to decide. Conflating the
+    /// two put every item a dry run would have assigned into the review queue, at the score it had
+    /// earned, where it stayed after dry run was switched off.
+    /// </remarks>
+    WouldAssign = 5,
 }
 
 /// <summary>
@@ -63,6 +73,9 @@ public sealed class RunReport
     /// <summary>Gets or sets how many items failed outright.</summary>
     public int Failed { get; set; }
 
+    /// <summary>Gets or sets how many themes a real run would have assigned. Dry runs only.</summary>
+    public int WouldAssign { get; set; }
+
     /// <summary>Gets or sets a fatal error that stopped the whole run, such as yt-dlp being unavailable.</summary>
     public string? FatalError { get; set; }
 
@@ -91,20 +104,30 @@ public sealed class RunReport
             case ItemOutcome.Queued: Queued++; break;
             case ItemOutcome.NoCandidate: NoCandidate++; break;
             case ItemOutcome.Failed: Failed++; break;
+            case ItemOutcome.WouldAssign: WouldAssign++; break;
             default: Skipped++; break;
         }
     }
 
     /// <summary>Renders the one-line summary written to the log when a run ends.</summary>
     /// <returns>The summary.</returns>
-    public override string ToString() => string.Format(
-        CultureInfo.InvariantCulture,
-        "{0} considered, {1} assigned, {2} queued for review, {3} without a candidate, {4} failed, {5} skipped{6}",
-        Considered,
-        Assigned,
-        Queued,
-        NoCandidate,
-        Failed,
-        Skipped,
-        WasDryRun ? " (dry run — nothing was written)" : string.Empty);
+    public override string ToString() => WasDryRun
+        ? string.Format(
+            CultureInfo.InvariantCulture,
+            "dry run: {0} considered, {1} would be assigned, {2} would need review, {3} without a candidate, {4} would fail, {5} skipped — nothing was written",
+            Considered,
+            WouldAssign,
+            Queued,
+            NoCandidate,
+            Failed,
+            Skipped)
+        : string.Format(
+            CultureInfo.InvariantCulture,
+            "{0} considered, {1} assigned, {2} queued for review, {3} without a candidate, {4} failed, {5} skipped",
+            Considered,
+            Assigned,
+            Queued,
+            NoCandidate,
+            Failed,
+            Skipped);
 }

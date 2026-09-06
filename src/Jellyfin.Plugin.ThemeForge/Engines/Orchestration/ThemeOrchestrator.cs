@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.ThemeForge.Configuration;
 using Jellyfin.Plugin.ThemeForge.Engines.Acquisition;
+using Jellyfin.Plugin.ThemeForge.Engines.Catalogue;
 using Jellyfin.Plugin.ThemeForge.Engines.Decision;
 using Jellyfin.Plugin.ThemeForge.Engines.Discovery;
 using Jellyfin.Plugin.ThemeForge.Engines.Identity;
@@ -78,6 +79,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
     private readonly IQueryPlanner _queryPlanner;
     private readonly ICandidateSource _candidateSource;
     private readonly IReadOnlyList<IThemeProvenanceSource> _provenanceSources;
+    private readonly IThemerrDbCatalogue _themerrDb;
     private readonly IScoringEngine _scoringEngine;
     private readonly IDecisionPolicy _decisionPolicy;
     private readonly IAcquisitionEngine _acquisitionEngine;
@@ -98,6 +100,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
     /// <param name="queryPlanner">Plans the search ladder.</param>
     /// <param name="candidateSource">Finds candidates.</param>
     /// <param name="provenanceSources">Catalogues that answer by the item's own database id.</param>
+    /// <param name="themerrDb">The local ThemerrDB copy, refreshed at the start of a run if stale.</param>
     /// <param name="scoringEngine">Ranks candidates.</param>
     /// <param name="decisionPolicy">Decides what to do with the best candidate.</param>
     /// <param name="acquisitionEngine">Downloads and normalises the chosen candidate.</param>
@@ -111,6 +114,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         IQueryPlanner queryPlanner,
         ICandidateSource candidateSource,
         IEnumerable<IThemeProvenanceSource> provenanceSources,
+        IThemerrDbCatalogue themerrDb,
         IScoringEngine scoringEngine,
         IDecisionPolicy decisionPolicy,
         IAcquisitionEngine acquisitionEngine,
@@ -123,7 +127,9 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         _identityResolver = identityResolver;
         _queryPlanner = queryPlanner;
         _candidateSource = candidateSource;
-        _provenanceSources = provenanceSources.ToList();
+        // Ordered here, once, rather than depending on the order services were registered in.
+        _provenanceSources = provenanceSources.OrderBy(source => source.Order).ToList();
+        _themerrDb = themerrDb;
         _scoringEngine = scoringEngine;
         _decisionPolicy = decisionPolicy;
         _acquisitionEngine = acquisitionEngine;
@@ -162,6 +168,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
             // library, and any rule stored against a library that no longer exists. A settings
             // page can only show what was typed into it; this shows what the engine resolved.
             _policyResolver.LogEffectiveRules(configuration);
+            await RefreshCatalogueIfStaleAsync(configuration, cancellationToken).ConfigureAwait(false);
 
             var items = GetLibraryItems(configuration);
             report.Considered = items.Count;
@@ -251,14 +258,23 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
 
         var entry = _index.Resolve(item.Id, identity.StableKey) ?? NewEntry(identity);
 
+        // A dry run is supposed to answer "what would this do?" without doing any of it. That has
+        // to include the index: recording a decision it did not act on left the review queue full
+        // of items the run would have assigned outright, showing the full score they earned, and
+        // they stayed there after dry run was switched off again.
+        var dryRun = configuration.DryRun;
+
         var skipReason = ShouldSkip(item, entry, configuration, policy);
         if (skipReason is not null)
         {
             // Recorded rather than only logged: "why was this skipped" is the first question asked
             // when a settings change appears to do nothing, and the log is not where people look.
-            entry.LastSkipReason = skipReason;
-            entry.LastSkipUtc = DateTime.UtcNow;
-            _index.Put(entry);
+            if (!dryRun)
+            {
+                entry.LastSkipReason = skipReason;
+                entry.LastSkipUtc = DateTime.UtcNow;
+                _index.Put(entry);
+            }
 
             _logger.LogDebug("ThemeForge: skipping \"{Item}\" — {Reason}.", identity.Label, skipReason);
             return ItemOutcome.Skipped;
@@ -281,12 +297,24 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
                     Certain(known),
                     $"listed in {known.Provenance} against this title's own database id");
 
+                if (dryRun)
+                {
+                    return WouldAssign(identity, certain);
+                }
+
                 RecordCandidates(entry, new[] { certain.Best! }, certain);
                 return await AssignAsync(item, identity, entry, certain, configuration, policy, report, cancellationToken).ConfigureAwait(false);
             }
 
             var ranked = await SearchAndRankAsync(identity, configuration, cancellationToken).ConfigureAwait(false);
             var decision = _decisionPolicy.Decide(ranked, configuration);
+
+            if (dryRun)
+            {
+                return decision.Outcome == DecisionOutcome.AutoAssign
+                    ? WouldAssign(identity, decision)
+                    : Report(identity, decision, report);
+            }
 
             RecordCandidates(entry, ranked, decision);
 
@@ -304,12 +332,46 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         catch (Exception ex)
         {
             _logger.LogError(ex, "ThemeForge: failed while processing \"{Item}\".", identity.Label);
+
+            if (dryRun)
+            {
+                _logger.LogInformation("ThemeForge: [dry run] \"{Item}\" would have failed: {Error}.", identity.Label, ex.Message);
+                return ItemOutcome.Failed;
+            }
+
             return Fail(entry, ex.Message, configuration, report);
         }
         finally
         {
-            _index.Put(entry);
+            if (!dryRun)
+            {
+                _index.Put(entry);
+            }
         }
+    }
+
+    /// <summary>Notes an item a real run would have assigned, without recording anything.</summary>
+    private ItemOutcome WouldAssign(MediaIdentity identity, ThemeDecision decision)
+    {
+        _logger.LogInformation(
+            "ThemeForge: [dry run] would assign \"{Candidate}\" to \"{Item}\" ({Reason}).",
+            decision.Best!.Candidate.Title,
+            identity.Label,
+            decision.Reason);
+
+        return ItemOutcome.WouldAssign;
+    }
+
+    /// <summary>Notes what a real run would have done with an item it could not assign.</summary>
+    private ItemOutcome Report(MediaIdentity identity, ThemeDecision decision, RunReport report)
+    {
+        report.NoteReason(decision.Reason);
+        _logger.LogInformation(
+            "ThemeForge: [dry run] \"{Item}\" — {Reason}.",
+            identity.Label,
+            decision.Reason);
+
+        return decision.Outcome == DecisionOutcome.Review ? ItemOutcome.Queued : ItemOutcome.NoCandidate;
     }
 
     /// <inheritdoc />
@@ -437,6 +499,48 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
 
     /// <inheritdoc />
     public void Dispose() => _throttle.Dispose();
+
+    /// <summary>
+    /// Brings the local ThemerrDB copy up to date before a run if the scheduled task has not.
+    /// </summary>
+    /// <remarks>
+    /// The daily task is the normal path. This covers a server that was switched off when the task
+    /// was due, and a fresh install that would otherwise spend its first scan asking the database
+    /// about every title one at a time.
+    /// </remarks>
+    private async Task RefreshCatalogueIfStaleAsync(PluginConfiguration configuration, CancellationToken cancellationToken)
+    {
+        if (!configuration.UseThemerrDb || !configuration.SyncThemerrDb)
+        {
+            return;
+        }
+
+        try
+        {
+            var snapshot = await _themerrDb.GetAsync(cancellationToken).ConfigureAwait(false);
+            var maxAge = TimeSpan.FromDays(Math.Max(1, configuration.ThemerrDbMaxAgeDays));
+
+            if (snapshot.IsUsable && snapshot.Age < maxAge)
+            {
+                return;
+            }
+
+            _logger.LogInformation(
+                "ThemeForge: the ThemerrDB catalogue is {State}; refreshing it before the run.",
+                snapshot.IsUsable ? $"{snapshot.Age.TotalDays:0.#} days old" : "empty");
+
+            await _themerrDb.SyncAsync(null, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // A stale catalogue costs requests, not correctness: the run still works without it.
+            _logger.LogWarning(ex, "ThemeForge: could not refresh the ThemerrDB catalogue before the run.");
+        }
+    }
 
     /// <summary>
     /// Asks each enabled catalogue whether it holds the theme for this exact work.
@@ -586,19 +690,9 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         RunReport report,
         CancellationToken cancellationToken)
     {
+        // Dry runs never reach here: they are decided in ProcessItemAsync, before anything is
+        // recorded. This method's job is to act, and everything it does is a write.
         var best = decision.Best!;
-
-        if (configuration.DryRun)
-        {
-            entry.State = ThemeItemState.PendingReview;
-            entry.LastError = null;
-            _logger.LogInformation(
-                "ThemeForge: [dry run] would assign \"{Candidate}\" to \"{Item}\" ({Reason}).",
-                best.Candidate.Title,
-                identity.Label,
-                decision.Reason);
-            return ItemOutcome.Queued;
-        }
 
         entry.Attempts++;
         var audio = await _acquisitionEngine.AcquireAsync(best.Candidate, configuration, cancellationToken).ConfigureAwait(false);

@@ -160,6 +160,36 @@ public sealed class StatusDto
     /// library carries assignments from a matcher that is gone and nothing ever says so.
     /// </remarks>
     public int StaleDecisions { get; set; }
+
+    /// <summary>Gets or sets a value indicating whether the last run wrote nothing.</summary>
+    public bool LastRunWasDryRun { get; set; }
+
+    /// <summary>Gets or sets what the local ThemerrDB copy holds, and how old it is.</summary>
+    public CatalogueStatus Themerr { get; set; } = new();
+}
+
+/// <summary>What the local copy of a catalogue holds.</summary>
+/// <remarks>
+/// Reported because the difference between "the database has nothing for this title" and "we have
+/// never read the database" is invisible otherwise, and it is the difference between a scan that
+/// costs no requests for a miss and one that costs hundreds.
+/// </remarks>
+public sealed class CatalogueStatus
+{
+    /// <summary>Gets or sets how many films are listed.</summary>
+    public int Movies { get; set; }
+
+    /// <summary>Gets or sets how many shows are listed.</summary>
+    public int Shows { get; set; }
+
+    /// <summary>Gets or sets how many film collections are listed.</summary>
+    public int Collections { get; set; }
+
+    /// <summary>Gets or sets when it was last read, or null if it never has been.</summary>
+    public DateTime? UpdatedUtc { get; set; }
+
+    /// <summary>Gets or sets how many hours old it is.</summary>
+    public double? AgeHours { get; set; }
 }
 
 /// <summary>A request to set an item's theme from a specific URL.</summary>

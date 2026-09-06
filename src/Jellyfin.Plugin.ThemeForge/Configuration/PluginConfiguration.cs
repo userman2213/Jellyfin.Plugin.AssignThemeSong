@@ -55,6 +55,27 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool UseThemerrDb { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets a value indicating whether the list of works ThemerrDB has a theme for is
+    /// mirrored locally by a daily scheduled task.
+    /// </summary>
+    /// <remarks>
+    /// Without the mirror, every title in the library costs one request to discover whether it is
+    /// in the database, and most are not. With it, a miss costs nothing. Turning it off does not
+    /// disable ThemerrDB; it falls back to asking about each item directly.
+    /// </remarks>
+    public bool SyncThemerrDb { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets how old the local ThemerrDB copy may get before a run refreshes it itself.
+    /// </summary>
+    /// <remarks>
+    /// The scheduled task is the normal path. This is the safety net for a server that was off
+    /// when the task was due, and for a fresh install that would otherwise wait a day for its
+    /// first mirror.
+    /// </remarks>
+    public int ThemerrDbMaxAgeDays { get; set; } = 2;
+
+    /// <summary>
     /// Gets or sets a value indicating whether series are looked up in Plex's television theme
     /// archive by their TheTVDB id.
     /// </summary>
