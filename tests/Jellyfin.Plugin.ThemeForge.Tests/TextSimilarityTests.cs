@@ -1,57 +1,19 @@
-using Jellyfin.Plugin.ThemeForge.Engines.Identity;
+using System;
 using Jellyfin.Plugin.ThemeForge.Engines.Scoring;
 using Xunit;
 
 namespace Jellyfin.Plugin.ThemeForge.Tests;
 
+/// <summary>
+/// Covers the string measures themselves.
+/// </summary>
+/// <remarks>
+/// These say how alike two strings are and nothing else. Whether a candidate names a particular
+/// work is decided by <c>TitleAnchor</c> and covered separately — the two used to be conflated,
+/// and that is what let "Girls" match "The Golden Girls" at full marks.
+/// </remarks>
 public class TextSimilarityTests
 {
-    [Fact]
-    public void TitleMatch_IsPerfectWhenTheTitleAppearsVerbatim()
-    {
-        // The usual shape of a real theme upload: the show name plus descriptive noise.
-        var score = TextSimilarity.TitleMatch(
-            TitleNormalizer.Normalize("Battlestar Galactica"),
-            TitleNormalizer.Normalize("Battlestar Galactica - Main Title Theme (HD)"));
-
-        Assert.Equal(1.0, score);
-    }
-
-    [Fact]
-    public void TitleMatch_IsZeroForAnUnrelatedTitle()
-    {
-        var score = TextSimilarity.TitleMatch(
-            TitleNormalizer.Normalize("Firefly"),
-            TitleNormalizer.Normalize("Top 10 Cooking Fails"));
-
-        Assert.True(score < 0.35, $"expected a low score, got {score}");
-    }
-
-    [Fact]
-    public void TitleMatch_FallsWhenOnlyPartOfAMultiWordTitleIsPresent()
-    {
-        var full = TextSimilarity.TitleMatch(
-            TitleNormalizer.Normalize("Star Trek Voyager"),
-            TitleNormalizer.Normalize("Star Trek Voyager opening"));
-
-        var partial = TextSimilarity.TitleMatch(
-            TitleNormalizer.Normalize("Star Trek Voyager"),
-            TitleNormalizer.Normalize("Star Trek opening"));
-
-        Assert.Equal(1.0, full);
-        Assert.True(partial < full, "a partial match must score lower than a complete one");
-    }
-
-    [Fact]
-    public void TitleMatch_ToleratesASmallSpellingDifference()
-    {
-        var score = TextSimilarity.TitleMatch(
-            TitleNormalizer.Normalize("Battlestar Galactica"),
-            TitleNormalizer.Normalize("Battlestar Galactika theme"));
-
-        Assert.True(score >= 0.9, $"a one-letter difference should still match, got {score}");
-    }
-
     [Fact]
     public void JaroWinkler_ScoresIdenticalStringsAsOne() =>
         Assert.Equal(1.0, TextSimilarity.JaroWinkler("firefly", "firefly"));
@@ -64,10 +26,30 @@ public class TextSimilarityTests
         Assert.True(shared > unshared);
     }
 
+    [Theory]
+    [InlineData("castle", "castlevania")]
+    [InlineData("dark", "darkside")]
+    [InlineData("you", "young")]
+    public void JaroWinkler_RatesADifferentWordAsNearlyIdentical(string first, string second)
+    {
+        // Kept as a test because it is the reason similarity alone cannot decide identity: each
+        // of these pairs names two unrelated works and scores above 0.90.
+        Assert.True(
+            TextSimilarity.JaroWinkler(first, second) >= 0.90,
+            $"{first}/{second} scored {TextSimilarity.JaroWinkler(first, second):0.000}");
+    }
+
+    [Fact]
+    public void Coverage_CountsTheWantedWordsThatArePresent()
+    {
+        Assert.Equal(1.0, TextSimilarity.Coverage(new[] { "star", "trek" }, new[] { "star", "trek", "theme" }));
+        Assert.Equal(0.5, TextSimilarity.Coverage(new[] { "star", "trek" }, new[] { "star", "wars" }));
+    }
+
     [Fact]
     public void Coverage_IsZeroWhenEitherSideIsEmpty()
     {
-        Assert.Equal(0, TextSimilarity.Coverage(new[] { "a" }, System.Array.Empty<string>()));
-        Assert.Equal(0, TextSimilarity.Coverage(System.Array.Empty<string>(), new[] { "a" }));
+        Assert.Equal(0, TextSimilarity.Coverage(new[] { "a" }, Array.Empty<string>()));
+        Assert.Equal(0, TextSimilarity.Coverage(Array.Empty<string>(), new[] { "a" }));
     }
 }

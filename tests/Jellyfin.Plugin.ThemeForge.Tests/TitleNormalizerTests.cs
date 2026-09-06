@@ -48,27 +48,11 @@ public class TitleNormalizerTests
     }
 
     [Fact]
-    public void NormalizeCandidate_KeepsBracketedText()
-    {
-        // On an uploaded video the brackets often hold the only mention of the show. Dropping
-        // them made the real Firefly theme unmatchable.
-        Assert.Equal(
-            "sonny rhodes the ballad of serenity firefly opening theme song",
-            TitleNormalizer.NormalizeCandidate("Sonny Rhodes The Ballad of Serenity (Firefly Opening Theme Song)"));
-    }
-
-    [Fact]
-    public void Normalize_StillDropsBracketedQualifiersFromLibraryTitles()
+    public void Normalize_DropsBracketedQualifiersFromLibraryTitles()
     {
         // On a library item the brackets hold qualifiers that would only pollute a search.
         Assert.Equal("doctor who", TitleNormalizer.Normalize("Doctor Who (2005)"));
     }
-
-    [Fact]
-    public void BothFormsAgreeWhenThereAreNoBrackets() =>
-        Assert.Equal(
-            TitleNormalizer.Normalize("Battlestar Galactica"),
-            TitleNormalizer.NormalizeCandidate("Battlestar Galactica"));
 
     [Fact]
     public void Tokenize_SplitsOnSpaces() =>

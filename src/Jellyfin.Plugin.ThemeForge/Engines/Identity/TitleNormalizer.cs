@@ -56,23 +56,16 @@ public static partial class TitleNormalizer
     /// Normalises a library item's title: strips accents and bracketed qualifiers, folds
     /// punctuation to spaces, converts roman numerals to digits, and drops a leading article.
     /// </summary>
+    /// <remarks>
+    /// This is the form used to build search queries and the index's stable key. Candidates are
+    /// not normalised this way: deciding whether an uploaded title names a work is a different
+    /// job, done by <see cref="TitleAnchor"/> against the raw text, because the parts this throws
+    /// away — brackets, the leading article, the exact word boundaries — are the parts that tell
+    /// "Girls" from "The Golden Girls".
+    /// </remarks>
     /// <param name="title">The raw title.</param>
     /// <returns>The normalised form, or an empty string when nothing survives.</returns>
     public static string Normalize(string? title) => Normalize(title, dropBracketedText: true);
-
-    /// <summary>
-    /// Normalises a candidate's title the same way, but keeping what is inside brackets.
-    /// </summary>
-    /// <remarks>
-    /// The two cases pull in opposite directions. On a library item, brackets hold qualifiers
-    /// that would only pollute a search — "(2019)", "(US)", "[1080p]". On an uploaded video they
-    /// routinely hold the part that identifies it at all: "Sonny Rhodes - The Ballad of Serenity
-    /// (Firefly Opening Theme Song)" is the real theme, and discarding the bracketed half leaves
-    /// nothing to match the show against.
-    /// </remarks>
-    /// <param name="title">The candidate's title.</param>
-    /// <returns>The normalised form.</returns>
-    public static string NormalizeCandidate(string? title) => Normalize(title, dropBracketedText: false);
 
     private static string Normalize(string? title, bool dropBracketedText)
     {

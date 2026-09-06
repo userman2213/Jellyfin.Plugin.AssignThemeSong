@@ -8,11 +8,12 @@ namespace Jellyfin.Plugin.ThemeForge.Engines.Scoring;
 /// String comparison helpers used by the title-matching rule.
 /// </summary>
 /// <remarks>
-/// Pure and dependency-free so the matching behaviour can be pinned down by tests. The
-/// question these answer is deliberately narrow: "does the media title actually appear in this
-/// candidate's title?" — not "how similar are these two strings?". A theme is usually titled
-/// "&lt;Show&gt; - Opening Theme", so the show name is a subset of the candidate title and raw
-/// whole-string similarity would score it poorly.
+/// Pure and dependency-free so the behaviour can be pinned down by tests. These are measures of
+/// how alike two strings are, and nothing more. Deciding whether a candidate names a particular
+/// work is a different question, answered by
+/// <see cref="Jellyfin.Plugin.ThemeForge.Engines.Identity.TitleAnchor"/>: string similarity alone
+/// cannot tell "Girls" from "The Golden Girls", because as strings they are almost the same and
+/// as works they are not related at all.
 /// </remarks>
 public static class TextSimilarity
 {
@@ -43,40 +44,6 @@ public static class TextSimilarity
                 || JaroWinkler(wanted, actual) >= WordMatchThreshold));
 
         return (double)matched / wantedTokens.Count;
-    }
-
-    /// <summary>
-    /// Scores how strongly a candidate title refers to the wanted title.
-    /// </summary>
-    /// <param name="wantedNormalized">The normalised media title.</param>
-    /// <param name="candidateNormalized">The normalised candidate title.</param>
-    /// <returns>A score from 0 to 1.</returns>
-    public static double TitleMatch(string wantedNormalized, string candidateNormalized)
-    {
-        if (string.IsNullOrEmpty(wantedNormalized) || string.IsNullOrEmpty(candidateNormalized))
-        {
-            return 0;
-        }
-
-        // The whole title appearing verbatim is the strongest evidence available and should not
-        // be diluted by however much else the uploader crammed into the title.
-        if (candidateNormalized.Contains(wantedNormalized, StringComparison.Ordinal))
-        {
-            return 1.0;
-        }
-
-        var wanted = Identity.TitleNormalizer.Tokenize(wantedNormalized);
-        var candidate = Identity.TitleNormalizer.Tokenize(candidateNormalized);
-        var coverage = Coverage(wanted, candidate);
-
-        // A single-word title is easy to hit by accident, so back coverage up with whole-string
-        // similarity before treating it as a match.
-        if (wanted.Count == 1)
-        {
-            return Math.Min(coverage, JaroWinkler(wantedNormalized, candidateNormalized) + 0.5);
-        }
-
-        return coverage;
     }
 
     /// <summary>
