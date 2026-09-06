@@ -1,0 +1,31 @@
+[
+    {
+        "guid": "bfb42f2f-93f8-4d6b-97e6-1750035c211f",
+        "name": "ThemeForge",
+        "owner": "userman2213",
+        "category": "General",
+        "imageUrl": "https://raw.githubusercontent.com/userman2213/Jellyfin.Plugin.AssignThemeSong/claude/jellyfin-theme-song-plugin-e3ko2x/src/Jellyfin.Plugin.ThemeForge/images/icon.png",
+        "overview": "Automatically finds, scores and assigns theme songs for movies and TV shows.",
+        "description": "ThemeForge searches YouTube with yt-dlp, ranks every candidate with an explainable scoring engine, and writes the winner to theme.mp3 beside your media. High-confidence matches are assigned automatically; anything less certain waits in a review queue. Every theme is loudness-normalised at encode time so themes play at a consistent volume, which Jellyfin itself provides no way to control. All decisions are recorded in a persistent index, so re-runs are idempotent and manual choices are never overwritten.",
+        "versions": [
+            {
+                "version": "1.1.0.0",
+                "targetAbi": "10.11.0.0",
+                "framework": "net9.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_1.1.0.0.zip",
+                "checksum": "51677f09707da79daef3d9172f6fb7d8",
+                "timestamp": "2026-09-06T03:43:10Z",
+                "changelog": "Per-library rules for existing themes: leave them alone, replace only the ones ThemeForge chose, or replace everything. Adds a dedicated log file with its own level, full cleanup on uninstall, an action to remove every theme ThemeForge wrote, and a durable index that survives an interrupted run."
+            },
+            {
+                "version": "1.0.0.0",
+                "targetAbi": "10.11.0.0",
+                "framework": "net9.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_1.0.0.0.zip",
+                "checksum": "cc428ba6416bcc9dd2277c965526a5cc",
+                "timestamp": "2026-09-06T03:27:16Z",
+                "changelog": "First release. Automatic discovery and scoring, loudness-normalised themes, per-library rules for existing themes, review queue, a persistent decision index, a dedicated log file, and full cleanup on uninstall."
+            }
+        ]
+    }
+]
