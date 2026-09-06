@@ -39,10 +39,27 @@ Whether theme songs play at all stays where it belongs: your own Jellyfin settin
 
 ## Installing
 
-1. Download the latest release zip.
-2. Extract it into `<jellyfin data>/plugins/ThemeForge/`.
+### From the plugin repository (recommended)
+
+1. In Jellyfin, go to **Dashboard → Plugins → Repositories** and press **+**.
+2. Name it `ThemeForge` and paste this as the URL:
+
+   ```
+   https://raw.githubusercontent.com/userman2213/Jellyfin.Plugin.AssignThemeSong/claude/jellyfin-theme-song-plugin-e3ko2x/manifest.json
+   ```
+
+3. Save, then go to **Dashboard → Plugins → Catalog**, find **ThemeForge**, and install it.
+4. Restart Jellyfin.
+5. Open **Dashboard → Plugins → ThemeForge** and press **Run now**, or wait for the nightly task.
+
+Once this branch is merged, change `claude/jellyfin-theme-song-plugin-e3ko2x` in that URL to
+`main`.
+
+### By hand
+
+1. Download `dist/themeforge_1.0.0.0.zip` from this repository.
+2. Extract it into `<jellyfin data>/plugins/ThemeForge_1.0.0.0/`.
 3. Restart Jellyfin.
-4. Open **Dashboard → Plugins → ThemeForge** and press **Run now**, or wait for the nightly task.
 
 ### Requirements
 

@@ -4,9 +4,19 @@
         "name": "ThemeForge",
         "owner": "userman2213",
         "category": "General",
-        "imageUrl": "https://raw.githubusercontent.com/userman2213/Jellyfin.Plugin.AssignThemeSong/main/src/Jellyfin.Plugin.ThemeForge/images/icon.png",
+        "imageUrl": "https://raw.githubusercontent.com/userman2213/Jellyfin.Plugin.AssignThemeSong/claude/jellyfin-theme-song-plugin-e3ko2x/src/Jellyfin.Plugin.ThemeForge/images/icon.png",
         "overview": "Automatically finds, scores and assigns theme songs for movies and TV shows.",
-        "description": "ThemeForge searches YouTube with yt-dlp, ranks every candidate with an explainable scoring engine, and writes the winner to theme.mp3 beside your media. High-confidence matches are assigned automatically; anything less certain waits in a review queue. Every theme is loudness-normalised at encode time so themes play at a consistent volume, which Jellyfin itself provides no way to control.",
-        "versions": []
+        "description": "ThemeForge searches YouTube with yt-dlp, ranks every candidate with an explainable scoring engine, and writes the winner to theme.mp3 beside your media. High-confidence matches are assigned automatically; anything less certain waits in a review queue. Every theme is loudness-normalised at encode time so themes play at a consistent volume, which Jellyfin itself provides no way to control. All decisions are recorded in a persistent index, so re-runs are idempotent and manual choices are never overwritten.",
+        "versions": [
+            {
+                "version": "1.0.0.0",
+                "targetAbi": "10.11.0.0",
+                "framework": "net9.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/claude/jellyfin-theme-song-plugin-e3ko2x/dist/themeforge_1.0.0.0.zip",
+                "checksum": "67f41f1a88c83b3105c4f3425916885b",
+                "timestamp": "2026-09-06T00:35:44Z",
+                "changelog": "First release. Automatic discovery and scoring, loudness-normalised themes, review queue and a persistent decision index."
+            }
+        ]
     }
 ]
