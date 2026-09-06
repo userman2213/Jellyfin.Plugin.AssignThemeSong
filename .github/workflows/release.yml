@@ -1,0 +1,64 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Four-part version, for example 1.2.0.0'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The release script commits to the channel branch, so it needs the full history and
+          # a token that can push.
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      # The loudness tests drive a real encoder. Without ffmpeg they skip themselves, so a
+      # release could otherwise be cut without the audio pipeline ever being exercised.
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+
+      - name: Work out the version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            echo "value=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Identify the committer
+        run: |
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+
+      # One script for CI and for a local release, so the two cannot drift apart and produce
+      # differently-built packages under the same version number.
+      - name: Build, package and publish
+        run: ./scripts/release.sh "${{ steps.version.outputs.value }}" --publish
+
+      - name: Commit the manifest and package back to this branch
+        run: |
+          git add manifest.json dist Directory.Build.props src/Jellyfin.Plugin.ThemeForge/meta.json
+          if git diff --cached --quiet; then
+            echo "nothing to commit"
+          else
+            git commit -m "Release ${{ steps.version.outputs.value }}"
+            git push origin "HEAD:${GITHUB_REF_NAME}" || echo "source branch not updated; the channel is already published"
+          fi

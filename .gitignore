@@ -314,5 +314,9 @@ MigrationBackup/
 FodyWeavers.xsd
 
 # Plugin-specific
+# Built packages are published to the plugin-repo channel branch, not carried on the source
+# branch, so a release does not add a binary to the history every time.
 *.zip
-!Jellyfin.Plugin.AssignThemeSong_*.zip
+dist/
+CHANGELOG_NEXT.md
+plexsupport.html

@@ -1,249 +1,230 @@
-# xThemeSong
+# ThemeForge
 
-A Jellyfin plugin that allows you to download theme songs from YouTube or upload custom MP3 files for your movies and TV shows.
-<p align="center">
-<img alt="Logo" src="https://raw.githubusercontent.com/kirtan3d/Jellyfin.Plugin.AssignThemeSong/main/images/icon.png" style="width:50%;" />
-</p>
+A Jellyfin plugin that finds theme songs for your movies and TV shows, scores every candidate it
+finds, and assigns the confident ones automatically. Anything it is unsure about waits in a
+review queue instead of guessing.
 
-## ✨ Features
+Requires **Jellyfin 10.11**.
 
-### Core Features
-- 🎵 Download theme songs from YouTube by providing video ID or URL
-- 📤 Upload your own MP3 files as theme songs
-- 🎬 Supports both movies and TV shows
-- 📁 Automatically saves theme songs as `theme.mp3` in media folders
-- 📝 Stores metadata in `theme.json` files
-- ⏰ Scheduled task to process theme songs (now with fixed error handling!)
+## What it does
 
-### User Interface
-- 🎛️ Configuration page with **tabbed interface** (Settings & Media Library)
-- 🔄 Loading animations during processing
-- 🎧 Audio player for existing theme songs
-- ✅ Modern modal dialogs for success/error messages
-- 🗑️ **Delete existing theme songs** with confirmation dialog
+Point it at your library and it will, for each movie and series:
 
-### Advanced Features (v1.2.0+)
-- 📤 **Export/Import Theme Mappings** - Backup and migrate themes between servers
-- 🔐 **Role-Based Access Control** - Control who can manage theme songs
-- 👤 **Per-User Preferences** - Individual settings for enable/disable, volume, duration
-- 📚 **Media Library Overview** - View all media with theme song status at a glance
-- 📝 **Bulk YouTube URL Assignment** - Set URLs for multiple items in settings
-- ⚙️ **Custom FFmpeg Path** - Configure FFmpeg location or use auto-detect
+1. Work out what the item actually is — title, alternate titles, year, TVDB/TMDB/IMDb ids.
+2. Build an ordered list of searches, most specific first.
+3. Search YouTube with **yt-dlp** and collect candidates.
+4. Score every candidate against ten independent rules, each of which explains itself.
+5. Assign the winner if it is confident, queue it for you if it is not, and record either way.
+6. Download the audio, **normalise it to a consistent loudness**, fade it, verify it plays, and
+   write it as `theme.mp3` beside your media.
 
-## 📋 Requirements
+Everything it decides is recorded, so re-running is cheap and safe: settled items are skipped,
+and anything you decided yourself is never touched again.
 
-- **Jellyfin Server**: Version 10.11.0 or later
-- **File Transformation Plugin**: **REQUIRED** for Web UI features to work. Install from [here](https://github.com/IAmParadox27/jellyfin-plugin-file-transformation)
-- **FFmpeg**: Must be installed on your Jellyfin server (usually bundled with Jellyfin)
-- **Internet Connection**: Required for YouTube downloads
+## Theme song volume
 
-## 🔧 Installation
+Themes downloaded from different uploaders arrive at wildly different volumes, and Jellyfin has
+no theme volume control to compensate with — [jellyfin-web#3086](https://github.com/jellyfin/jellyfin-web/issues/3086)
+is still open. A plugin cannot fix this from the browser either: Jellyfin's player re-reads its
+saved global volume every time it creates a media element, so a volume set from a script is
+overwritten moments later, and setting it at all leaks into your volume for normal playback.
 
-### Prerequisites
+ThemeForge fixes it in the file instead. Every theme is normalised to the same integrated
+loudness (EBU R128, `-23 LUFS` by default) when it is encoded, with a fade in and out and an
+optional length cap. That works on every client — including the ones no browser script can reach
+— and needs no per-user setting, because there is nothing left to correct.
 
-**IMPORTANT:** Install the File Transformation plugin first!
+Whether theme songs play at all stays where it belongs: your own Jellyfin setting under
+**Display → Play theme music**.
 
-1. Go to **Dashboard → Plugins → Catalog**
-2. Search for "File Transformation"
-3. Install it and restart Jellyfin
-4. Then proceed with installing xThemeSong
+## Installing
 
-### Method 1: From Repository (Recommended)
+### From the plugin repository (recommended)
 
-1. Add repository URL to Jellyfin: `https://raw.githubusercontent.com/kirtan3d/Jellyfin.Plugin.AssignThemeSong/main/manifest.json`
-2. Go to **Dashboard → Plugins → Catalog**
-3. Search for "xThemeSong"
-4. Click **Install** and restart Jellyfin
+1. In Jellyfin, go to **Dashboard → Plugins → Repositories** and press **+**.
+2. Name it `ThemeForge` and paste this as the URL:
 
-### Method 2: Manual Installation
+   ```
+   https://raw.githubusercontent.com/userman2213/Jellyfin.Plugin.AssignThemeSong/plugin-repo/manifest.json
+   ```
 
-1. Download the latest release from [GitHub Releases](https://github.com/kirtan3d/Jellyfin.Plugin.AssignThemeSong/releases)
-2. Extract the zip file
-3. Copy the contents to your Jellyfin plugins directory:
-   - **Windows**: `%AppData%\Jellyfin\Server\plugins\xThemeSong`
-   - **Linux**: `/var/lib/jellyfin/plugins/xThemeSong`
-   - **Docker**: `/config/plugins/xThemeSong`
-4. Restart Jellyfin
+3. Save, then go to **Dashboard → Plugins → Catalog**, find **ThemeForge**, and install it.
+4. Restart Jellyfin.
+5. Open **Dashboard → Plugins → ThemeForge** and press **Run now**, or wait for the nightly task.
 
-## 📖 Usage
+**Add that URL once.** New releases show up in the catalogue as updates on their own — there is
+never a URL to change. The `plugin-repo` branch is an install channel holding nothing but the
+manifest and the packages, so it is unaffected by branching, merging or renaming anything in the
+source tree.
 
-### Assigning a Theme Song
+### By hand
 
-1. Navigate to a movie or TV show in Jellyfin
-2. Click the **"⋮" (three dots)** menu
-3. Select **"Assign Theme Song"**
-4. A modal dialog will open showing:
-   - 🎧 Existing theme song audio player (if available)
-   - YouTube URL/Video ID input field
-   - Drag-and-drop area for MP3 files
-5. Choose one of the following:
-   - Enter a YouTube video ID or URL
-   - Upload an MP3 file (drag-and-drop or browse)
-6. Click **"Save Theme Song"**
-7. Wait for the loading animation to complete
-8. Success message will appear when done!
+1. Download the newest `dist/themeforge_*.zip` from the
+   [`plugin-repo` branch](https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/tree/plugin-repo/dist).
+2. Extract it into `<jellyfin data>/plugins/ThemeForge_<version>/`.
+3. Restart Jellyfin.
 
-### Scheduled Task
+### Requirements
 
-The plugin includes a scheduled task that processes theme songs:
+- **ffmpeg** — auto-detected, preferring Jellyfin's own bundled build. No setup needed in the
+  official Docker images.
+- **yt-dlp** — ThemeForge downloads its own copy into its data directory on first use and keeps
+  it current with a weekly task. Set an explicit path in the settings if you would rather manage
+  it yourself.
+- **File Transformation plugin** — *optional*. Installing it adds a "set theme song" button to
+  movie and series pages. Without it everything else works exactly the same; only that button is
+  missing. ThemeForge never edits Jellyfin's `index.html` on disk, so a server update cannot
+  leave it in a broken state.
 
-1. Go to **Dashboard → Scheduled Tasks**
-2. Find **"xTheme Songs"**
-3. Click **▶ Play** to run immediately, or
-4. Configure the schedule (default: daily at 3 AM)
+## What happens to themes you already have
 
-## 📁 File Structure
+By default, **nothing**. On its first pass ThemeForge notices that an item already has a
+`theme.*` file or a `theme-music/` folder, marks it `ManualOverride` in its index, and never
+looks at it again. Your existing themes are safe out of the box.
 
-For each media item with a theme song, the plugin creates:
+If you want that changed, it is set **per library** on the **Libraries** tab, because shows and
+films usually want different answers:
 
-```
-/path/to/movie/
-├── movie.mp4
-├── theme.mp3          # The theme song audio file
-└── theme.json         # Metadata about the theme song
-```
+| Setting | What it does |
+|---|---|
+| **Never replace an existing theme** | Default. An item that has a theme is left alone permanently. |
+| **Replace themes ThemeForge chose** | Re-runs its own picks — useful after tuning the scoring — while leaving anything you placed by hand untouched. It tells the difference using the content hash recorded when it wrote the file. |
+| **Replace any theme, including ones I placed** | Overwrites everything. Use this to hand a whole library over to ThemeForge. |
 
-### theme.json Format
+Each library can also be switched off entirely, so ThemeForge ignores it.
 
-```json
-{
-  "YouTubeId": "dQw4w9WgXcQ",
-  "YouTubeUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-  "Title": "Never Gonna Give You Up",
-  "Uploader": "RickAstleyVEVO",
-  "DateAdded": "2025-01-04T12:00:00Z",
-  "DateModified": "2025-01-04T12:00:00Z",
-  "IsUserUploaded": false,
-  "OriginalFileName": null
-}
-```
+Replaced themes are copied aside first as `theme.mp3.themeforge-backup-<timestamp>` unless you
+turn backups off, and a theme assigned by hand or locked from the Library tab is never touched by
+any of these settings.
 
-## ⚙️ Configuration
+## Logging
 
-Access plugin settings in **Dashboard → Plugins → xThemeSong**:
+ThemeForge keeps its own log at `<jellyfin-data>/themeforge/logs/themeforge.log`, viewable under
+the **Log** tab on the plugin page. It rotates at 5 MB and keeps three old files by default.
 
-### Settings Tab (Admin Access)
-- **Overwrite Existing Files**: Whether to overwrite existing theme.mp3 files
-- **Audio Bitrate**: Audio quality for downloaded theme songs (default: 192 kbps)
-- **FFmpeg Path**: Custom path to FFmpeg executable (leave empty for auto-detect)
-- **Permission Mode**: Control who can manage theme songs (Admins Only / Library Managers / Everyone)
+Everything in it also goes to the Jellyfin server log, so this hides nothing — it exists because
+a run over a large library produces thousands of lines that only make sense together, and picking
+them out of everything else the server logs is impractical.
 
-### Backup & Migration (Admin)
-- **Export to JSON**: Download all theme assignments for backup
-- **Export to CSV**: Export for editing in spreadsheet applications
-- **Import from JSON**: Restore themes from backup with conflict detection
-- **Use Cases**: Server migrations, backups, bulk management
+Its level is set independently of Jellyfin's, so you can turn ThemeForge up to **Debug** to see
+per-candidate scoring for one run without making the whole server log verbose.
 
-### Media Library Tab (Admin)
-The Media Library tab provides a comprehensive overview of all your media:
+## Uninstalling
 
-- **Statistics**: See total media count, items with themes, and items without themes
-- **Library Tables**: View all movies and TV shows grouped by library
-- **Theme Status**: Quick badges showing which items have theme songs
-- **Mini Audio Player**: Preview existing theme songs directly in the table
-- **YouTube URL Input**: Enter YouTube URLs for each item
-- **Bulk Save**: Save URLs for an entire library, then run the scheduled task to download
+Uninstalling from the Jellyfin dashboard removes the plugin **and** everything it stored:
+`<jellyfin-data>/themeforge/` — the index, the logs, and the yt-dlp binary it downloaded.
 
-### User Preferences (All Users)
-Access from: **Dashboard → Plugins → xThemeSong User Preferences**
+**Your theme files stay.** The `theme.mp3` files in your media folders are your media now, and
+uninstalling a plugin should never delete your files as a side effect.
 
-Each user can customize their theme song experience:
-- **Enable/Disable Theme Songs**: Turn theme songs on or off for your account
-- **Maximum Duration**: Limit playback to X seconds (0 = play full theme)
-- **Volume Control**: Adjust theme song volume (0-100%)
-- **Server-Side Storage**: Preferences sync across all your devices
+If you *do* want them gone, use **Settings → Removing themes → Remove all ThemeForge themes**
+before uninstalling. That deletes only files ThemeForge actually wrote: each one is checked
+against the contents recorded when it was written, so anything you have since replaced by hand is
+left alone.
 
-### Deleting Theme Songs
+### Upgrading from the old xThemeSong plugin
 
-To remove an existing theme song:
-1. Navigate to the movie or TV show
-2. Click the **"⋮" (three dots)** menu and select **"Assign Theme Song"**
-3. Click the **"🗑️ Delete"** button next to the existing theme
-4. Confirm the deletion
+The previous plugin could patch Jellyfin's `index.html` on disk to inject its script. That edit
+survives uninstalling it, so you may be left with a dead `<script plugin="xThemeSong" ...>` tag in
+`<jellyfin-web>/index.html` that reloads on every page. Remove that line by hand, or reinstall
+`jellyfin-web`. ThemeForge never writes to that file — it injects only through the File
+Transformation plugin, in memory, per request.
 
-## 🐛 Troubleshooting
+## How scoring works
 
-### Plugin doesn't appear in Jellyfin
+Each candidate is judged by ten rules. Each returns a named signal with a reason, and the review
+queue shows you the whole breakdown, so a score is always something you can argue with.
 
-1. Check Jellyfin logs for errors: `/config/log/log_*.log`
-2. Ensure you're running Jellyfin 10.11.0 or later
-3. Verify the plugin files are in the correct directory
-4. Restart Jellyfin after installation
+| Rule | What it looks at |
+|---|---|
+| `TitleSimilarity` | Whether the media title genuinely appears in the candidate's title. Vetoes if not. |
+| `KeywordAffinity` | Words like *opening*, *main title*, *theme*, *OST*. |
+| `NegativeKeywords` | *reaction*, *cover*, *tutorial*, *1 hour*, *loop*, *AMV*, *full episode*… |
+| `DurationPlausibility` | Whether it is the right length. Vetoes ten-hour loops and three-second clips. |
+| `ChannelReputation` | Trusts YouTube's auto-generated `- Topic` channels and your own allow list. |
+| `Popularity` | View count, log-scaled and capped so it can never outvote the title. |
+| `Recency` | Penalises uploads from years before the release date. |
+| `Availability` | Rejects live, private and blocked videos outright. |
+| `Duplicate` | Penalises a video already used as another item's theme. |
+| `QuerySpecificity` | Prefers hits from a narrower search. |
 
-### Theme songs not downloading
+Every weight, keyword list and threshold is editable in the settings — no rebuild needed.
 
-1. Check if FFmpeg is installed and accessible
-2. Verify you have an internet connection
-3. Check the scheduled task logs in **Dashboard → Scheduled Tasks**
-4. Ensure the YouTube URL/ID is valid
+Two thresholds decide what happens:
 
-### Build from Source
+- **at or above the auto-assign threshold** (default 72) → downloaded and assigned;
+- **at or above the review threshold** (default 45) → offered in the review queue;
+- **below that** → recorded as having no acceptable candidate, and retried later with a backoff.
+
+## Permissions
+
+Every API endpoint requires an administrator. Assigning a theme writes into your media library
+and starting a run makes outbound requests from your server, so there is no part of this the
+plugin exposes to ordinary users. The plugin stores no per-user settings of its own.
+
+## Where themes are written
+
+Jellyfin looks for `theme.*` in an item's own folder, or any audio inside a `theme-music/`
+folder there. ThemeForge writes `theme.mp3` beside the item.
+
+**Films in a shared folder are skipped by default.** In a flat library every film lives in one
+directory, so a `theme.mp3` written there would become the theme for all of them. ThemeForge
+detects this, refuses, and records the reason. Give each film its own folder, or turn off
+*"only write a theme when the item has its own folder"* if that is really what you want.
+
+## Releasing
+
+`scripts/release.sh` is the only supported way to cut a release. It sets the version everywhere
+it appears, builds, runs the tests, packages, computes the checksum, adds the entry to
+`manifest.json`, and pushes the result to the `plugin-repo` channel — then re-fetches the
+published manifest and fails if it does not match the package it just built.
 
 ```bash
-git clone https://github.com/kirtan3d/Jellyfin.Plugin.AssignThemeSong.git
-cd Jellyfin.Plugin.AssignThemeSong
-dotnet build -c Release
-dotnet publish -c Release -o publish
+scripts/release.sh 1.2.0.0             # build and update the manifest locally
+scripts/release.sh 1.2.0.0 --publish   # ...and publish it to the channel
 ```
 
-## 📝 Development Status
+Put the release notes in `CHANGELOG_NEXT.md` first; the script uses that as the changelog for
+the entry.
 
-**Current Version**: v1.2.0
+Tagging `v1.2.0.0` runs the same script through GitHub Actions, so a manual release and an
+automated one cannot produce differently-built packages under the same version.
 
-### v1.2.0 Features (Latest - Major Update!)
-- ✅ **Fixed Scheduled Task Error** - No more deserialization crashes
-- ✅ **Export/Import Theme Mappings** - JSON & CSV export, import with conflict resolution
-- ✅ **Role-Based Access Control** - 3 permission modes (Admins/Managers/Everyone)
-- ✅ **Per-User Theme Preferences** - Enable/disable, volume, duration control per user
-- ✅ **User Preferences Page** - Accessible to all users for customization
-- ✅ **Code Quality** - Reduced warnings from 5 to 1 (80% reduction)
-- ✅ **Security** - Permission-based API endpoint protection
+Two things this exists to prevent, both of which fail in ways that are miserable to diagnose from
+the Jellyfin end: a checksum that does not match its package, which makes the install fail
+verification with no useful message; and a three-part version number, which parses fine but never
+compares as newer, so the update simply never appears.
 
-### v1.1.0 Features
-- ✅ **Tabbed Settings Page** - Clean organization with Settings and Media Library tabs
-- ✅ **Media Library Overview** - View all media with theme song status at a glance
-- ✅ **Inline Audio Players** - Preview theme songs directly in the library table
-- ✅ **Bulk YouTube URL Assignment** - Set URLs for multiple items, download via scheduled task
-- ✅ **Statistics Dashboard** - Total media, with themes, without themes counts
-- ✅ **Improved Table Styling** - Better visual hierarchy and responsive layout
+## Building from source
 
-### v1.0.x Features
-- ✅ Plugin loads successfully in Jellyfin
-- ✅ **Web UI integration** - Three-dot menu item "Assign Theme Song"
-- ✅ **Modern Modal Dialog** with dark theme
-- ✅ **Loading Animations** during download/upload
-- ✅ **Success/Error Messages** in modal dialogs (no JavaScript alerts)
-- ✅ **Audio Player** for existing theme songs
-- ✅ **Delete Theme Songs** with confirmation dialog
-- ✅ **Drag-and-drop** file upload
-- ✅ YouTube download service with YoutubeExplode v6.5.6
-- ✅ MP3 upload support
-- ✅ API endpoints for theme management
-- ✅ Scheduled task for batch processing  
-- ✅ **Custom FFmpeg Path** configuration
-- ✅ **Cross-Platform FFmpeg Detection** - Windows, Mac, Linux, Docker
-- ✅ File Transformation Plugin Integration
+```bash
+dotnet build Jellyfin.Plugin.ThemeForge.sln -c Release
+dotnet test  Jellyfin.Plugin.ThemeForge.sln -c Release
+```
 
-## 🤝 Contributing
+The loudness tests drive a real ffmpeg. They skip themselves if one is not installed, so install
+ffmpeg to run the full suite.
 
-Contributions are welcome! Please feel free to submit issues or pull requests.
+## Layout
 
-## 📄 License
+```
+src/Jellyfin.Plugin.ThemeForge/
+  Engines/
+    Identity/      turns a library item into a searchable identity
+    Query/         builds the ordered search ladder
+    Discovery/     runs yt-dlp and parses its output
+    Scoring/       ten independent, explainable rules
+    Decision/      applies the confidence thresholds
+    Acquisition/   downloads, normalises, verifies
+    Placement/     writes theme.mp3 and refreshes the item
+    Index/         remembers every decision
+    Tooling/       provisions yt-dlp, locates ffmpeg
+    Orchestration/ drives the pipeline
+  Api/             administrator-only HTTP surface
+  Configuration/   settings and the dashboard page
+  Web/             the optional injected client script
+tests/             unit tests plus real-encoder integration tests
+```
 
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 🙏 Acknowledgments
-
-- [Jellyfin](https://github.com/jellyfin/jellyfin) - The media server
-- [YoutubeExplode](https://github.com/Tyrrrz/YoutubeExplode) - YouTube download library
-- Reference plugins: File Transformation, HoverTrailer, and others
-
-## 📧 Support
-
-For issues and questions:
-- [GitHub Issues](https://github.com/kirtan3d/Jellyfin.Plugin.AssignThemeSong/issues)
-- [Jellyfin Forum](https://forum.jellyfin.org/)
-
----
-
-**Note**: Please report any bugs or issues on GitHub.
+Each engine sits behind an interface and knows nothing about the ones on either side; the
+orchestrator is the only thing that knows the shape of the whole pipeline.

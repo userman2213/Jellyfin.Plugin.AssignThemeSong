@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>ThemeForge</title>
+</head>
+<body>
+<div id="ThemeForgeConfigPage" data-role="page" class="page type-interior pluginConfigurationPage"
+     data-require="emby-input,emby-button,emby-checkbox,emby-select,emby-collapse">
+    <div data-role="content">
+        <div class="content-primary">
+
+            <div class="verticalSection">
+                <div class="sectionTitleContainer flex align-items-center">
+                    <h2 class="sectionTitle">ThemeForge</h2>
+                </div>
+                <p class="fieldDescription">
+                    Finds a theme song for every movie and series, scores the candidates, and assigns the
+                    confident ones. Anything less certain waits in the review queue below.
+                </p>
+            </div>
+
+            <div class="localnav">
+                <a href="#" is="emby-linkbutton" data-tab="status" class="ThemeForgeTab emby-tab-button emby-tab-button-active"><span>Status</span></a>
+                <a href="#" is="emby-linkbutton" data-tab="review" class="ThemeForgeTab emby-tab-button"><span>Review queue</span></a>
+                <a href="#" is="emby-linkbutton" data-tab="library" class="ThemeForgeTab emby-tab-button"><span>Library</span></a>
+                <a href="#" is="emby-linkbutton" data-tab="libraries" class="ThemeForgeTab emby-tab-button"><span>Libraries</span></a>
+                <a href="#" is="emby-linkbutton" data-tab="settings" class="ThemeForgeTab emby-tab-button"><span>Settings</span></a>
+                <a href="#" is="emby-linkbutton" data-tab="diagnostics" class="ThemeForgeTab emby-tab-button"><span>Diagnostics</span></a>
+                <a href="#" is="emby-linkbutton" data-tab="log" class="ThemeForgeTab emby-tab-button"><span>Log</span></a>
+            </div>
+
+            <!-- ------------------------------------------------------------------ Status -->
+            <div class="ThemeForgePanel" data-panel="status">
+                <div class="verticalSection">
+                    <div id="tfStatus" class="fieldDescription" style="line-height:1.9;"></div>
+                    <br />
+                    <button is="emby-button" type="button" id="tfRun" class="raised button-submit block">
+                        <span>Run now</span>
+                    </button>
+                    <button is="emby-button" type="button" id="tfRefreshStatus" class="raised block">
+                        <span>Refresh</span>
+                    </button>
+                    <button is="emby-button" type="button" id="tfRetryFailed" class="raised block">
+                        <span>Retry failed items</span>
+                    </button>
+                    <div class="fieldDescription">
+                        Failures back off for hours before being retried. Use this after fixing whatever
+                        was breaking the run, so you do not have to wait it out.
+                    </div>
+                </div>
+            </div>
+
+            <!-- ------------------------------------------------------------ Review queue -->
+            <div class="ThemeForgePanel" data-panel="review" style="display:none;">
+                <div class="verticalSection">
+                    <p class="fieldDescription">
+                        These scored well enough to suggest, but not well enough to assign unattended.
+                        Open a candidate to listen to it, then approve or reject.
+                    </p>
+                    <div id="tfQueue"></div>
+                </div>
+            </div>
+
+            <!-- ---------------------------------------------------------------- Library -->
+            <div class="ThemeForgePanel" data-panel="library" style="display:none;">
+                <div class="verticalSection">
+                    <div class="inputContainer">
+                        <input is="emby-input" type="text" id="tfFilter" label="Filter by title" />
+                    </div>
+                    <button is="emby-button" type="button" id="tfLoadLibrary" class="raised block"><span>Load library</span></button>
+                    <div id="tfLibrary" style="margin-top:1em;"></div>
+                </div>
+            </div>
+
+            <!-- ------------------------------------------------------- Per-library rules -->
+            <div class="ThemeForgePanel" data-panel="libraries" style="display:none;">
+                <div class="verticalSection">
+                    <p class="fieldDescription">
+                        What ThemeForge is allowed to do in each library. Shows and films usually want
+                        different answers: a shows library is worth re-running as scoring improves, while a
+                        curated film library may hold themes you picked by hand.
+                    </p>
+                    <div class="selectContainer">
+                        <label class="selectLabel" for="DefaultOverwritePolicy">Default for libraries with no rule</label>
+                        <select is="emby-select" id="DefaultOverwritePolicy">
+                            <option value="1">Never replace an existing theme</option>
+                            <option value="2">Replace themes ThemeForge chose</option>
+                            <option value="3">Replace any theme, including ones I placed</option>
+                        </select>
+                    </div>
+                    <div id="tfLibraries" style="margin-top:1em;"></div>
+                    <br />
+                    <button is="emby-button" type="button" id="tfSaveLibraries" class="raised button-submit block">
+                        <span>Save library rules</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- ------------------------------------------------------------ Diagnostics -->
+            <div class="ThemeForgePanel" data-panel="diagnostics" style="display:none;">
+                <div class="verticalSection">
+                    <p class="fieldDescription">
+                        What ThemeForge is actually configured to do, read back from where the engine reads
+                        it rather than from the form above. If a setting here disagrees with what you typed,
+                        the save did not take.
+                    </p>
+                    <button is="emby-button" type="button" id="tfRefreshDiagnostics" class="raised block"><span>Refresh</span></button>
+                    <div id="tfDiagnostics" style="margin-top:1em;"></div>
+                </div>
+            </div>
+
+            <!-- -------------------------------------------------------------------- Log -->
+            <div class="ThemeForgePanel" data-panel="log" style="display:none;">
+                <div class="verticalSection">
+                    <p class="fieldDescription">
+                        ThemeForge's own log, separate from the Jellyfin server log. Everything here is also
+                        in the server log; this view just isolates it. Set the level under Settings.
+                    </p>
+                    <button is="emby-button" type="button" id="tfRefreshLog" class="raised block"><span>Refresh</span></button>
+                    <pre id="tfLog" style="white-space:pre-wrap;font-size:.8em;line-height:1.45;max-height:60vh;overflow:auto;background:#111;padding:12px;border-radius:6px;margin-top:1em;"></pre>
+                </div>
+            </div>
+
+            <!-- --------------------------------------------------------------- Settings -->
+            <div class="ThemeForgePanel" data-panel="settings" style="display:none;">
+                <form id="tfForm">
+
+                    <h3 class="checkboxListLabel">Tools</h3>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="text" id="YtDlpPath" label="yt-dlp path" />
+                        <div class="fieldDescription">Leave empty to use yt-dlp from PATH, or let ThemeForge download and update its own copy.</div>
+                    </div>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="AutoProvisionYtDlp" />
+                        <span>Download and update yt-dlp automatically</span>
+                    </label>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="text" id="FfmpegPath" label="ffmpeg path" />
+                        <div class="fieldDescription">Leave empty to auto-detect, preferring Jellyfin's own ffmpeg build.</div>
+                    </div>
+
+                    <h3 class="checkboxListLabel">What to process</h3>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="ProcessSeries" /><span>Series</span>
+                    </label>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="ProcessMovies" /><span>Movies</span>
+                    </label>
+                    <div class="fieldDescription" style="margin:.5em 0 1.5em;">
+                        Whether existing themes may be replaced is set per library, on the
+                        <strong>Libraries</strong> tab.
+                    </div>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="BackupExistingThemes" />
+                        <span>Keep a backup copy when replacing a theme</span>
+                    </label>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="RequireDedicatedFolder" />
+                        <span>Only write a theme when the item has its own folder</span>
+                    </label>
+                    <div class="fieldDescription" style="margin-bottom:1.5em;">
+                        In a flat movie library every film shares one folder, so a theme written there would
+                        apply to all of them. With this on, those items are skipped and the reason recorded.
+                    </div>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="DryRun" />
+                        <span>Dry run — score and report, but never write anything</span>
+                    </label>
+
+                    <h3 class="checkboxListLabel">Confidence thresholds</h3>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="AutoAssignThreshold" min="0" max="100" step="1" label="Assign automatically at or above" />
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="ReviewThreshold" min="0" max="100" step="1" label="Offer for review at or above" />
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="MinimumTitleSimilarity" min="0" max="1" step="0.01" label="Minimum title match (0-1)" />
+                        <div class="fieldDescription">Below this, a candidate is rejected outright however good it otherwise looks.</div>
+                    </div>
+
+                    <h3 class="checkboxListLabel">Audio</h3>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="RejectNonMusic" />
+                        <span>Check that what was downloaded is actually music</span>
+                    </label>
+                    <div class="fieldDescription" style="margin:.25em 0 1em 0;">
+                        Every other check judges a title, and a title can be wrong about what the file holds.
+                        This one measures the audio, so a recap, a reaction or a stretch of dialogue is thrown
+                        away before it reaches your library. Files under a minute are passed without an
+                        opinion &mdash; the measure cannot tell music from speech at that length.
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="MusicThreshold" min="0" max="20" step="0.1" label="Counts as music at or below" />
+                        <div class="fieldDescription">
+                            Measured on a 66-clip corpus, music fell between 0.31 and 5.57 and speech between
+                            6.20 and 12.32. Anything between the two values goes to the review queue rather
+                            than being decided either way. The measured value is recorded against every item,
+                            so you can see where your own library actually sits.
+                        </div>
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="SpeechThreshold" min="0" max="20" step="0.1" label="Rejected as speech above" />
+                    </div>
+
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="AudioBitrate" min="64" max="320" step="8" label="MP3 bitrate (kbit/s)" />
+                    </div>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="EnableLoudnessNormalization" />
+                        <span>Normalise every theme to the same loudness</span>
+                    </label>
+                    <div class="fieldDescription" style="margin-bottom:1.5em;">
+                        Jellyfin plays themes at the same volume as everything else and offers no theme volume
+                        control, so without this a theme is as loud as whoever uploaded it made it. Normalising
+                        at encode time fixes that on every client.
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="TargetLoudnessLufs" min="-40" max="-5" step="0.5" label="Loudness target (LUFS)" />
+                        <div class="fieldDescription">-23 is the broadcast standard. Use a higher value such as -18 if themes feel too quiet.</div>
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="TargetTruePeakDb" min="-9" max="0" step="0.1" label="True peak ceiling (dBTP)" />
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="MaxThemeSeconds" min="0" max="600" step="5" label="Trim to this many seconds (0 keeps the full theme)" />
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="FadeInSeconds" min="0" max="10" step="0.1" label="Fade in (seconds)" />
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="FadeOutSeconds" min="0" max="30" step="0.5" label="Fade out (seconds)" />
+                    </div>
+
+                    <h3 class="checkboxListLabel">Catalogues</h3>
+                    <p class="fieldDescription" style="margin-bottom:1em;">
+                        A catalogue is asked before any searching, using the item's own TMDB or TheTVDB id.
+                        It either has the theme for that exact title or it does not &mdash; there is nothing to
+                        score and nothing to get wrong &mdash; so a hit is used as it stands.
+                    </p>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="UseThemerrDb" />
+                        <span>Look films, shows and collections up in ThemerrDB</span>
+                    </label>
+                    <div class="fieldDescription" style="margin:.25em 0 1em 0;">
+                        A community-curated index that maps a work's TMDB id to the video someone chose as its
+                        theme &mdash; roughly 4400 films, 1300 shows and 140 film collections. Asked first for
+                        everything. A film with no theme of its own inherits its collection's, so Alien&sup3;
+                        gets the Alien Collection theme. It supplies a link, so the download is unchanged.
+                    </div>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="SyncThemerrDb" />
+                        <span>Keep a local copy of what ThemerrDB has, refreshed daily</span>
+                    </label>
+                    <div class="fieldDescription" style="margin:.25em 0 1em 0;">
+                        ThemerrDB publishes once a day at 12:00 UTC, and the scheduled task reads it an hour
+                        later. Without the local copy, every title in your library costs one request just to
+                        find out it is not in the database &mdash; and most are not. With it, a miss costs
+                        nothing. Turning this off does not disable ThemerrDB; it goes back to asking about
+                        each item directly.
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="ThemerrDbMaxAgeDays" min="1" max="30" step="1" label="Refresh before a run if the copy is older than (days)" />
+                        <div class="fieldDescription">
+                            The safety net for a server that was switched off when the task was due.
+                        </div>
+                    </div>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="UsePlexThemeArchive" />
+                        <span>Look series up in Plex's television theme archive by their TheTVDB id</span>
+                    </label>
+                    <div class="fieldDescription" style="margin:.25em 0 1em 0;color:#e8a33d;">
+                        Off by default, and worth a moment's thought before turning on. Coverage is good
+                        &mdash; roughly 43% of American series &mdash; and a hit is certain in a way no search
+                        result is. But these files are hosted by Plex for Plex's own clients, and the fair-use
+                        rationale Plex publishes for them covers their software, not this plugin. Whether that
+                        is acceptable on your server is your decision, not ours to make for you.
+                    </div>
+
+                    <h3 class="checkboxListLabel">Searching</h3>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="SearchResultsPerQuery" min="1" max="50" step="1" label="Results per search" />
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="HydrateTopCandidates" min="1" max="20" step="1" label="Candidates to inspect in full" />
+                    </div>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="StopLadderOnConfidentHit" />
+                        <span>Stop searching as soon as a confident match is found</span>
+                    </label>
+                    <div class="inputContainer">
+                        <textarea is="emby-textarea" id="SeriesQueryTemplates" rows="5" label="Series searches (one per line)"></textarea>
+                        <div class="fieldDescription">Most specific first. {title} and {year} are substituted.</div>
+                    </div>
+                    <div class="inputContainer">
+                        <textarea is="emby-textarea" id="MovieQueryTemplates" rows="5" label="Movie searches (one per line)"></textarea>
+                    </div>
+
+                    <h3 class="checkboxListLabel">Scoring</h3>
+                    <div class="inputContainer">
+                        <textarea is="emby-textarea" id="PositiveKeywords" rows="3" label="Words that suggest a real theme (one per line)"></textarea>
+                    </div>
+                    <div class="inputContainer">
+                        <textarea is="emby-textarea" id="NegativeKeywords" rows="6" label="Words that disqualify a candidate (one per line)"></textarea>
+                    </div>
+                    <div class="inputContainer">
+                        <textarea is="emby-textarea" id="PreferredChannels" rows="3" label="Trusted channels (one per line)"></textarea>
+                    </div>
+                    <div class="inputContainer">
+                        <textarea is="emby-textarea" id="BlockedChannels" rows="3" label="Blocked channels (one per line)"></textarea>
+                    </div>
+                    <div class="inputContainer">
+                        <textarea is="emby-textarea" id="BlockedVideoIds" rows="3" label="Blocked video ids (one per line)"></textarea>
+                    </div>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="TrustTopicChannels" />
+                        <span>Trust YouTube's auto-generated "- Topic" music channels</span>
+                    </label>
+
+                    <h3 class="checkboxListLabel">Plausible lengths</h3>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="SeriesIdealMinSeconds" min="1" step="1" label="Series theme, shortest expected (s)" />
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="SeriesIdealMaxSeconds" min="1" step="1" label="Series theme, longest expected (s)" />
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="MovieIdealMinSeconds" min="1" step="1" label="Movie theme, shortest expected (s)" />
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="MovieIdealMaxSeconds" min="1" step="1" label="Movie theme, longest expected (s)" />
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="HardMinSeconds" min="1" step="1" label="Reject anything shorter than (s)" />
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="HardMaxSeconds" min="1" step="1" label="Reject anything longer than (s)" />
+                    </div>
+
+                    <h3 class="checkboxListLabel">Pace</h3>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="MaxConcurrency" min="1" max="8" step="1" label="Items processed at once" />
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="RequestDelayMs" min="0" max="30000" step="100" label="Minimum gap between requests (ms)" />
+                        <div class="fieldDescription">Raising these risks being rate limited, which makes a run fail entirely.</div>
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="MaxAttempts" min="1" max="10" step="1" label="Attempts before giving up on an item" />
+                    </div>
+
+                    <h3 class="checkboxListLabel">Logging</h3>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="EnableFileLogging" />
+                        <span>Keep a separate ThemeForge log file</span>
+                    </label>
+                    <div class="fieldDescription" style="margin-bottom:1.5em;">
+                        Written to <code>&lt;jellyfin-data&gt;/themeforge/logs/</code>. Everything in it also goes to
+                        the Jellyfin server log, so turning this off hides nothing.
+                    </div>
+                    <div class="selectContainer">
+                        <label class="selectLabel" for="FileLogLevel">Log file detail</label>
+                        <select is="emby-select" id="FileLogLevel">
+                            <option value="0">Trace &mdash; everything</option>
+                            <option value="1">Debug &mdash; per-candidate detail</option>
+                            <option value="2">Information &mdash; normal</option>
+                            <option value="3">Warning</option>
+                            <option value="4">Error</option>
+                        </select>
+                        <div class="fieldDescription">
+                            Independent of Jellyfin's own level, so a run can be traced in detail without
+                            making the whole server log verbose.
+                        </div>
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="MaxLogFileSizeMb" min="1" max="100" step="1" label="Rotate the log at (MB)" />
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="MaxLogFiles" min="1" max="20" step="1" label="Old log files to keep" />
+                    </div>
+
+                    <br />
+                    <button is="emby-button" type="submit" class="raised button-submit block"><span>Save</span></button>
+                </form>
+
+                <div class="verticalSection" style="margin-top:2.5em;border-top:1px solid #442;padding-top:1em;">
+                    <h3 class="checkboxListLabel" style="color:#e8a33d;">Removing themes</h3>
+                    <div class="fieldDescription" style="margin-bottom:1em;">
+                        Deletes every <code>theme.mp3</code> ThemeForge wrote into your library. Files you have
+                        replaced by hand are left alone &mdash; each one is checked against the contents
+                        ThemeForge recorded when it wrote it, and anything that no longer matches is kept.
+                        <br /><br />
+                        Uninstalling ThemeForge does <em>not</em> do this. It removes the plugin's own data and
+                        leaves your theme files where they are.
+                    </div>
+                    <button is="emby-button" type="button" id="tfRemoveAll" class="raised block"><span>Remove all ThemeForge themes</span></button>
+
+                    <h3 class="checkboxListLabel" style="color:#e8a33d;margin-top:2em;">Starting over</h3>
+                    <div class="fieldDescription" style="margin-bottom:1em;">
+                        Throws away every decision ThemeForge has recorded, so your library is looked at again
+                        from nothing. Worth doing after an upgrade that changes how matches are chosen: a
+                        recorded decision is only as good as the code that made it, and several of the states
+                        they are kept in &mdash; rejected, locked &mdash; are treated as your judgement and
+                        would never be revisited on their own.
+                        <br /><br />
+                        Ticking the box also deletes the theme files ThemeForge wrote. Anything you have
+                        replaced by hand since is kept either way.
+                    </div>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="tfResetThemes" />
+                        <span>Also delete the theme files ThemeForge wrote</span>
+                    </label>
+                    <br />
+                    <button is="emby-button" type="button" id="tfReset" class="raised block"><span>Start over</span></button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        (function () {
+            'use strict';
+
+            var PLUGIN_ID = 'bfb42f2f-93f8-4d6b-97e6-1750035c211f';
+
+            var CHECKBOXES = [
+                'AutoProvisionYtDlp', 'ProcessSeries', 'ProcessMovies',
+                'BackupExistingThemes', 'RequireDedicatedFolder', 'DryRun',
+                'EnableLoudnessNormalization', 'StopLadderOnConfidentHit', 'TrustTopicChannels',
+                'EnableFileLogging', 'UseThemerrDb', 'UsePlexThemeArchive', 'RejectNonMusic',
+                'SyncThemerrDb'
+            ];
+            var NUMBERS = [
+                'AutoAssignThreshold', 'ReviewThreshold', 'MinimumTitleSimilarity', 'AudioBitrate',
+                'TargetLoudnessLufs', 'TargetTruePeakDb', 'MaxThemeSeconds', 'FadeInSeconds', 'FadeOutSeconds',
+                'SearchResultsPerQuery', 'HydrateTopCandidates', 'SeriesIdealMinSeconds', 'SeriesIdealMaxSeconds',
+                'MovieIdealMinSeconds', 'MovieIdealMaxSeconds', 'HardMinSeconds', 'HardMaxSeconds',
+                'MaxConcurrency', 'RequestDelayMs', 'MaxAttempts',
+                'MaxLogFileSizeMb', 'MaxLogFiles', 'FileLogLevel',
+                'MusicThreshold', 'SpeechThreshold', 'ThemerrDbMaxAgeDays'
+            ];
+            var TEXTS = ['YtDlpPath', 'FfmpegPath'];
+            var LISTS = [
+                'SeriesQueryTemplates', 'MovieQueryTemplates', 'PositiveKeywords', 'NegativeKeywords',
+                'PreferredChannels', 'BlockedChannels', 'BlockedVideoIds'
+            ];
+
+            var page = document.querySelector('#ThemeForgeConfigPage');
+
+            function el(id) { return page.querySelector('#' + id); }
+            function esc(text) {
+                var div = document.createElement('div');
+                div.textContent = text === null || text === undefined ? '' : String(text);
+                return div.innerHTML;
+            }
+
+            function api(method, path, body) {
+                var request = {
+                    type: method,
+                    url: ApiClient.getUrl('ThemeForge/' + path),
+                    dataType: 'json'
+                };
+                if (body !== undefined) {
+                    request.data = JSON.stringify(body);
+                    request.contentType = 'application/json';
+                }
+                return ApiClient.ajax(request);
+            }
+
+            // ---------------------------------------------------------------- tabs
+            page.querySelectorAll('.ThemeForgeTab').forEach(function (tab) {
+                tab.addEventListener('click', function (event) {
+                    event.preventDefault();
+                    var name = tab.getAttribute('data-tab');
+
+                    page.querySelectorAll('.ThemeForgeTab').forEach(function (other) {
+                        other.classList.toggle('emby-tab-button-active', other === tab);
+                    });
+                    page.querySelectorAll('.ThemeForgePanel').forEach(function (panel) {
+                        panel.style.display = panel.getAttribute('data-panel') === name ? '' : 'none';
+                    });
+
+                    if (name === 'review') { loadQueue(); }
+                    if (name === 'status') { loadStatus(); }
+                    if (name === 'log') { loadLog(); }
+                    if (name === 'libraries') { loadLibraries(); }
+                    if (name === 'diagnostics') { loadDiagnostics(); }
+                });
+            });
+
+            // -------------------------------------------------------------- status
+            function loadStatus() {
+                api('GET', 'Status').then(function (status) {
+                    var lines = [];
+                    lines.push('<strong>' + (status.IsRunning ? 'A run is in progress.' : 'Idle.') + '</strong>');
+                    lines.push('yt-dlp: ' + esc(status.YtDlpVersion));
+                    lines.push('ffmpeg: ' + esc(status.FfmpegPath || 'not resolved'));
+                    if (status.ToolProblem) {
+                        lines.push('<span style="color:#ff5f56;">Tooling problem: ' + esc(status.ToolProblem) + '</span>');
+                    }
+                    var themerr = status.Themerr || {};
+                    if (themerr.UpdatedUtc) {
+                        lines.push('ThemerrDB: ' + themerr.Movies + ' films, ' + themerr.Shows + ' shows, ' +
+                            themerr.Collections + ' collections &mdash; read ' +
+                            (themerr.AgeHours < 1 ? 'just now' : Math.round(themerr.AgeHours) + ' hours ago'));
+                    } else {
+                        lines.push('<span style="color:#e8a33d;">ThemerrDB: not read yet. ' +
+                            'Run the "Update the ThemerrDB catalogue" scheduled task, or start a scan and it ' +
+                            'will read it first.</span>');
+                    }
+                    if (status.StaleDecisions > 0) {
+                        lines.push('<span style="color:#e8a33d;">' + status.StaleDecisions +
+                            ' assignments and queued candidates were chosen by an older matcher. ' +
+                            'They are kept until you say otherwise &mdash; "Start over", at the bottom of ' +
+                            'Settings, discards them so your library is looked at again.</span>');
+                    }
+                    (status.ConfigurationProblems || []).forEach(function (problem) {
+                        lines.push('<span style="color:#e0a030;">Settings: ' + esc(problem) +
+                            ' See the Diagnostics tab.</span>');
+                    });
+                    if (status.ToolWarning) {
+                        lines.push('<span style="color:#e8a33d;">' + esc(status.ToolWarning) + '</span>');
+                    }
+                    lines.push('Indexed: ' + status.Indexed +
+                               ' &middot; assigned: ' + status.Assigned +
+                               ' &middot; awaiting review: ' + status.PendingReview +
+                               ' &middot; failed: ' + status.Failed);
+                    if (status.LastRunSummary) {
+                        lines.push('Last run: ' + esc(status.LastRunSummary));
+                    }
+                    if (status.LastRunReasons && status.LastRunReasons.length) {
+                        lines.push('Most common reasons: ' + status.LastRunReasons.map(esc).join('; '));
+                    }
+                    el('tfStatus').innerHTML = lines.join('<br />');
+                }, function () {
+                    el('tfStatus').textContent = 'Could not read the plugin status.';
+                });
+            }
+
+            el('tfRefreshStatus').addEventListener('click', loadStatus);
+
+            el('tfRetryFailed').addEventListener('click', function () {
+                Dashboard.showLoadingMsg();
+                api('POST', 'RetryFailed').then(function (result) {
+                    Dashboard.hideLoadingMsg();
+                    Dashboard.alert(result.Message);
+                    loadStatus();
+                }, function () {
+                    Dashboard.hideLoadingMsg();
+                    Dashboard.alert('Could not clear the retry backoff.');
+                });
+            });
+
+            // ------------------------------------------------------------------ log
+            function loadLog() {
+                api('GET', 'Log?lines=400').then(function (lines) {
+                    var pre = el('tfLog');
+                    pre.textContent = lines.length ? lines.join('\n') : 'Nothing logged yet.';
+                    pre.scrollTop = pre.scrollHeight;
+                }, function () {
+                    el('tfLog').textContent = 'Could not read the log.';
+                });
+            }
+
+            el('tfRefreshLog').addEventListener('click', loadLog);
+
+            // -------------------------------------------------- per-library rules
+            var POLICY_LABELS = [
+                { value: 0, text: 'Use the default above' },
+                { value: 1, text: 'Never replace an existing theme' },
+                { value: 2, text: 'Replace themes ThemeForge chose' },
+                { value: 3, text: 'Replace any theme, including ones I placed' }
+            ];
+
+            function loadLibraries() {
+                Dashboard.showLoadingMsg();
+                api('GET', 'Libraries').then(function (libraries) {
+                    Dashboard.hideLoadingMsg();
+
+                    if (!libraries.length) {
+                        el('tfLibraries').innerHTML =
+                            '<p class="fieldDescription">No movie or show libraries were found.</p>';
+                        return;
+                    }
+
+                    el('tfLibraries').innerHTML = libraries.map(function (library) {
+                        var options = POLICY_LABELS.map(function (option) {
+                            var selected = option.value === library.Overwrite ? ' selected' : '';
+                            return '<option value="' + option.value + '"' + selected + '>' + esc(option.text) + '</option>';
+                        }).join('');
+
+                        return '' +
+                            '<div class="verticalSection" data-library="' + esc(library.Id) + '" data-name="' + esc(library.Name) + '"' +
+                            ' style="border-bottom:1px solid #333;padding-bottom:1em;margin-bottom:1em;">' +
+                                '<h3 style="margin-bottom:.25em;">' + esc(library.Name) +
+                                    ' <small style="color:#888;">(' + esc(library.CollectionType) + ')</small></h3>' +
+                                '<label class="emby-checkbox-label">' +
+                                    '<input is="emby-checkbox" type="checkbox" class="tfLibEnabled"' +
+                                    (library.Enabled ? ' checked' : '') + ' />' +
+                                    '<span>Look for theme songs in this library</span>' +
+                                '</label>' +
+                                '<div class="selectContainer" style="margin-top:.5em;">' +
+                                    '<select is="emby-select" class="tfLibPolicy">' + options + '</select>' +
+                                '</div>' +
+                            '</div>';
+                    }).join('');
+                }, function () {
+                    Dashboard.hideLoadingMsg();
+                    el('tfLibraries').textContent = 'Could not load the libraries.';
+                });
+            }
+
+            el('tfSaveLibraries').addEventListener('click', function () {
+                var rules = [];
+                page.querySelectorAll('#tfLibraries [data-library]').forEach(function (row) {
+                    rules.push({
+                        LibraryId: row.getAttribute('data-library'),
+                        LibraryName: row.getAttribute('data-name'),
+                        Enabled: row.querySelector('.tfLibEnabled').checked,
+                        Overwrite: parseInt(row.querySelector('.tfLibPolicy').value, 10)
+                    });
+                });
+
+                Dashboard.showLoadingMsg();
+
+                // The default lives in the main configuration; the rules have their own endpoint.
+                ApiClient.getPluginConfiguration(PLUGIN_ID).then(function (config) {
+                    config.DefaultOverwritePolicy = parseInt(el('DefaultOverwritePolicy').value, 10);
+                    return ApiClient.updatePluginConfiguration(PLUGIN_ID, config);
+                }).then(function () {
+                    return api('POST', 'Libraries', rules);
+                }).then(function (result) {
+                    Dashboard.hideLoadingMsg();
+                    Dashboard.alert(result.Message);
+                    loadLibraries();
+                }, function () {
+                    Dashboard.hideLoadingMsg();
+                    Dashboard.alert('Could not save the library rules.');
+                });
+            });
+
+            // ------------------------------------------------- remove every theme
+            el('tfRemoveAll').addEventListener('click', function () {
+                var question = 'Delete every theme.mp3 that ThemeForge wrote into your library?\n\n' +
+                               'Themes you have replaced by hand are kept. This cannot be undone.';
+
+                if (!window.confirm(question)) {
+                    return;
+                }
+
+                Dashboard.showLoadingMsg();
+                api('DELETE', 'Themes?confirm=true').then(function (result) {
+                    Dashboard.hideLoadingMsg();
+                    var message = result.Summary;
+                    if (result.Failures && result.Failures.length) {
+                        message += '\n\nCould not delete:\n' + result.Failures.join('\n');
+                    }
+                    Dashboard.alert(message);
+                }, function () {
+                    Dashboard.hideLoadingMsg();
+                    Dashboard.alert('That did not work. Check the log.');
+                });
+            });
+
+            el('tfReset').addEventListener('click', function () {
+                var alsoThemes = el('tfResetThemes').checked;
+                var question = 'Throw away every decision ThemeForge has recorded?\n\n' +
+                               (alsoThemes
+                                   ? 'The theme files ThemeForge wrote will also be deleted. Themes you replaced by hand are kept.\n\n'
+                                   : 'Theme files stay where they are.\n\n') +
+                               'This cannot be undone.';
+
+                if (!window.confirm(question)) {
+                    return;
+                }
+
+                Dashboard.showLoadingMsg();
+                api('POST', 'Reset?confirm=true&deleteThemes=' + (alsoThemes ? 'true' : 'false')).then(function (result) {
+                    Dashboard.hideLoadingMsg();
+                    Dashboard.alert(result.Summary);
+                    loadStatus();
+                }, function () {
+                    Dashboard.hideLoadingMsg();
+                    Dashboard.alert('That did not work. Check the log.');
+                });
+            });
+            el('tfRun').addEventListener('click', function () {
+                api('POST', 'Run').then(function (result) {
+                    Dashboard.alert(result.Message);
+                    loadStatus();
+                });
+            });
+
+            // --------------------------------------------------------- review queue
+            function loadQueue() {
+                Dashboard.showLoadingMsg();
+                api('GET', 'Queue').then(function (items) {
+                    Dashboard.hideLoadingMsg();
+
+                    if (!items.length) {
+                        el('tfQueue').innerHTML = '<p class="fieldDescription">Nothing is waiting for review.</p>';
+                        return;
+                    }
+
+                    el('tfQueue').innerHTML = items.map(renderQueueItem).join('');
+                    wireQueueButtons();
+                }, function () {
+                    Dashboard.hideLoadingMsg();
+                    el('tfQueue').textContent = 'Could not load the review queue.';
+                });
+            }
+
+            function renderQueueItem(item) {
+                var alternates = (item.Alternates || []).map(function (alt) {
+                    return '<li><a href="' + esc(alt.Url) + '" target="_blank" rel="noopener">' + esc(alt.Title) + '</a>' +
+                           ' &mdash; ' + alt.Score.toFixed(1) + ' (' + esc(alt.Reason) + ')' +
+                           ' <button is="emby-button" type="button" class="raised tfApprove" data-id="' + item.ItemId +
+                           '" data-url="' + esc(alt.Url) + '"><span>Use this</span></button></li>';
+                }).join('');
+
+                return '' +
+                    '<div class="verticalSection" style="border-bottom:1px solid #333;padding-bottom:1em;margin-bottom:1em;">' +
+                        '<h3 style="margin-bottom:.25em;">' + esc(item.Label) + ' <small>(' + esc(item.Kind) + ')</small></h3>' +
+                        '<div>Proposed: <a href="' + esc(item.CandidateUrl) + '" target="_blank" rel="noopener">' +
+                            esc(item.CandidateTitle) + '</a>' +
+                            (item.CandidateChannel ? ' by ' + esc(item.CandidateChannel) : '') +
+                            ' &mdash; <strong>' + (item.Score === null ? '?' : item.Score.toFixed(1)) + '/100</strong></div>' +
+                        '<details style="margin:.5em 0;"><summary>Why it scored that</summary>' +
+                            '<pre style="white-space:pre-wrap;font-size:.85em;">' +
+                            esc((item.ScoreBreakdown || []).join('\n')) + '</pre></details>' +
+                        (alternates ? '<details><summary>Other candidates</summary><ul>' + alternates + '</ul></details>' : '') +
+                        '<div style="margin-top:.75em;">' +
+                            '<button is="emby-button" type="button" class="raised button-submit tfApprove" data-id="' + item.ItemId + '"><span>Approve</span></button> ' +
+                            '<button is="emby-button" type="button" class="raised tfReject" data-id="' + item.ItemId + '"><span>Reject</span></button> ' +
+                            '<button is="emby-button" type="button" class="raised tfBlock" data-id="' + item.ItemId + '"><span>Reject and block this video</span></button>' +
+                        '</div>' +
+                    '</div>';
+            }
+
+            function wireQueueButtons() {
+                page.querySelectorAll('.tfApprove').forEach(function (button) {
+                    button.addEventListener('click', function () {
+                        var url = button.getAttribute('data-url');
+                        var path = 'Queue/' + button.getAttribute('data-id') + '/Approve' +
+                                   (url ? '?url=' + encodeURIComponent(url) : '');
+                        Dashboard.showLoadingMsg();
+                        api('POST', path).then(function (result) {
+                            Dashboard.hideLoadingMsg();
+                            Dashboard.alert(result.Message);
+                            loadQueue();
+                        }, function () {
+                            Dashboard.hideLoadingMsg();
+                            Dashboard.alert('That did not work. Check the server log.');
+                        });
+                    });
+                });
+
+                function reject(button, block) {
+                    Dashboard.showLoadingMsg();
+                    api('POST', 'Queue/' + button.getAttribute('data-id') + '/Reject?blockVideo=' + block)
+                        .then(function (result) {
+                            Dashboard.hideLoadingMsg();
+                            Dashboard.alert(result.Message);
+                            loadQueue();
+                        });
+                }
+
+                page.querySelectorAll('.tfReject').forEach(function (b) {
+                    b.addEventListener('click', function () { reject(b, false); });
+                });
+                page.querySelectorAll('.tfBlock').forEach(function (b) {
+                    b.addEventListener('click', function () { reject(b, true); });
+                });
+            }
+
+            // -------------------------------------------------------------- library
+            el('tfLoadLibrary').addEventListener('click', function () {
+                Dashboard.showLoadingMsg();
+                var filter = el('tfFilter').value.trim();
+                api('GET', 'Library' + (filter ? '?filter=' + encodeURIComponent(filter) : '')).then(function (rows) {
+                    Dashboard.hideLoadingMsg();
+                    el('tfLibrary').innerHTML =
+                        '<table style="width:100%;border-collapse:collapse;font-size:.9em;">' +
+                        '<thead><tr style="text-align:left;border-bottom:1px solid #444;">' +
+                        '<th>Title</th><th>State</th><th>File</th><th>Theme</th><th>Score</th><th>Loudness</th><th>Audio</th></tr></thead><tbody>' +
+                        rows.map(function (row) {
+                            return '<tr style="border-bottom:1px solid #2a2a2a;">' +
+                                '<td>' + esc(row.Label) + '</td>' +
+                                '<td>' + esc(row.State) + '</td>' +
+                                '<td>' + (row.HasThemeFile ? 'yes' : '&mdash;') + '</td>' +
+                                '<td>' + (row.ThemeUrl
+                                    ? '<a href="' + esc(row.ThemeUrl) + '" target="_blank" rel="noopener">' + esc(row.ThemeTitle || 'source') + '</a>'
+                                    : '&mdash;') + '</td>' +
+                                '<td>' + (row.Score === null || row.Score === undefined ? '&mdash;' : row.Score.toFixed(1)) + '</td>' +
+                                '<td>' + (row.LoudnessLufs === null || row.LoudnessLufs === undefined ? '&mdash;' : row.LoudnessLufs.toFixed(1) + ' LUFS') + '</td>' +
+                                '<td>' + (row.BandDiffStd === null || row.BandDiffStd === undefined ? '&mdash;' : row.BandDiffStd.toFixed(2)) + '</td>' +
+                                '</tr>' +
+                                (row.LastError ? '<tr><td colspan="7" style="color:#c88;font-size:.85em;padding-bottom:.5em;">' + esc(row.LastError) + '</td></tr>' : '') +
+                                (row.SkipReason ? '<tr><td colspan="7" style="color:#999;font-size:.85em;padding-bottom:.5em;">Passed over because ' + esc(row.SkipReason) + '</td></tr>' : '');
+                        }).join('') +
+                        '</tbody></table>';
+                }, function () {
+                    Dashboard.hideLoadingMsg();
+                    el('tfLibrary').textContent = 'Could not load the library overview.';
+                });
+            });
+
+            // ---------------------------------------------------------- diagnostics
+            var POLICY_NAMES = { 0: 'use the default', 1: 'never replace', 2: 'replace ThemeForge\'s own', 3: 'replace any' };
+
+            function policyName(value) {
+                return POLICY_NAMES[value] !== undefined ? POLICY_NAMES[value] : String(value);
+            }
+
+            function section(title, body) {
+                return '<div class="verticalSection" style="margin-bottom:1.5em;">' +
+                    '<h3 style="margin-bottom:.4em;">' + esc(title) + '</h3>' + body + '</div>';
+            }
+
+            function table(headers, rows) {
+                if (!rows.length) {
+                    return '<p class="fieldDescription">Nothing to report.</p>';
+                }
+                return '<table style="width:100%;border-collapse:collapse;font-size:.85em;">' +
+                    '<thead><tr style="text-align:left;border-bottom:1px solid #444;">' +
+                    headers.map(function (h) { return '<th style="padding:.25em .5em;">' + esc(h) + '</th>'; }).join('') +
+                    '</tr></thead><tbody>' + rows.join('') + '</tbody></table>';
+            }
+
+            function loadDiagnostics() {
+                Dashboard.showLoadingMsg();
+                api('GET', 'Diagnostics').then(function (d) {
+                    Dashboard.hideLoadingMsg();
+                    var html = '';
+
+                    if (d.Problems && d.Problems.length) {
+                        html += '<div style="background:#3a1f1f;border-left:3px solid #ff5f56;padding:.75em 1em;margin-bottom:1.5em;">' +
+                            d.Problems.map(function (p) { return '<p style="margin:.35em 0;">' + esc(p) + '</p>'; }).join('') +
+                            '</div>';
+                    } else {
+                        html += '<div style="background:#1f3a24;border-left:3px solid #4caf50;padding:.75em 1em;margin-bottom:1.5em;">' +
+                            '<p style="margin:.35em 0;">The saved settings, the settings in use and the resolved library rules all agree.</p></div>';
+                    }
+
+                    html += section('Where things are',
+                        '<p class="fieldDescription" style="line-height:1.9;">' +
+                        'Settings file: ' + esc(d.ConfigurationFilePath) +
+                        (d.ConfigurationReadable ? '' : ' <span style="color:#ff5f56;">(could not be read)</span>') + '<br />' +
+                        'Last written: ' + (d.ConfigurationSavedUtc ? esc(new Date(d.ConfigurationSavedUtc).toLocaleString()) : 'never') + '<br />' +
+                        'ThemerrDB copy: ' + esc(d.ThemerrPath) +
+                        (d.Themerr && d.Themerr.UpdatedUtc
+                            ? ' &mdash; ' + d.Themerr.Movies + ' films, ' + d.Themerr.Shows + ' shows, ' +
+                              d.Themerr.Collections + ' collections, read ' +
+                              esc(new Date(d.Themerr.UpdatedUtc).toLocaleString())
+                            : ' <span style="color:#e8a33d;">(never read)</span>') + '<br />' +
+                        'Index: ' + esc(d.IndexPath) + '<br />' +
+                        'Log: ' + esc(d.LogPath) + '<br />' +
+                        'Data: ' + esc(d.DataPath) +
+                        '</p>');
+
+                    html += section('Library rules in force', table(
+                        ['Library', 'Type', 'Rule stored', 'Enabled', 'Existing themes', 'Id'],
+                        (d.Libraries || []).map(function (row) {
+                            return '<tr style="border-bottom:1px solid #2a2a2a;">' +
+                                '<td style="padding:.25em .5em;">' + esc(row.Name) + '</td>' +
+                                '<td style="padding:.25em .5em;">' + esc(row.CollectionType) + '</td>' +
+                                '<td style="padding:.25em .5em;">' + (row.HasStoredRule ? 'yes' : 'no, follows the default') + '</td>' +
+                                '<td style="padding:.25em .5em;">' + (row.Enabled ? 'yes' : '<span style="color:#e0a030;">no</span>') + '</td>' +
+                                '<td style="padding:.25em .5em;">' + esc(policyName(row.EffectiveOverwrite)) + '</td>' +
+                                '<td style="padding:.25em .5em;font-family:monospace;color:#888;">' + esc(row.Id) + '</td>' +
+                                '</tr>';
+                        })));
+
+                    if (d.OrphanedRules && d.OrphanedRules.length) {
+                        html += section('Rules with no library', table(
+                            ['Saved as', 'Id', 'Existing themes'],
+                            d.OrphanedRules.map(function (row) {
+                                return '<tr style="border-bottom:1px solid #2a2a2a;">' +
+                                    '<td style="padding:.25em .5em;">' + esc(row.Name) + '</td>' +
+                                    '<td style="padding:.25em .5em;font-family:monospace;color:#888;">' + esc(row.Id) + '</td>' +
+                                    '<td style="padding:.25em .5em;">' + esc(policyName(row.Overwrite)) + '</td>' +
+                                    '</tr>';
+                            })));
+                    }
+
+                    html += section('Why items were passed over', table(
+                        ['Reason', 'Items', 'For example'],
+                        (d.SkipReasons || []).map(function (row) {
+                            return '<tr style="border-bottom:1px solid #2a2a2a;">' +
+                                '<td style="padding:.25em .5em;">' + esc(row.Reason) + '</td>' +
+                                '<td style="padding:.25em .5em;">' + row.Count + '</td>' +
+                                '<td style="padding:.25em .5em;color:#999;">' + esc((row.Examples || []).join(', ')) + '</td>' +
+                                '</tr>';
+                        })));
+
+                    var disagreements = d.Disagreements || [];
+                    if (disagreements.length) {
+                        html += section('Settings that did not save', table(
+                            ['Setting', 'In use now', 'Saved on disk'],
+                            disagreements.map(function (row) {
+                                return '<tr style="border-bottom:1px solid #2a2a2a;">' +
+                                    '<td style="padding:.25em .5em;">' + esc(row.Name) + '</td>' +
+                                    '<td style="padding:.25em .5em;">' + esc(row.InUse) + '</td>' +
+                                    '<td style="padding:.25em .5em;color:#ff8a80;">' + esc(row.OnDisk) + '</td>' +
+                                    '</tr>';
+                            })));
+                    }
+
+                    html += section('Every setting, as saved', table(
+                        ['Setting', 'Value'],
+                        (d.Settings || []).map(function (row) {
+                            return '<tr style="border-bottom:1px solid #2a2a2a;">' +
+                                '<td style="padding:.25em .5em;">' + esc(row.Name) + '</td>' +
+                                '<td style="padding:.25em .5em;' + (row.Agrees ? '' : 'color:#ff8a80;') + '">' + esc(row.OnDisk) + '</td>' +
+                                '</tr>';
+                        })));
+
+                    el('tfDiagnostics').innerHTML = html;
+                }, function () {
+                    Dashboard.hideLoadingMsg();
+                    el('tfDiagnostics').textContent = 'Could not load the diagnostics.';
+                });
+            }
+
+            el('tfRefreshDiagnostics').addEventListener('click', loadDiagnostics);
+
+            // ------------------------------------------------------------- settings
+            function loadConfig() {
+                Dashboard.showLoadingMsg();
+                ApiClient.getPluginConfiguration(PLUGIN_ID).then(function (config) {
+                    CHECKBOXES.forEach(function (id) { el(id).checked = !!config[id]; });
+                    NUMBERS.forEach(function (id) { el(id).value = config[id]; });
+                    TEXTS.forEach(function (id) { el(id).value = config[id] || ''; });
+                    LISTS.forEach(function (id) { el(id).value = (config[id] || []).join('\n'); });
+                    el('DefaultOverwritePolicy').value = config.DefaultOverwritePolicy || 1;
+                    Dashboard.hideLoadingMsg();
+                    loadStatus();
+                });
+            }
+
+            el('tfForm').addEventListener('submit', function (event) {
+                event.preventDefault();
+                Dashboard.showLoadingMsg();
+
+                ApiClient.getPluginConfiguration(PLUGIN_ID).then(function (config) {
+                    CHECKBOXES.forEach(function (id) { config[id] = el(id).checked; });
+                    NUMBERS.forEach(function (id) {
+                        var value = parseFloat(el(id).value);
+                        config[id] = isNaN(value) ? config[id] : value;
+                    });
+                    TEXTS.forEach(function (id) { config[id] = el(id).value.trim(); });
+                    LISTS.forEach(function (id) {
+                        config[id] = el(id).value.split('\n')
+                            .map(function (line) { return line.trim(); })
+                            .filter(function (line) { return line.length > 0; });
+                    });
+
+                    ApiClient.updatePluginConfiguration(PLUGIN_ID, config).then(function (result) {
+                        Dashboard.processPluginConfigurationUpdateResult(result);
+                    });
+                });
+
+                return false;
+            });
+
+            page.addEventListener('pageshow', loadConfig);
+        })();
+    </script>
+</div>
+</body>
+</html>

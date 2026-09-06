@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>Jellyfin.Plugin.ThemeForge</AssemblyName>
+    <RootNamespace>Jellyfin.Plugin.ThemeForge</RootNamespace>
+    <Version>$(ThemeForgeVersion)</Version>
+    <AssemblyVersion>$(ThemeForgeVersion)</AssemblyVersion>
+    <FileVersion>$(ThemeForgeVersion)</FileVersion>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Referenced for compilation only. ExcludeAssets="runtime" is what keeps these and their
+      transitive dependencies out of the plugin output: the Jellyfin host already has them
+      loaded, and shipping a second copy invites assembly-identity conflicts. Deleting them
+      after the fact from a hand-written list is not equivalent, because every Jellyfin release
+      can add a transitive package the list has never heard of.
+    -->
+    <PackageReference Include="Jellyfin.Controller" Version="10.11.0" PrivateAssets="all" ExcludeAssets="runtime" />
+    <PackageReference Include="Jellyfin.Model" Version="10.11.0" PrivateAssets="all" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Configuration\**\*.html" />
+    <EmbeddedResource Include="Web\**\*.js" />
+    <None Include="meta.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Jellyfin.Plugin.ThemeForge.Tests" />
+  </ItemGroup>
+
+  <!-- The build output is the plugin package, so keep it free of anything not needed. -->
+  <Target Name="TrimPluginOutput" AfterTargets="Build">
+    <ItemGroup>
+      <NotShipped Include="$(OutputPath)*.pdb" />
+      <NotShipped Include="$(OutputPath)*.xml" />
+      <NotShipped Include="$(OutputPath)*.runtimeconfig.json" />
+    </ItemGroup>
+    <Delete Files="@(NotShipped)" />
+  </Target>
+
+</Project>
