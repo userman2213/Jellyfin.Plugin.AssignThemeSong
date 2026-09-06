@@ -40,7 +40,7 @@ public class LibraryIdentityTests
     private static PluginConfiguration WithRule(string libraryId, ThemeOverwritePolicy overwrite, bool enabled = true)
     {
         var configuration = TestData.Config();
-        configuration.LibraryPolicies = new List<LibraryThemePolicy>
+        configuration.LibraryPolicies = new LibraryThemePolicy[]
         {
             new() { LibraryId = libraryId, LibraryName = "Shows", Enabled = enabled, Overwrite = overwrite },
         };

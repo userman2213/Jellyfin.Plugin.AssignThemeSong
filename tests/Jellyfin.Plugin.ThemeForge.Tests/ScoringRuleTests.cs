@@ -151,7 +151,7 @@ public class ChannelReputationRuleTests
     public void BlockedChannelIsVetoed()
     {
         var configuration = TestData.Config();
-        configuration.BlockedChannels.Add("SpamChannel");
+        configuration.BlockedChannels = new[] { "SpamChannel" };
 
         var verdict = _rule.Evaluate(
             TestData.Candidate("theme", channel: "SpamChannel Uploads"),
@@ -187,7 +187,7 @@ public class AvailabilityRuleTests
     public void BlockedVideoIdIsVetoed()
     {
         var configuration = TestData.Config();
-        configuration.BlockedVideoIds.Add("abc12345678");
+        configuration.BlockedVideoIds = new[] { "abc12345678" };
 
         var verdict = _rule.Evaluate(
             TestData.Candidate("theme", id: "abc12345678"),

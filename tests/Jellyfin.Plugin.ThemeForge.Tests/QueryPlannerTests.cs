@@ -12,7 +12,7 @@ public class QueryPlannerTests
     public void SubstitutesTitleAndYear()
     {
         var configuration = TestData.Config();
-        configuration.MovieQueryTemplates = new() { "{title} {year} main theme" };
+        configuration.MovieQueryTemplates = new[] { "{title} {year} main theme" };
 
         var plan = _planner.Plan(TestData.Movie("Blade Runner", 1982), configuration);
 
@@ -23,7 +23,7 @@ public class QueryPlannerTests
     public void CollapsesTheYearPlaceholderWhenNoYearIsKnown()
     {
         var configuration = TestData.Config();
-        configuration.MovieQueryTemplates = new() { "{title} {year} main theme" };
+        configuration.MovieQueryTemplates = new[] { "{title} {year} main theme" };
 
         var plan = _planner.Plan(TestData.Movie("Nosferatu", year: null), configuration);
 
@@ -35,8 +35,8 @@ public class QueryPlannerTests
     public void UsesTheSeriesLadderForSeriesAndTheMovieLadderForFilms()
     {
         var configuration = TestData.Config();
-        configuration.SeriesQueryTemplates = new() { "series {title}" };
-        configuration.MovieQueryTemplates = new() { "movie {title}" };
+        configuration.SeriesQueryTemplates = new[] { "series {title}" };
+        configuration.MovieQueryTemplates = new[] { "movie {title}" };
 
         Assert.StartsWith("series ", _planner.Plan(TestData.Series("X"), configuration)[0].Text, System.StringComparison.Ordinal);
         Assert.StartsWith("movie ", _planner.Plan(TestData.Movie("X"), configuration)[0].Text, System.StringComparison.Ordinal);
@@ -60,7 +60,7 @@ public class QueryPlannerTests
     public void AlternateTitlesAreSearchedToo()
     {
         var configuration = TestData.Config();
-        configuration.SeriesQueryTemplates = new() { "{title} theme" };
+        configuration.SeriesQueryTemplates = new[] { "{title} theme" };
 
         var plan = _planner.Plan(
             TestData.Series("Ghost in the Shell", alternates: new[] { "koukaku kidoutai" }),
@@ -74,7 +74,7 @@ public class QueryPlannerTests
     public void DuplicateQueriesAreNotRepeated()
     {
         var configuration = TestData.Config();
-        configuration.SeriesQueryTemplates = new() { "{title} theme", "{title} theme", "  " };
+        configuration.SeriesQueryTemplates = new[] { "{title} theme", "{title} theme", "  " };
 
         var plan = _planner.Plan(TestData.Series("Firefly"), configuration);
 

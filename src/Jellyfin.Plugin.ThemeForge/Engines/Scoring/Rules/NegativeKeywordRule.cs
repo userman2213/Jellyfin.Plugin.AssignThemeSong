@@ -30,7 +30,7 @@ public sealed class NegativeKeywordRule : IScoringRule
     public RuleVerdict Evaluate(Candidate candidate, ScoringContext context)
     {
         var keywords = context.Configuration.NegativeKeywords;
-        if (keywords is null || keywords.Count == 0)
+        if (keywords is null || keywords.Length == 0)
         {
             return RuleVerdict.Abstain("no negative keywords are configured");
         }

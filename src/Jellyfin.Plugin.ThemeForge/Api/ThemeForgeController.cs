@@ -110,6 +110,16 @@ public class ThemeForgeController : ControllerBase
 
         try
         {
+            status.ConfigurationProblems = _policyResolver.Audit(Plugin.Config).Problems;
+        }
+        catch (Exception ex)
+        {
+            // Reporting a broken rule must never be the thing that breaks the status panel.
+            _logger.LogWarning(ex, "ThemeForge: could not check the per-library rules for the status panel.");
+        }
+
+        try
+        {
             var tools = await _toolProvisioner.EnsureToolsAsync(cancellationToken).ConfigureAwait(false);
             status.YtDlpVersion = tools.YtDlpVersion;
             status.FfmpegPath = tools.Ffmpeg;
@@ -241,7 +251,9 @@ public class ThemeForgeController : ControllerBase
             var configuration = Plugin.Config;
             if (!configuration.BlockedVideoIds.Contains(entry.ChosenId, StringComparer.OrdinalIgnoreCase))
             {
-                configuration.BlockedVideoIds.Add(entry.ChosenId);
+                configuration.BlockedVideoIds = configuration.BlockedVideoIds
+                    .Append(entry.ChosenId)
+                    .ToArray();
                 Plugin.Instance?.UpdateConfiguration(configuration);
             }
         }
@@ -502,7 +514,7 @@ public class ThemeForgeController : ControllerBase
                 Enabled = policy.Enabled,
                 Overwrite = policy.Overwrite,
             })
-            .ToList();
+            .ToArray();
 
         configuration.LibraryPolicies = wanted;
         Plugin.Instance?.UpdateConfiguration(configuration);
@@ -519,7 +531,7 @@ public class ThemeForgeController : ControllerBase
                 "The rules were applied for this session but could not be read back from disk, so they may not survive a restart. Check the server log.");
         }
 
-        var stored = persisted.LibraryPolicies ?? new List<LibraryThemePolicy>();
+        var stored = persisted.LibraryPolicies ?? Array.Empty<LibraryThemePolicy>();
         var missing = wanted
             .Where(want => !stored.Any(have =>
                 LibraryPolicyResolver.ParseId(have.LibraryId) == LibraryPolicyResolver.ParseId(want.LibraryId)
@@ -532,16 +544,16 @@ public class ThemeForgeController : ControllerBase
             _logger.LogError(
                 "ThemeForge: {Count} of {Total} library rules did not survive being written to {Path}.",
                 missing.Count,
-                wanted.Count,
+                wanted.Length,
                 Plugin.Instance?.ConfigurationFilePath);
 
             return new OperationResult(
                 false,
-                $"{missing.Count} of {wanted.Count} rules did not persist: {string.Join(", ", missing.Select(rule => rule.LibraryName))}. "
+                $"{missing.Count} of {wanted.Length} rules did not persist: {string.Join(", ", missing.Select(rule => rule.LibraryName))}. "
                 + "Jellyfin may not be able to write its plugin configuration directory.");
         }
 
-        _logger.LogInformation("ThemeForge: saved and verified {Count} per-library rules.", stored.Count);
+        _logger.LogInformation("ThemeForge: saved and verified {Count} per-library rules.", stored.Length);
 
         var audit = _policyResolver.Audit(Plugin.Config);
         foreach (var problem in audit.Problems)
@@ -552,9 +564,9 @@ public class ThemeForgeController : ControllerBase
         return new OperationResult(
             true,
             audit.Problems.Count == 0
-                ? (stored.Count == 0
+                ? (stored.Length == 0
                     ? "Every library now follows the server-wide default."
-                    : $"{stored.Count} library rules saved and verified.")
+                    : $"{stored.Length} library rules saved and verified.")
                 : $"Saved, but: {string.Join(" ", audit.Problems)}");
     }
 
@@ -615,6 +627,7 @@ public class ThemeForgeController : ControllerBase
                 Score = entry?.Score,
                 LoudnessLufs = entry?.LoudnessLufs,
                 LastError = entry?.LastError,
+                SkipReason = entry?.LastSkipReason,
             });
         }
 

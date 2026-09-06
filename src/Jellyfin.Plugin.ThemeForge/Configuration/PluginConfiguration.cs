@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+using System;
 using MediaBrowser.Model.Plugins;
 using Microsoft.Extensions.Logging;
 
@@ -6,8 +6,17 @@ namespace Jellyfin.Plugin.ThemeForge.Configuration;
 
 /// <summary>
 /// ThemeForge settings. Serialized by Jellyfin with <see cref="System.Xml.Serialization.XmlSerializer"/>,
-/// so every member here must be a public settable property of a simple type or a list thereof.
+/// so every member here must be a public settable property of a simple type or an array thereof.
 /// </summary>
+/// <remarks>
+/// The collections are arrays rather than lists deliberately. When deserializing into a
+/// <c>List&lt;T&gt;</c> property that already holds a value, <c>XmlSerializer</c> calls the getter
+/// and appends to the existing list instead of replacing it. With defaults defined here that had
+/// two silent consequences: a default entry could never be removed -- delete a keyword, save,
+/// restart, and it is back -- and every restart concatenated the saved list onto the defaults
+/// again, so the stored lists grew without bound. Arrays are assigned rather than appended to,
+/// so what is saved is what comes back.
+/// </remarks>
 public class PluginConfiguration : BasePluginConfiguration
 {
     // ---- Tooling -------------------------------------------------------------------
@@ -40,7 +49,7 @@ public class PluginConfiguration : BasePluginConfiguration
     public int HydrateTopCandidates { get; set; } = 5;
 
     /// <summary>Gets or sets the search ladder for series, most specific first. <c>{title}</c> and <c>{year}</c> are substituted.</summary>
-    public List<string> SeriesQueryTemplates { get; set; } = new()
+    public string[] SeriesQueryTemplates { get; set; } =
     {
         "{title} opening theme song",
         "{title} main title theme",
@@ -50,7 +59,7 @@ public class PluginConfiguration : BasePluginConfiguration
     };
 
     /// <summary>Gets or sets the search ladder for films, most specific first.</summary>
-    public List<string> MovieQueryTemplates { get; set; } = new()
+    public string[] MovieQueryTemplates { get; set; } =
     {
         "{title} {year} main theme soundtrack",
         "{title} main title theme",
@@ -82,14 +91,14 @@ public class PluginConfiguration : BasePluginConfiguration
     public double MinimumTitleSimilarity { get; set; } = 0.34;
 
     /// <summary>Gets or sets words that suggest a genuine theme.</summary>
-    public List<string> PositiveKeywords { get; set; } = new()
+    public string[] PositiveKeywords { get; set; } =
     {
         "theme", "opening", "main title", "intro", "ost", "soundtrack",
         "title sequence", "end credits", "titles", "generique",
     };
 
     /// <summary>Gets or sets words that suggest the candidate is not a theme. These carry the heaviest negative weight.</summary>
-    public List<string> NegativeKeywords { get; set; } = new()
+    public string[] NegativeKeywords { get; set; } =
     {
         "reaction", "cover", "remix", "tutorial", "lesson", "how to play",
         "1 hour", "10 hours", "hour loop", "loop", "extended", "amv",
@@ -101,13 +110,13 @@ public class PluginConfiguration : BasePluginConfiguration
     };
 
     /// <summary>Gets or sets channel names or ids that are trusted sources of themes.</summary>
-    public List<string> PreferredChannels { get; set; } = new();
+    public string[] PreferredChannels { get; set; } = Array.Empty<string>();
 
     /// <summary>Gets or sets channel names or ids that are never acceptable.</summary>
-    public List<string> BlockedChannels { get; set; } = new();
+    public string[] BlockedChannels { get; set; } = Array.Empty<string>();
 
     /// <summary>Gets or sets video ids a human has rejected globally; they are never offered again.</summary>
-    public List<string> BlockedVideoIds { get; set; } = new();
+    public string[] BlockedVideoIds { get; set; } = Array.Empty<string>();
 
     /// <summary>Gets or sets a value indicating whether YouTube's auto-generated "- Topic" music channels get a reputation bonus.</summary>
     public bool TrustTopicChannels { get; set; } = true;
@@ -179,7 +188,7 @@ public class PluginConfiguration : BasePluginConfiguration
     /// hand that should never be touched. One server-wide switch forces the more cautious
     /// setting onto both.
     /// </remarks>
-    public List<LibraryThemePolicy> LibraryPolicies { get; set; } = new();
+    public LibraryThemePolicy[] LibraryPolicies { get; set; } = Array.Empty<LibraryThemePolicy>();
 
     /// <summary>Gets or sets a value indicating whether a pre-existing theme is backed up before being replaced.</summary>
     public bool BackupExistingThemes { get; set; } = true;

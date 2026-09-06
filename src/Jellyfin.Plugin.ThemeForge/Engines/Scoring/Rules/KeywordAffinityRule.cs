@@ -22,7 +22,7 @@ public sealed class KeywordAffinityRule : IScoringRule
     public RuleVerdict Evaluate(Candidate candidate, ScoringContext context)
     {
         var keywords = context.Configuration.PositiveKeywords;
-        if (keywords is null || keywords.Count == 0)
+        if (keywords is null || keywords.Length == 0)
         {
             return RuleVerdict.Abstain("no positive keywords are configured");
         }
@@ -30,9 +30,11 @@ public sealed class KeywordAffinityRule : IScoringRule
         // Only the title is considered. Descriptions routinely mention "theme" in passing,
         // which would make this signal fire for almost everything.
         var haystack = candidate.Title.ToLowerInvariant();
+        // Distinct, so a keyword listed twice cannot inflate the score below.
         var hits = keywords
             .Where(keyword => !string.IsNullOrWhiteSpace(keyword)
                               && haystack.Contains(keyword.ToLowerInvariant(), StringComparison.Ordinal))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
         if (hits.Count == 0)

@@ -26,6 +26,7 @@
                 <a href="#" is="emby-linkbutton" data-tab="library" class="ThemeForgeTab emby-tab-button"><span>Library</span></a>
                 <a href="#" is="emby-linkbutton" data-tab="libraries" class="ThemeForgeTab emby-tab-button"><span>Libraries</span></a>
                 <a href="#" is="emby-linkbutton" data-tab="settings" class="ThemeForgeTab emby-tab-button"><span>Settings</span></a>
+                <a href="#" is="emby-linkbutton" data-tab="diagnostics" class="ThemeForgeTab emby-tab-button"><span>Diagnostics</span></a>
                 <a href="#" is="emby-linkbutton" data-tab="log" class="ThemeForgeTab emby-tab-button"><span>Log</span></a>
             </div>
 
@@ -93,6 +94,19 @@
                     <button is="emby-button" type="button" id="tfSaveLibraries" class="raised button-submit block">
                         <span>Save library rules</span>
                     </button>
+                </div>
+            </div>
+
+            <!-- ------------------------------------------------------------ Diagnostics -->
+            <div class="ThemeForgePanel" data-panel="diagnostics" style="display:none;">
+                <div class="verticalSection">
+                    <p class="fieldDescription">
+                        What ThemeForge is actually configured to do, read back from where the engine reads
+                        it rather than from the form above. If a setting here disagrees with what you typed,
+                        the save did not take.
+                    </p>
+                    <button is="emby-button" type="button" id="tfRefreshDiagnostics" class="raised block"><span>Refresh</span></button>
+                    <div id="tfDiagnostics" style="margin-top:1em;"></div>
                 </div>
             </div>
 
@@ -384,6 +398,7 @@
                     if (name === 'status') { loadStatus(); }
                     if (name === 'log') { loadLog(); }
                     if (name === 'libraries') { loadLibraries(); }
+                    if (name === 'diagnostics') { loadDiagnostics(); }
                 });
             });
 
@@ -397,6 +412,10 @@
                     if (status.ToolProblem) {
                         lines.push('<span style="color:#ff5f56;">Tooling problem: ' + esc(status.ToolProblem) + '</span>');
                     }
+                    (status.ConfigurationProblems || []).forEach(function (problem) {
+                        lines.push('<span style="color:#e0a030;">Settings: ' + esc(problem) +
+                            ' See the Diagnostics tab.</span>');
+                    });
                     if (status.ToolWarning) {
                         lines.push('<span style="color:#e8a33d;">' + esc(status.ToolWarning) + '</span>');
                     }
@@ -650,7 +669,8 @@
                                 '<td>' + (row.Score === null || row.Score === undefined ? '&mdash;' : row.Score.toFixed(1)) + '</td>' +
                                 '<td>' + (row.LoudnessLufs === null || row.LoudnessLufs === undefined ? '&mdash;' : row.LoudnessLufs.toFixed(1) + ' LUFS') + '</td>' +
                                 '</tr>' +
-                                (row.LastError ? '<tr><td colspan="6" style="color:#c88;font-size:.85em;padding-bottom:.5em;">' + esc(row.LastError) + '</td></tr>' : '');
+                                (row.LastError ? '<tr><td colspan="6" style="color:#c88;font-size:.85em;padding-bottom:.5em;">' + esc(row.LastError) + '</td></tr>' : '') +
+                                (row.SkipReason ? '<tr><td colspan="6" style="color:#999;font-size:.85em;padding-bottom:.5em;">Passed over because ' + esc(row.SkipReason) + '</td></tr>' : '');
                         }).join('') +
                         '</tbody></table>';
                 }, function () {
@@ -658,6 +678,119 @@
                     el('tfLibrary').textContent = 'Could not load the library overview.';
                 });
             });
+
+            // ---------------------------------------------------------- diagnostics
+            var POLICY_NAMES = { 0: 'use the default', 1: 'never replace', 2: 'replace ThemeForge\'s own', 3: 'replace any' };
+
+            function policyName(value) {
+                return POLICY_NAMES[value] !== undefined ? POLICY_NAMES[value] : String(value);
+            }
+
+            function section(title, body) {
+                return '<div class="verticalSection" style="margin-bottom:1.5em;">' +
+                    '<h3 style="margin-bottom:.4em;">' + esc(title) + '</h3>' + body + '</div>';
+            }
+
+            function table(headers, rows) {
+                if (!rows.length) {
+                    return '<p class="fieldDescription">Nothing to report.</p>';
+                }
+                return '<table style="width:100%;border-collapse:collapse;font-size:.85em;">' +
+                    '<thead><tr style="text-align:left;border-bottom:1px solid #444;">' +
+                    headers.map(function (h) { return '<th style="padding:.25em .5em;">' + esc(h) + '</th>'; }).join('') +
+                    '</tr></thead><tbody>' + rows.join('') + '</tbody></table>';
+            }
+
+            function loadDiagnostics() {
+                Dashboard.showLoadingMsg();
+                api('GET', 'Diagnostics').then(function (d) {
+                    Dashboard.hideLoadingMsg();
+                    var html = '';
+
+                    if (d.Problems && d.Problems.length) {
+                        html += '<div style="background:#3a1f1f;border-left:3px solid #ff5f56;padding:.75em 1em;margin-bottom:1.5em;">' +
+                            d.Problems.map(function (p) { return '<p style="margin:.35em 0;">' + esc(p) + '</p>'; }).join('') +
+                            '</div>';
+                    } else {
+                        html += '<div style="background:#1f3a24;border-left:3px solid #4caf50;padding:.75em 1em;margin-bottom:1.5em;">' +
+                            '<p style="margin:.35em 0;">The saved settings, the settings in use and the resolved library rules all agree.</p></div>';
+                    }
+
+                    html += section('Where things are',
+                        '<p class="fieldDescription" style="line-height:1.9;">' +
+                        'Settings file: ' + esc(d.ConfigurationFilePath) +
+                        (d.ConfigurationReadable ? '' : ' <span style="color:#ff5f56;">(could not be read)</span>') + '<br />' +
+                        'Last written: ' + (d.ConfigurationSavedUtc ? esc(new Date(d.ConfigurationSavedUtc).toLocaleString()) : 'never') + '<br />' +
+                        'Index: ' + esc(d.IndexPath) + '<br />' +
+                        'Log: ' + esc(d.LogPath) + '<br />' +
+                        'Data: ' + esc(d.DataPath) +
+                        '</p>');
+
+                    html += section('Library rules in force', table(
+                        ['Library', 'Type', 'Rule stored', 'Enabled', 'Existing themes', 'Id'],
+                        (d.Libraries || []).map(function (row) {
+                            return '<tr style="border-bottom:1px solid #2a2a2a;">' +
+                                '<td style="padding:.25em .5em;">' + esc(row.Name) + '</td>' +
+                                '<td style="padding:.25em .5em;">' + esc(row.CollectionType) + '</td>' +
+                                '<td style="padding:.25em .5em;">' + (row.HasStoredRule ? 'yes' : 'no, follows the default') + '</td>' +
+                                '<td style="padding:.25em .5em;">' + (row.Enabled ? 'yes' : '<span style="color:#e0a030;">no</span>') + '</td>' +
+                                '<td style="padding:.25em .5em;">' + esc(policyName(row.EffectiveOverwrite)) + '</td>' +
+                                '<td style="padding:.25em .5em;font-family:monospace;color:#888;">' + esc(row.Id) + '</td>' +
+                                '</tr>';
+                        })));
+
+                    if (d.OrphanedRules && d.OrphanedRules.length) {
+                        html += section('Rules with no library', table(
+                            ['Saved as', 'Id', 'Existing themes'],
+                            d.OrphanedRules.map(function (row) {
+                                return '<tr style="border-bottom:1px solid #2a2a2a;">' +
+                                    '<td style="padding:.25em .5em;">' + esc(row.Name) + '</td>' +
+                                    '<td style="padding:.25em .5em;font-family:monospace;color:#888;">' + esc(row.Id) + '</td>' +
+                                    '<td style="padding:.25em .5em;">' + esc(policyName(row.Overwrite)) + '</td>' +
+                                    '</tr>';
+                            })));
+                    }
+
+                    html += section('Why items were passed over', table(
+                        ['Reason', 'Items', 'For example'],
+                        (d.SkipReasons || []).map(function (row) {
+                            return '<tr style="border-bottom:1px solid #2a2a2a;">' +
+                                '<td style="padding:.25em .5em;">' + esc(row.Reason) + '</td>' +
+                                '<td style="padding:.25em .5em;">' + row.Count + '</td>' +
+                                '<td style="padding:.25em .5em;color:#999;">' + esc((row.Examples || []).join(', ')) + '</td>' +
+                                '</tr>';
+                        })));
+
+                    var disagreements = d.Disagreements || [];
+                    if (disagreements.length) {
+                        html += section('Settings that did not save', table(
+                            ['Setting', 'In use now', 'Saved on disk'],
+                            disagreements.map(function (row) {
+                                return '<tr style="border-bottom:1px solid #2a2a2a;">' +
+                                    '<td style="padding:.25em .5em;">' + esc(row.Name) + '</td>' +
+                                    '<td style="padding:.25em .5em;">' + esc(row.InUse) + '</td>' +
+                                    '<td style="padding:.25em .5em;color:#ff8a80;">' + esc(row.OnDisk) + '</td>' +
+                                    '</tr>';
+                            })));
+                    }
+
+                    html += section('Every setting, as saved', table(
+                        ['Setting', 'Value'],
+                        (d.Settings || []).map(function (row) {
+                            return '<tr style="border-bottom:1px solid #2a2a2a;">' +
+                                '<td style="padding:.25em .5em;">' + esc(row.Name) + '</td>' +
+                                '<td style="padding:.25em .5em;' + (row.Agrees ? '' : 'color:#ff8a80;') + '">' + esc(row.OnDisk) + '</td>' +
+                                '</tr>';
+                        })));
+
+                    el('tfDiagnostics').innerHTML = html;
+                }, function () {
+                    Dashboard.hideLoadingMsg();
+                    el('tfDiagnostics').textContent = 'Could not load the diagnostics.';
+                });
+            }
+
+            el('tfRefreshDiagnostics').addEventListener('click', loadDiagnostics);
 
             // ------------------------------------------------------------- settings
             function loadConfig() {

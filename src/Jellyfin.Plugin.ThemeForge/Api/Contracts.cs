@@ -74,6 +74,15 @@ public sealed class LibraryRowDto
 
     /// <summary>Gets or sets the last error recorded for this item.</summary>
     public string? LastError { get; set; }
+
+    /// <summary>
+    /// Gets or sets why the last run passed this item over, in the pipeline's own words.
+    /// </summary>
+    /// <remarks>
+    /// A run summary can say 767 items were skipped without saying why any one of them was, which
+    /// is no help at all when the question is whether a setting was even consulted.
+    /// </remarks>
+    public string? SkipReason { get; set; }
 }
 
 /// <summary>The plugin's current state, for the status panel.</summary>
@@ -120,6 +129,17 @@ public sealed class StatusDto
 
     /// <summary>Gets or sets the most common reasons items did not get a theme in the last run.</summary>
     public IReadOnlyList<string> LastRunReasons { get; set; } = Array.Empty<string>();
+
+    /// <summary>
+    /// Gets or sets anything wrong with the settings themselves, such as a library rule that
+    /// matches no library.
+    /// </summary>
+    /// <remarks>
+    /// Repeated from the Diagnostics tab because this is the panel people look at when something
+    /// has not happened, and a rule the engine never sees is indistinguishable from a rule that
+    /// did nothing.
+    /// </remarks>
+    public IReadOnlyList<string> ConfigurationProblems { get; set; } = Array.Empty<string>();
 }
 
 /// <summary>A request to set an item's theme from a specific URL.</summary>

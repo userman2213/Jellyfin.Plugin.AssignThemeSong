@@ -184,7 +184,7 @@ public sealed class LibraryPolicyResolver : ILibraryPolicyResolver
         ArgumentNullException.ThrowIfNull(libraries);
         ArgumentNullException.ThrowIfNull(configuration);
 
-        var rules = configuration.LibraryPolicies ?? new List<LibraryThemePolicy>();
+        var rules = configuration.LibraryPolicies ?? Array.Empty<LibraryThemePolicy>();
 
         return libraries
             .Select(library =>
@@ -219,7 +219,7 @@ public sealed class LibraryPolicyResolver : ILibraryPolicyResolver
         ArgumentNullException.ThrowIfNull(libraries);
         ArgumentNullException.ThrowIfNull(configuration);
 
-        var rules = configuration.LibraryPolicies ?? new List<LibraryThemePolicy>();
+        var rules = configuration.LibraryPolicies ?? Array.Empty<LibraryThemePolicy>();
         var problems = new List<string>();
 
         var rows = libraries
@@ -250,7 +250,7 @@ public sealed class LibraryPolicyResolver : ILibraryPolicyResolver
                 rule.Overwrite))
             .ToList();
 
-        if (libraries.Count == 0 && rules.Count > 0)
+        if (libraries.Count == 0 && rules.Length > 0)
         {
             // Only worth saying when rules exist. A server with no movie or show libraries at all
             // is not misconfigured, and the run report already says it considered nothing.
@@ -374,7 +374,7 @@ public sealed class LibraryPolicyResolver : ILibraryPolicyResolver
     private LibraryThemePolicy? FindRule(BaseItem item, PluginConfiguration configuration)
     {
         var rules = configuration.LibraryPolicies;
-        if (rules is null || rules.Count == 0)
+        if (rules is null || rules.Length == 0)
         {
             return null;
         }
