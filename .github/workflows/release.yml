@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to build, for example 1.0.0.0'
+        description: 'Four-part version, for example 1.2.0.0'
         required: true
 
 permissions:
@@ -18,57 +18,47 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The release script commits to the channel branch, so it needs the full history and
+          # a token that can push.
+          fetch-depth: 0
+          persist-credentials: true
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '9.0.x'
 
+      # The loudness tests drive a real encoder. Without ffmpeg they skip themselves, so a
+      # release could otherwise be cut without the audio pipeline ever being exercised.
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+
       - name: Work out the version
         id: version
         run: |
           if [ -n "${{ github.event.inputs.version }}" ]; then
-            VERSION="${{ github.event.inputs.version }}"
+            echo "value=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
           else
-            VERSION="${GITHUB_REF_NAME#v}"
+            echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
           fi
-          # Jellyfin plugin manifests require a four-part version.
-          case "$(echo "$VERSION" | tr -cd '.' | wc -c)" in
-            2) VERSION="$VERSION.0" ;;
-          esac
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Build
+      - name: Identify the committer
         run: |
-          dotnet build src/Jellyfin.Plugin.ThemeForge/Jellyfin.Plugin.ThemeForge.csproj \
-            -c Release \
-            -p:ThemeForgeVersion=${{ steps.version.outputs.version }}
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
 
-      - name: Test
-        run: dotnet test Jellyfin.Plugin.ThemeForge.sln -c Release
+      # One script for CI and for a local release, so the two cannot drift apart and produce
+      # differently-built packages under the same version number.
+      - name: Build, package and publish
+        run: ./scripts/release.sh "${{ steps.version.outputs.value }}" --publish
 
-      # Packaged from the build output rather than a publish folder, so the released archive is
-      # byte-for-byte the same shape as a local build: the plugin assembly and its manifest,
-      # with nothing the Jellyfin host already provides.
-      - name: Package
-        id: package
+      - name: Commit the manifest and package back to this branch
         run: |
-          OUT=src/Jellyfin.Plugin.ThemeForge/bin/Release/net9.0
-          cp src/Jellyfin.Plugin.ThemeForge/images/icon.png "$OUT/"
-          mkdir -p artifacts
-          ( cd "$OUT" && zip -r "$GITHUB_WORKSPACE/artifacts/themeforge_${{ steps.version.outputs.version }}.zip" . )
-          CHECKSUM=$(md5sum "artifacts/themeforge_${{ steps.version.outputs.version }}.zip" | cut -d' ' -f1)
-          echo "checksum=$CHECKSUM" >> "$GITHUB_OUTPUT"
-          echo "ThemeForge ${{ steps.version.outputs.version }} md5: $CHECKSUM"
-
-      - name: Publish release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: artifacts/*.zip
-          body: |
-            ThemeForge ${{ steps.version.outputs.version }}
-
-            Package checksum (md5): `${{ steps.package.outputs.checksum }}`
-
-            Add this checksum and the asset URL to `manifest.json` to make the release
-            installable from the Jellyfin plugin catalogue.
+          git add manifest.json dist Directory.Build.props src/Jellyfin.Plugin.ThemeForge/meta.json
+          if git diff --cached --quiet; then
+            echo "nothing to commit"
+          else
+            git commit -m "Release ${{ steps.version.outputs.value }}"
+            git push origin "HEAD:${GITHUB_REF_NAME}" || echo "source branch not updated; the channel is already published"
+          fi

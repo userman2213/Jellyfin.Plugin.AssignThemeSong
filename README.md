@@ -45,20 +45,23 @@ Whether theme songs play at all stays where it belongs: your own Jellyfin settin
 2. Name it `ThemeForge` and paste this as the URL:
 
    ```
-   https://raw.githubusercontent.com/userman2213/Jellyfin.Plugin.AssignThemeSong/claude/jellyfin-theme-song-plugin-e3ko2x/manifest.json
+   https://raw.githubusercontent.com/userman2213/Jellyfin.Plugin.AssignThemeSong/plugin-repo/manifest.json
    ```
 
 3. Save, then go to **Dashboard → Plugins → Catalog**, find **ThemeForge**, and install it.
 4. Restart Jellyfin.
 5. Open **Dashboard → Plugins → ThemeForge** and press **Run now**, or wait for the nightly task.
 
-Once this branch is merged, change `claude/jellyfin-theme-song-plugin-e3ko2x` in that URL to
-`main`.
+**Add that URL once.** New releases show up in the catalogue as updates on their own — there is
+never a URL to change. The `plugin-repo` branch is an install channel holding nothing but the
+manifest and the packages, so it is unaffected by branching, merging or renaming anything in the
+source tree.
 
 ### By hand
 
-1. Download `dist/themeforge_1.0.0.0.zip` from this repository.
-2. Extract it into `<jellyfin data>/plugins/ThemeForge_1.0.0.0/`.
+1. Download the newest `dist/themeforge_*.zip` from the
+   [`plugin-repo` branch](https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/tree/plugin-repo/dist).
+2. Extract it into `<jellyfin data>/plugins/ThemeForge_<version>/`.
 3. Restart Jellyfin.
 
 ### Requirements
@@ -168,6 +171,29 @@ folder there. ThemeForge writes `theme.mp3` beside the item.
 directory, so a `theme.mp3` written there would become the theme for all of them. ThemeForge
 detects this, refuses, and records the reason. Give each film its own folder, or turn off
 *"only write a theme when the item has its own folder"* if that is really what you want.
+
+## Releasing
+
+`scripts/release.sh` is the only supported way to cut a release. It sets the version everywhere
+it appears, builds, runs the tests, packages, computes the checksum, adds the entry to
+`manifest.json`, and pushes the result to the `plugin-repo` channel — then re-fetches the
+published manifest and fails if it does not match the package it just built.
+
+```bash
+scripts/release.sh 1.2.0.0             # build and update the manifest locally
+scripts/release.sh 1.2.0.0 --publish   # ...and publish it to the channel
+```
+
+Put the release notes in `CHANGELOG_NEXT.md` first; the script uses that as the changelog for
+the entry.
+
+Tagging `v1.2.0.0` runs the same script through GitHub Actions, so a manual release and an
+automated one cannot produce differently-built packages under the same version.
+
+Two things this exists to prevent, both of which fail in ways that are miserable to diagnose from
+the Jellyfin end: a checksum that does not match its package, which makes the install fail
+verification with no useful message; and a three-part version number, which parses fine but never
+compares as newer, so the update simply never appears.
 
 ## Building from source
 
