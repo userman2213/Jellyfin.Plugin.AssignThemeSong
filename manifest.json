@@ -9,6 +9,15 @@
         "description": "ThemeForge searches YouTube with yt-dlp, ranks every candidate with an explainable scoring engine, and writes the winner to theme.mp3 beside your media. High-confidence matches are assigned automatically; anything less certain waits in a review queue. Every theme is loudness-normalised at encode time so themes play at a consistent volume, which Jellyfin itself provides no way to control. All decisions are recorded in a persistent index, so re-runs are idempotent and manual choices are never overwritten.",
         "versions": [
             {
+                "version": "1.2.0.0",
+                "targetAbi": "10.11.0.0",
+                "framework": "net9.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_1.2.0.0.zip",
+                "checksum": "3264371bb3c92ab36c740b1c86fc9c51",
+                "timestamp": "2026-09-06T04:22:46Z",
+                "changelog": "Fixes downloads failing with HTTP 403. The plugin now uses its own yt-dlp rather than an older copy found on PATH, and replaces it automatically when it ages out - previously the update task downloaded a current yt-dlp that was then never used. Adds a \"Retry failed items\" action to clear the retry backoff, a warning when yt-dlp is too old, and takes a settings snapshot per run so a mid-run change cannot make the report disagree with what happened."
+            },
+            {
                 "version": "1.1.0.0",
                 "targetAbi": "10.11.0.0",
                 "framework": "net9.0",
