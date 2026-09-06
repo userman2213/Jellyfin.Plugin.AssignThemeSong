@@ -13,8 +13,8 @@
                 "targetAbi": "10.11.0.0",
                 "framework": "net9.0",
                 "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_2.0.0.0.zip",
-                "checksum": "4bbfd546d3ed2b031de10d8872d59d41",
-                "timestamp": "2026-09-06T13:40:58Z",
+                "checksum": "3889c0d7766649836add16c236ce9f10",
+                "timestamp": "2026-09-06T13:41:34Z",
                 "changelog": "Rebuilt how a theme is matched to a title.\n\nThe old matcher scored any candidate whose title merely contained the show's name as a perfect\nmatch, so Lost matched \"Getting lost in the woods ASMR\" and Girls was assigned the theme for The\nGolden Girls. Titles are now matched on identity: the name has to appear as whole words, a\none-word title has to match exactly, and any content word left over beside it -- \"Golden\" Girls,\n\"Lost in Space\" -- means it names something else. Ordinary titles such as Friends or House go to\nthe review queue unless something in the candidate claims to be a theme.\n\nFilms are looked up in ThemerrDB by their TMDB id before any searching, and series can optionally\nbe looked up in Plex's theme archive by their TheTVDB id. A catalogue hit is the theme for that\nexact title, so it is used as it stands.\n\nDownloaded audio is measured before it is written, so a recap, a reaction or a stretch of dialogue\nis rejected rather than assigned.\n\nPer-library rules now actually reach the items they were set for, and saving one is verified\nagainst the file on disk instead of assumed. A new Diagnostics tab shows the settings in force,\nthe rule resolved for each library, and why each item was passed over.\n\nSettings lists no longer append to their defaults on every restart, so a keyword you delete stays\ndeleted.\n\nDecisions recorded by the old matcher are marked as such, and \"Start over\" under Settings\ndiscards them."
             },
             {
