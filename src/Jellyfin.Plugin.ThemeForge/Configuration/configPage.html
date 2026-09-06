@@ -25,6 +25,7 @@
                 <a href="#" is="emby-linkbutton" data-tab="review" class="ThemeForgeTab emby-tab-button"><span>Review queue</span></a>
                 <a href="#" is="emby-linkbutton" data-tab="library" class="ThemeForgeTab emby-tab-button"><span>Library</span></a>
                 <a href="#" is="emby-linkbutton" data-tab="settings" class="ThemeForgeTab emby-tab-button"><span>Settings</span></a>
+                <a href="#" is="emby-linkbutton" data-tab="log" class="ThemeForgeTab emby-tab-button"><span>Log</span></a>
             </div>
 
             <!-- ------------------------------------------------------------------ Status -->
@@ -60,6 +61,18 @@
                     </div>
                     <button is="emby-button" type="button" id="tfLoadLibrary" class="raised block"><span>Load library</span></button>
                     <div id="tfLibrary" style="margin-top:1em;"></div>
+                </div>
+            </div>
+
+            <!-- -------------------------------------------------------------------- Log -->
+            <div class="ThemeForgePanel" data-panel="log" style="display:none;">
+                <div class="verticalSection">
+                    <p class="fieldDescription">
+                        ThemeForge's own log, separate from the Jellyfin server log. Everything here is also
+                        in the server log; this view just isolates it. Set the level under Settings.
+                    </p>
+                    <button is="emby-button" type="button" id="tfRefreshLog" class="raised block"><span>Refresh</span></button>
+                    <pre id="tfLog" style="white-space:pre-wrap;font-size:.8em;line-height:1.45;max-height:60vh;overflow:auto;background:#111;padding:12px;border-radius:6px;margin-top:1em;"></pre>
                 </div>
             </div>
 
@@ -227,9 +240,52 @@
                         <input is="emby-input" type="number" id="MaxAttempts" min="1" max="10" step="1" label="Attempts before giving up on an item" />
                     </div>
 
+                    <h3 class="checkboxListLabel">Logging</h3>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="EnableFileLogging" />
+                        <span>Keep a separate ThemeForge log file</span>
+                    </label>
+                    <div class="fieldDescription" style="margin-bottom:1.5em;">
+                        Written to <code>&lt;jellyfin-data&gt;/themeforge/logs/</code>. Everything in it also goes to
+                        the Jellyfin server log, so turning this off hides nothing.
+                    </div>
+                    <div class="selectContainer">
+                        <label class="selectLabel" for="FileLogLevel">Log file detail</label>
+                        <select is="emby-select" id="FileLogLevel">
+                            <option value="0">Trace &mdash; everything</option>
+                            <option value="1">Debug &mdash; per-candidate detail</option>
+                            <option value="2">Information &mdash; normal</option>
+                            <option value="3">Warning</option>
+                            <option value="4">Error</option>
+                        </select>
+                        <div class="fieldDescription">
+                            Independent of Jellyfin's own level, so a run can be traced in detail without
+                            making the whole server log verbose.
+                        </div>
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="MaxLogFileSizeMb" min="1" max="100" step="1" label="Rotate the log at (MB)" />
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="MaxLogFiles" min="1" max="20" step="1" label="Old log files to keep" />
+                    </div>
+
                     <br />
                     <button is="emby-button" type="submit" class="raised button-submit block"><span>Save</span></button>
                 </form>
+
+                <div class="verticalSection" style="margin-top:2.5em;border-top:1px solid #442;padding-top:1em;">
+                    <h3 class="checkboxListLabel" style="color:#e8a33d;">Removing themes</h3>
+                    <div class="fieldDescription" style="margin-bottom:1em;">
+                        Deletes every <code>theme.mp3</code> ThemeForge wrote into your library. Files you have
+                        replaced by hand are left alone &mdash; each one is checked against the contents
+                        ThemeForge recorded when it wrote it, and anything that no longer matches is kept.
+                        <br /><br />
+                        Uninstalling ThemeForge does <em>not</em> do this. It removes the plugin's own data and
+                        leaves your theme files where they are.
+                    </div>
+                    <button is="emby-button" type="button" id="tfRemoveAll" class="raised block"><span>Remove all ThemeForge themes</span></button>
+                </div>
             </div>
 
         </div>
@@ -244,14 +300,16 @@
             var CHECKBOXES = [
                 'AutoProvisionYtDlp', 'ProcessSeries', 'ProcessMovies', 'SkipItemsWithExistingTheme',
                 'OverwriteExisting', 'BackupExistingThemes', 'RequireDedicatedFolder', 'DryRun',
-                'EnableLoudnessNormalization', 'StopLadderOnConfidentHit', 'TrustTopicChannels'
+                'EnableLoudnessNormalization', 'StopLadderOnConfidentHit', 'TrustTopicChannels',
+                'EnableFileLogging'
             ];
             var NUMBERS = [
                 'AutoAssignThreshold', 'ReviewThreshold', 'MinimumTitleSimilarity', 'AudioBitrate',
                 'TargetLoudnessLufs', 'TargetTruePeakDb', 'MaxThemeSeconds', 'FadeInSeconds', 'FadeOutSeconds',
                 'SearchResultsPerQuery', 'HydrateTopCandidates', 'SeriesIdealMinSeconds', 'SeriesIdealMaxSeconds',
                 'MovieIdealMinSeconds', 'MovieIdealMaxSeconds', 'HardMinSeconds', 'HardMaxSeconds',
-                'MaxConcurrency', 'RequestDelayMs', 'MaxAttempts'
+                'MaxConcurrency', 'RequestDelayMs', 'MaxAttempts',
+                'MaxLogFileSizeMb', 'MaxLogFiles', 'FileLogLevel'
             ];
             var TEXTS = ['YtDlpPath', 'FfmpegPath'];
             var LISTS = [
@@ -296,6 +354,7 @@
 
                     if (name === 'review') { loadQueue(); }
                     if (name === 'status') { loadStatus(); }
+                    if (name === 'log') { loadLog(); }
                 });
             });
 
@@ -326,6 +385,42 @@
             }
 
             el('tfRefreshStatus').addEventListener('click', loadStatus);
+
+            // ------------------------------------------------------------------ log
+            function loadLog() {
+                api('GET', 'Log?lines=400').then(function (lines) {
+                    var pre = el('tfLog');
+                    pre.textContent = lines.length ? lines.join('\n') : 'Nothing logged yet.';
+                    pre.scrollTop = pre.scrollHeight;
+                }, function () {
+                    el('tfLog').textContent = 'Could not read the log.';
+                });
+            }
+
+            el('tfRefreshLog').addEventListener('click', loadLog);
+
+            // ------------------------------------------------- remove every theme
+            el('tfRemoveAll').addEventListener('click', function () {
+                var question = 'Delete every theme.mp3 that ThemeForge wrote into your library?\n\n' +
+                               'Themes you have replaced by hand are kept. This cannot be undone.';
+
+                if (!window.confirm(question)) {
+                    return;
+                }
+
+                Dashboard.showLoadingMsg();
+                api('DELETE', 'Themes?confirm=true').then(function (result) {
+                    Dashboard.hideLoadingMsg();
+                    var message = result.Summary;
+                    if (result.Failures && result.Failures.length) {
+                        message += '\n\nCould not delete:\n' + result.Failures.join('\n');
+                    }
+                    Dashboard.alert(message);
+                }, function () {
+                    Dashboard.hideLoadingMsg();
+                    Dashboard.alert('That did not work. Check the log.');
+                });
+            });
             el('tfRun').addEventListener('click', function () {
                 api('POST', 'Run').then(function (result) {
                     Dashboard.alert(result.Message);

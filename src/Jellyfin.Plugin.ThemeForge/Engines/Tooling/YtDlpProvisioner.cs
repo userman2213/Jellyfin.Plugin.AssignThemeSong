@@ -1,3 +1,4 @@
+using Jellyfin.Plugin.ThemeForge.Logging;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -46,7 +47,7 @@ public sealed class YtDlpProvisioner : IToolProvisioner
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IProcessRunner _processRunner;
     private readonly IFfmpegLocator _ffmpegLocator;
-    private readonly ILogger<YtDlpProvisioner> _logger;
+    private readonly IThemeForgeLogger<YtDlpProvisioner> _logger;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     private ToolPaths? _cached;
@@ -60,7 +61,7 @@ public sealed class YtDlpProvisioner : IToolProvisioner
         IHttpClientFactory httpClientFactory,
         IProcessRunner processRunner,
         IFfmpegLocator ffmpegLocator,
-        ILogger<YtDlpProvisioner> logger)
+        IThemeForgeLogger<YtDlpProvisioner> logger)
     {
         _httpClientFactory = httpClientFactory;
         _processRunner = processRunner;

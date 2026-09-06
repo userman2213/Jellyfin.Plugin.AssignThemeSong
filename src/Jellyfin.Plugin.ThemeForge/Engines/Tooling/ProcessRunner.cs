@@ -1,3 +1,4 @@
+using Jellyfin.Plugin.ThemeForge.Logging;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -65,11 +66,11 @@ public interface IProcessRunner
 /// </remarks>
 public sealed class ProcessRunner : IProcessRunner
 {
-    private readonly ILogger<ProcessRunner> _logger;
+    private readonly IThemeForgeLogger<ProcessRunner> _logger;
 
     /// <summary>Initializes a new instance of the <see cref="ProcessRunner"/> class.</summary>
     /// <param name="logger">Logger.</param>
-    public ProcessRunner(ILogger<ProcessRunner> logger) => _logger = logger;
+    public ProcessRunner(IThemeForgeLogger<ProcessRunner> logger) => _logger = logger;
 
     /// <inheritdoc />
     public async Task<ProcessResult> RunAsync(

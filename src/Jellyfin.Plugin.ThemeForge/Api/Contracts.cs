@@ -124,3 +124,26 @@ public sealed class AssignRequest
 /// <param name="Success">Whether it worked.</param>
 /// <param name="Message">What to tell the user.</param>
 public sealed record OperationResult(bool Success, string Message);
+
+/// <summary>The outcome of removing every theme ThemeForge wrote.</summary>
+public sealed class ThemeRemovalResult
+{
+    /// <summary>Gets or sets how many theme files were deleted.</summary>
+    public int Deleted { get; set; }
+
+    /// <summary>
+    /// Gets or sets how many were left alone because their contents no longer match what
+    /// ThemeForge wrote, meaning the user replaced them by hand.
+    /// </summary>
+    public int SkippedModified { get; set; }
+
+    /// <summary>Gets or sets how many were recorded but already gone from disk.</summary>
+    public int AlreadyMissing { get; set; }
+
+    /// <summary>Gets or sets how many could not be deleted, with the reason.</summary>
+    public List<string> Failures { get; set; } = new();
+
+    /// <summary>Gets a sentence describing the outcome, for the confirmation dialog.</summary>
+    public string Summary =>
+        $"Deleted {Deleted}; kept {SkippedModified} that had been edited; {AlreadyMissing} were already gone.";
+}

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using MediaBrowser.Model.Plugins;
+using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.ThemeForge.Configuration;
 
@@ -188,6 +189,30 @@ public class PluginConfiguration : BasePluginConfiguration
 
     /// <summary>Gets or sets a value indicating whether items that already have a theme file are skipped.</summary>
     public bool SkipItemsWithExistingTheme { get; set; } = true;
+
+    // ---- Logging -------------------------------------------------------------------
+
+    /// <summary>
+    /// Gets or sets a value indicating whether ThemeForge keeps its own log file.
+    /// </summary>
+    /// <remarks>
+    /// A run over a large library produces thousands of lines that only make sense together.
+    /// Everything written to the file is also written to Jellyfin's log, so turning this off
+    /// hides nothing — it only removes the separate view.
+    /// </remarks>
+    public bool EnableFileLogging { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets the lowest level written to ThemeForge's log file, independent of Jellyfin's
+    /// own level, so a run can be traced in detail without making the server log verbose.
+    /// </summary>
+    public LogLevel FileLogLevel { get; set; } = LogLevel.Information;
+
+    /// <summary>Gets or sets the size at which the log file is rotated, in megabytes.</summary>
+    public int MaxLogFileSizeMb { get; set; } = 5;
+
+    /// <summary>Gets or sets how many rotated log files are kept.</summary>
+    public int MaxLogFiles { get; set; } = 3;
 
     /// <summary>
     /// Creates a copy that can be adjusted for a single operation without disturbing the saved

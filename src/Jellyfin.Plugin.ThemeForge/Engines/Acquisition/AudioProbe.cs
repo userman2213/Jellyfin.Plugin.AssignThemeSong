@@ -1,3 +1,4 @@
+using Jellyfin.Plugin.ThemeForge.Logging;
 using System;
 using System.Globalization;
 using System.Linq;
@@ -48,13 +49,13 @@ public sealed class AudioProbe : IAudioProbe
 
     private readonly IToolProvisioner _toolProvisioner;
     private readonly IProcessRunner _processRunner;
-    private readonly ILogger<AudioProbe> _logger;
+    private readonly IThemeForgeLogger<AudioProbe> _logger;
 
     /// <summary>Initializes a new instance of the <see cref="AudioProbe"/> class.</summary>
     /// <param name="toolProvisioner">Supplies the ffprobe path.</param>
     /// <param name="processRunner">Runs ffprobe.</param>
     /// <param name="logger">Logger.</param>
-    public AudioProbe(IToolProvisioner toolProvisioner, IProcessRunner processRunner, ILogger<AudioProbe> logger)
+    public AudioProbe(IToolProvisioner toolProvisioner, IProcessRunner processRunner, IThemeForgeLogger<AudioProbe> logger)
     {
         _toolProvisioner = toolProvisioner;
         _processRunner = processRunner;

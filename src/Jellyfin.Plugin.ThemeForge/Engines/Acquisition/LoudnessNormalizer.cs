@@ -1,3 +1,4 @@
+using Jellyfin.Plugin.ThemeForge.Logging;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -78,13 +79,13 @@ public sealed class LoudnessNormalizer : ILoudnessNormalizer
 
     private readonly IToolProvisioner _toolProvisioner;
     private readonly IProcessRunner _processRunner;
-    private readonly ILogger<LoudnessNormalizer> _logger;
+    private readonly IThemeForgeLogger<LoudnessNormalizer> _logger;
 
     /// <summary>Initializes a new instance of the <see cref="LoudnessNormalizer"/> class.</summary>
     /// <param name="toolProvisioner">Supplies the ffmpeg path.</param>
     /// <param name="processRunner">Runs ffmpeg.</param>
     /// <param name="logger">Logger.</param>
-    public LoudnessNormalizer(IToolProvisioner toolProvisioner, IProcessRunner processRunner, ILogger<LoudnessNormalizer> logger)
+    public LoudnessNormalizer(IToolProvisioner toolProvisioner, IProcessRunner processRunner, IThemeForgeLogger<LoudnessNormalizer> logger)
     {
         _toolProvisioner = toolProvisioner;
         _processRunner = processRunner;

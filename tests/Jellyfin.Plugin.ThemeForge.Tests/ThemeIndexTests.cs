@@ -13,7 +13,7 @@ public class ThemeIndexTests : IDisposable
     private readonly string _path =
         Path.Combine(Path.GetTempPath(), "themeforge-index-" + Guid.NewGuid().ToString("N") + ".json");
 
-    private JsonThemeIndex NewIndex() => new(NullLogger<JsonThemeIndex>.Instance, _path);
+    private JsonThemeIndex NewIndex() => new(NullThemeForgeLogger<JsonThemeIndex>.Instance, _path);
 
     public void Dispose()
     {

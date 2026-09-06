@@ -1,3 +1,4 @@
+using Jellyfin.Plugin.ThemeForge.Logging;
 using System;
 using System.IO;
 using Microsoft.Extensions.Logging;
@@ -39,11 +40,11 @@ public sealed class FfmpegLocator : IFfmpegLocator
         @"C:\ffmpeg\bin\ffmpeg.exe",
     };
 
-    private readonly ILogger<FfmpegLocator> _logger;
+    private readonly IThemeForgeLogger<FfmpegLocator> _logger;
 
     /// <summary>Initializes a new instance of the <see cref="FfmpegLocator"/> class.</summary>
     /// <param name="logger">Logger.</param>
-    public FfmpegLocator(ILogger<FfmpegLocator> logger) => _logger = logger;
+    public FfmpegLocator(IThemeForgeLogger<FfmpegLocator> logger) => _logger = logger;
 
     /// <inheritdoc />
     public string ResolveFfmpeg()

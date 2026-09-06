@@ -59,8 +59,8 @@ public class ToolProvisionerTests
             var provisioner = new YtDlpProvisioner(
                 new SimpleHttpClientFactory(),
                 TestEngines.Runner(),
-                new FfmpegLocator(NullLogger<FfmpegLocator>.Instance),
-                NullLogger<YtDlpProvisioner>.Instance);
+                new FfmpegLocator(NullThemeForgeLogger<FfmpegLocator>.Instance),
+                NullThemeForgeLogger<YtDlpProvisioner>.Instance);
 
             var target = Path.Combine(tools, OperatingSystem.IsWindows() ? "yt-dlp.exe" : "yt-dlp");
             await DownloadDirectlyAsync(provisioner, target).ConfigureAwait(false);

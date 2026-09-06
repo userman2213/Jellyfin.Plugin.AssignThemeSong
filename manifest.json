@@ -13,9 +13,9 @@
                 "targetAbi": "10.11.0.0",
                 "framework": "net9.0",
                 "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/claude/jellyfin-theme-song-plugin-e3ko2x/dist/themeforge_1.0.0.0.zip",
-                "checksum": "67f41f1a88c83b3105c4f3425916885b",
-                "timestamp": "2026-09-06T00:35:44Z",
-                "changelog": "First release. Automatic discovery and scoring, loudness-normalised themes, review queue and a persistent decision index."
+                "checksum": "28b05d988b0fbe34958058e8e7c7d71e",
+                "timestamp": "2026-09-06T02:47:06Z",
+                "changelog": "First release. Automatic discovery and scoring, loudness-normalised themes, review queue, a persistent decision index, a dedicated log file, and full cleanup on uninstall."
             }
         ]
     }

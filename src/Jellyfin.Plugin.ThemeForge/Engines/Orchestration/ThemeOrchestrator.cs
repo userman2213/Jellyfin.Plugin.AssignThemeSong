@@ -1,3 +1,4 @@
+using Jellyfin.Plugin.ThemeForge.Logging;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -76,8 +77,11 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
     private readonly IAcquisitionEngine _acquisitionEngine;
     private readonly IThemePlacementEngine _placementEngine;
     private readonly IThemeIndex _index;
-    private readonly ILogger<ThemeOrchestrator> _logger;
+    private readonly IThemeForgeLogger<ThemeOrchestrator> _logger;
     private readonly RequestThrottle _throttle = new();
+
+    /// <summary>How many items are processed between index saves during a run.</summary>
+    private const int IndexFlushInterval = 25;
 
     private int _running;
 
@@ -102,7 +106,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         IAcquisitionEngine acquisitionEngine,
         IThemePlacementEngine placementEngine,
         IThemeIndex index,
-        ILogger<ThemeOrchestrator> logger)
+        IThemeForgeLogger<ThemeOrchestrator> logger)
     {
         _libraryManager = libraryManager;
         _identityResolver = identityResolver;
@@ -164,6 +168,15 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
                     concurrency.Release();
                     var done = Interlocked.Increment(ref processed);
                     progress?.Report(items.Count == 0 ? 100 : 100.0 * done / items.Count);
+
+                    // A run over a large library takes hours. Flushing only at the end meant a
+                    // container restart or a power cut threw away everything it had decided, so
+                    // the next run started from nothing. Flushes are debounced by the index's
+                    // dirty flag, so this is close to free when nothing has changed.
+                    if (done % IndexFlushInterval == 0)
+                    {
+                        await _index.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+                    }
                 }
             });
 

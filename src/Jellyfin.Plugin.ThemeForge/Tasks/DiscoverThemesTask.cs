@@ -1,3 +1,4 @@
+using Jellyfin.Plugin.ThemeForge.Logging;
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -14,12 +15,12 @@ namespace Jellyfin.Plugin.ThemeForge.Tasks;
 public sealed class DiscoverThemesTask : IScheduledTask
 {
     private readonly IThemeOrchestrator _orchestrator;
-    private readonly ILogger<DiscoverThemesTask> _logger;
+    private readonly IThemeForgeLogger<DiscoverThemesTask> _logger;
 
     /// <summary>Initializes a new instance of the <see cref="DiscoverThemesTask"/> class.</summary>
     /// <param name="orchestrator">The pipeline.</param>
     /// <param name="logger">Logger.</param>
-    public DiscoverThemesTask(IThemeOrchestrator orchestrator, ILogger<DiscoverThemesTask> logger)
+    public DiscoverThemesTask(IThemeOrchestrator orchestrator, IThemeForgeLogger<DiscoverThemesTask> logger)
     {
         _orchestrator = orchestrator;
         _logger = logger;

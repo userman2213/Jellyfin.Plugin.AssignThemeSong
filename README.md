@@ -73,6 +73,39 @@ Once this branch is merged, change `claude/jellyfin-theme-song-plugin-e3ko2x` in
   missing. ThemeForge never edits Jellyfin's `index.html` on disk, so a server update cannot
   leave it in a broken state.
 
+## Logging
+
+ThemeForge keeps its own log at `<jellyfin-data>/themeforge/logs/themeforge.log`, viewable under
+the **Log** tab on the plugin page. It rotates at 5 MB and keeps three old files by default.
+
+Everything in it also goes to the Jellyfin server log, so this hides nothing — it exists because
+a run over a large library produces thousands of lines that only make sense together, and picking
+them out of everything else the server logs is impractical.
+
+Its level is set independently of Jellyfin's, so you can turn ThemeForge up to **Debug** to see
+per-candidate scoring for one run without making the whole server log verbose.
+
+## Uninstalling
+
+Uninstalling from the Jellyfin dashboard removes the plugin **and** everything it stored:
+`<jellyfin-data>/themeforge/` — the index, the logs, and the yt-dlp binary it downloaded.
+
+**Your theme files stay.** The `theme.mp3` files in your media folders are your media now, and
+uninstalling a plugin should never delete your files as a side effect.
+
+If you *do* want them gone, use **Settings → Removing themes → Remove all ThemeForge themes**
+before uninstalling. That deletes only files ThemeForge actually wrote: each one is checked
+against the contents recorded when it was written, so anything you have since replaced by hand is
+left alone.
+
+### Upgrading from the old xThemeSong plugin
+
+The previous plugin could patch Jellyfin's `index.html` on disk to inject its script. That edit
+survives uninstalling it, so you may be left with a dead `<script plugin="xThemeSong" ...>` tag in
+`<jellyfin-web>/index.html` that reloads on every page. Remove that line by hand, or reinstall
+`jellyfin-web`. ThemeForge never writes to that file — it injects only through the File
+Transformation plugin, in memory, per request.
+
 ## How scoring works
 
 Each candidate is judged by ten rules. Each returns a named signal with a reason, and the review

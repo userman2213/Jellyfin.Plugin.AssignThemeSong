@@ -1,3 +1,4 @@
+using Jellyfin.Plugin.ThemeForge.Logging;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -45,7 +46,7 @@ public sealed class YtDlpAcquisitionEngine : IAcquisitionEngine
     private readonly IProcessRunner _processRunner;
     private readonly ILoudnessNormalizer _normalizer;
     private readonly IAudioProbe _probe;
-    private readonly ILogger<YtDlpAcquisitionEngine> _logger;
+    private readonly IThemeForgeLogger<YtDlpAcquisitionEngine> _logger;
 
     /// <summary>Initializes a new instance of the <see cref="YtDlpAcquisitionEngine"/> class.</summary>
     /// <param name="toolProvisioner">Supplies yt-dlp and ffmpeg.</param>
@@ -58,7 +59,7 @@ public sealed class YtDlpAcquisitionEngine : IAcquisitionEngine
         IProcessRunner processRunner,
         ILoudnessNormalizer normalizer,
         IAudioProbe probe,
-        ILogger<YtDlpAcquisitionEngine> logger)
+        IThemeForgeLogger<YtDlpAcquisitionEngine> logger)
     {
         _toolProvisioner = toolProvisioner;
         _processRunner = processRunner;
@@ -124,7 +125,7 @@ public sealed class YtDlpAcquisitionEngine : IAcquisitionEngine
                 StagingPath = finalPath,
                 DurationSeconds = finalProbe.DurationSeconds,
                 MeasuredLoudnessLufs = measurement?.IntegratedLufs,
-                Sha256 = await ComputeSha256Async(finalPath, cancellationToken).ConfigureAwait(false),
+                Sha256 = await FileHash.ComputeSha256Async(finalPath, cancellationToken).ConfigureAwait(false),
                 SizeBytes = info.Length,
                 SourceUrl = candidate.Url,
             };
@@ -178,12 +179,6 @@ public sealed class YtDlpAcquisitionEngine : IAcquisitionEngine
         return produced;
     }
 
-    private static async Task<string> ComputeSha256Async(string path, CancellationToken cancellationToken)
-    {
-        await using var stream = File.OpenRead(path);
-        var hash = await SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false);
-        return Convert.ToHexString(hash).ToLowerInvariant();
-    }
 
     private void TryCleanUp(string directory)
     {

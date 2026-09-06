@@ -1,3 +1,4 @@
+using Jellyfin.Plugin.ThemeForge.Logging;
 using System;
 using System.Collections.Concurrent;
 using System.Threading;
@@ -36,7 +37,7 @@ public sealed class NewItemWatcher : IHostedService, IDisposable
     private readonly ILibraryManager _libraryManager;
     private readonly IThemeOrchestrator _orchestrator;
     private readonly IThemeIndex _index;
-    private readonly ILogger<NewItemWatcher> _logger;
+    private readonly IThemeForgeLogger<NewItemWatcher> _logger;
 
     private readonly ConcurrentQueue<Guid> _pending = new();
     private readonly SemaphoreSlim _signal = new(0);
@@ -53,7 +54,7 @@ public sealed class NewItemWatcher : IHostedService, IDisposable
         ILibraryManager libraryManager,
         IThemeOrchestrator orchestrator,
         IThemeIndex index,
-        ILogger<NewItemWatcher> logger)
+        IThemeForgeLogger<NewItemWatcher> logger)
     {
         _libraryManager = libraryManager;
         _orchestrator = orchestrator;
@@ -77,8 +78,21 @@ public sealed class NewItemWatcher : IHostedService, IDisposable
 
         if (_worker is not null)
         {
-            // Wait for the worker, but never hold up server shutdown for it.
-            await Task.WhenAny(_worker, Task.Delay(Timeout.Infinite, cancellationToken)).ConfigureAwait(false);
+            // Wait for the worker to actually stop, but never hold up server shutdown for it.
+            // Awaiting here matters because Dispose frees the semaphore and token source the
+            // worker is still using; letting it race produced spurious faults during shutdown.
+            using var grace = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            grace.CancelAfter(TimeSpan.FromSeconds(10));
+
+            try
+            {
+                await _worker.WaitAsync(grace.Token).ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                // Cancelled, timed out, or the worker faulted on its way down. Either way the
+                // event handler is already detached and there is nothing left to wait for.
+            }
         }
     }
 

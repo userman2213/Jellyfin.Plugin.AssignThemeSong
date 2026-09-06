@@ -1,3 +1,4 @@
+using Jellyfin.Plugin.ThemeForge.Logging;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -27,7 +28,7 @@ public sealed class YtDlpCandidateSource : ICandidateSource
 
     private readonly IToolProvisioner _toolProvisioner;
     private readonly IProcessRunner _processRunner;
-    private readonly ILogger<YtDlpCandidateSource> _logger;
+    private readonly IThemeForgeLogger<YtDlpCandidateSource> _logger;
 
     /// <summary>Initializes a new instance of the <see cref="YtDlpCandidateSource"/> class.</summary>
     /// <param name="toolProvisioner">Supplies the yt-dlp binary.</param>
@@ -36,7 +37,7 @@ public sealed class YtDlpCandidateSource : ICandidateSource
     public YtDlpCandidateSource(
         IToolProvisioner toolProvisioner,
         IProcessRunner processRunner,
-        ILogger<YtDlpCandidateSource> logger)
+        IThemeForgeLogger<YtDlpCandidateSource> logger)
     {
         _toolProvisioner = toolProvisioner;
         _processRunner = processRunner;

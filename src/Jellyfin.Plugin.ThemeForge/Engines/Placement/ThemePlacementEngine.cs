@@ -1,3 +1,4 @@
+using Jellyfin.Plugin.ThemeForge.Logging;
 using System;
 using System.Globalization;
 using System.IO;
@@ -69,12 +70,12 @@ public sealed class ThemePlacementEngine : IThemePlacementEngine
     private const string ThemeFileName = "theme.mp3";
 
     private readonly IFileSystem _fileSystem;
-    private readonly ILogger<ThemePlacementEngine> _logger;
+    private readonly IThemeForgeLogger<ThemePlacementEngine> _logger;
 
     /// <summary>Initializes a new instance of the <see cref="ThemePlacementEngine"/> class.</summary>
     /// <param name="fileSystem">Jellyfin's file system abstraction, needed to trigger a refresh.</param>
     /// <param name="logger">Logger.</param>
-    public ThemePlacementEngine(IFileSystem fileSystem, ILogger<ThemePlacementEngine> logger)
+    public ThemePlacementEngine(IFileSystem fileSystem, IThemeForgeLogger<ThemePlacementEngine> logger)
     {
         _fileSystem = fileSystem;
         _logger = logger;

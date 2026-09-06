@@ -1,3 +1,4 @@
+using Jellyfin.Plugin.ThemeForge.Logging;
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -19,12 +20,12 @@ namespace Jellyfin.Plugin.ThemeForge.Tasks;
 public sealed class UpdateYtDlpTask : IScheduledTask
 {
     private readonly IToolProvisioner _toolProvisioner;
-    private readonly ILogger<UpdateYtDlpTask> _logger;
+    private readonly IThemeForgeLogger<UpdateYtDlpTask> _logger;
 
     /// <summary>Initializes a new instance of the <see cref="UpdateYtDlpTask"/> class.</summary>
     /// <param name="toolProvisioner">The provisioner that owns the binary.</param>
     /// <param name="logger">Logger.</param>
-    public UpdateYtDlpTask(IToolProvisioner toolProvisioner, ILogger<UpdateYtDlpTask> logger)
+    public UpdateYtDlpTask(IToolProvisioner toolProvisioner, IThemeForgeLogger<UpdateYtDlpTask> logger)
     {
         _toolProvisioner = toolProvisioner;
         _logger = logger;

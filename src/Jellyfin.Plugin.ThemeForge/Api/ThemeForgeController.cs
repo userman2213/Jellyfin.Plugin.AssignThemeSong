@@ -1,3 +1,4 @@
+using Jellyfin.Plugin.ThemeForge.Logging;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -5,6 +6,7 @@ using System.Linq;
 using System.Net.Mime;
 using System.Threading;
 using System.Threading.Tasks;
+using Jellyfin.Plugin.ThemeForge.Engines.Acquisition;
 using Jellyfin.Plugin.ThemeForge.Engines.Identity;
 using Jellyfin.Plugin.ThemeForge.Engines.Index;
 using Jellyfin.Plugin.ThemeForge.Engines.Orchestration;
@@ -41,7 +43,7 @@ public class ThemeForgeController : ControllerBase
     private readonly IThemePlacementEngine _placementEngine;
     private readonly IMediaIdentityResolver _identityResolver;
     private readonly IToolProvisioner _toolProvisioner;
-    private readonly ILogger<ThemeForgeController> _logger;
+    private readonly IThemeForgeLogger<ThemeForgeController> _logger;
 
     /// <summary>Initializes a new instance of the <see cref="ThemeForgeController"/> class.</summary>
     /// <param name="orchestrator">The pipeline.</param>
@@ -58,7 +60,7 @@ public class ThemeForgeController : ControllerBase
         IThemePlacementEngine placementEngine,
         IMediaIdentityResolver identityResolver,
         IToolProvisioner toolProvisioner,
-        ILogger<ThemeForgeController> logger)
+        IThemeForgeLogger<ThemeForgeController> logger)
     {
         _orchestrator = orchestrator;
         _index = index;
@@ -311,6 +313,87 @@ public class ThemeForgeController : ControllerBase
         await _index.FlushAsync(cancellationToken).ConfigureAwait(false);
         return new OperationResult(true, "Theme removed. The next run will look for a new one.");
     }
+
+    /// <summary>
+    /// Deletes every theme file ThemeForge wrote into the library.
+    /// </summary>
+    /// <remarks>
+    /// Each file is hashed before deletion and left alone if the hash no longer matches what was
+    /// recorded when it was written. A changed hash means the user replaced that theme by hand,
+    /// and a bulk cleanup has no business destroying a deliberate choice. Files ThemeForge never
+    /// wrote are not touched at all, because they are not in the index.
+    /// </remarks>
+    /// <param name="confirm">Must be true. Present so the endpoint cannot be triggered by accident.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Counts of what was deleted, kept and already missing.</returns>
+    [HttpDelete("Themes")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<ActionResult<ThemeRemovalResult>> RemoveAllThemes(
+        [FromQuery] bool confirm,
+        CancellationToken cancellationToken)
+    {
+        if (!confirm)
+        {
+            return BadRequest("This deletes theme files from your library. Pass confirm=true to proceed.");
+        }
+
+        await _index.LoadAsync(cancellationToken).ConfigureAwait(false);
+        var result = new ThemeRemovalResult();
+
+        foreach (var entry in _index.All())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (entry.ThemePath is null || entry.Sha256 is null)
+            {
+                continue;
+            }
+
+            if (!System.IO.File.Exists(entry.ThemePath))
+            {
+                result.AlreadyMissing++;
+                entry.ThemePath = null;
+                entry.Sha256 = null;
+                entry.State = ThemeItemState.Unprocessed;
+                _index.Put(entry);
+                continue;
+            }
+
+            try
+            {
+                var actual = await FileHash.ComputeSha256Async(entry.ThemePath, cancellationToken).ConfigureAwait(false);
+                if (!string.Equals(actual, entry.Sha256, StringComparison.OrdinalIgnoreCase))
+                {
+                    result.SkippedModified++;
+                    continue;
+                }
+
+                System.IO.File.Delete(entry.ThemePath);
+                result.Deleted++;
+
+                entry.ThemePath = null;
+                entry.Sha256 = null;
+                entry.State = ThemeItemState.Unprocessed;
+                _index.Put(entry);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                result.Failures.Add($"{entry.Label}: {ex.Message}");
+            }
+        }
+
+        await _index.FlushAsync(cancellationToken).ConfigureAwait(false);
+        _logger.LogInformation("ThemeForge: bulk theme removal — {Summary}", result.Summary);
+        return result;
+    }
+
+    /// <summary>Returns the tail of ThemeForge's own log file.</summary>
+    /// <param name="lines">How many lines to return.</param>
+    /// <returns>The most recent log lines, oldest first.</returns>
+    [HttpGet("Log")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public ActionResult<IReadOnlyList<string>> GetLog([FromQuery] int lines = 300) =>
+        Logging.ThemeForgeLogFile.Shared.Tail(lines);
 
     /// <summary>Lists every movie and series with its theme status.</summary>
     /// <param name="filter">Optional case-insensitive title filter.</param>

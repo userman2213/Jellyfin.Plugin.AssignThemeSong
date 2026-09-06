@@ -1,3 +1,4 @@
+using Jellyfin.Plugin.ThemeForge.Logging;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -38,7 +39,7 @@ public sealed class JsonThemeIndex : IThemeIndex, IDisposable
 
     private readonly ConcurrentDictionary<Guid, ThemeIndexEntry> _entries = new();
     private readonly SemaphoreSlim _saveGate = new(1, 1);
-    private readonly ILogger<JsonThemeIndex> _logger;
+    private readonly IThemeForgeLogger<JsonThemeIndex> _logger;
     private readonly string? _overridePath;
 
     private int _dirty;
@@ -49,7 +50,7 @@ public sealed class JsonThemeIndex : IThemeIndex, IDisposable
     /// Where to store the index. Left null in normal use so the location follows the plugin's
     /// data directory; supplied by tests so they do not share one file.
     /// </param>
-    public JsonThemeIndex(ILogger<JsonThemeIndex> logger, string? indexPath = null)
+    public JsonThemeIndex(IThemeForgeLogger<JsonThemeIndex> logger, string? indexPath = null)
     {
         _logger = logger;
         _overridePath = indexPath;
@@ -218,8 +219,27 @@ public sealed class JsonThemeIndex : IThemeIndex, IDisposable
         }
     }
 
-    /// <inheritdoc />
-    public void Dispose() => _saveGate.Dispose();
+    /// <summary>
+    /// Flushes any pending changes before releasing the file lock.
+    /// </summary>
+    /// <remarks>
+    /// Without this, an orderly host shutdown outside a run silently discarded every decision
+    /// made since the last flush — an approval or a lock set from the settings page moments
+    /// before a restart would simply be gone.
+    /// </remarks>
+    public void Dispose()
+    {
+        try
+        {
+            FlushAsync(CancellationToken.None).GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ThemeForge: could not save the index while shutting down.");
+        }
+
+        _saveGate.Dispose();
+    }
 
     private void MarkDirty() => Interlocked.Exchange(ref _dirty, 1);
 

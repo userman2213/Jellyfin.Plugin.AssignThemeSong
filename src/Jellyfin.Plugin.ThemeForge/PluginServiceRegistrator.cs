@@ -9,6 +9,7 @@ using Jellyfin.Plugin.ThemeForge.Engines.Query;
 using Jellyfin.Plugin.ThemeForge.Engines.Scoring;
 using Jellyfin.Plugin.ThemeForge.Engines.Scoring.Rules;
 using Jellyfin.Plugin.ThemeForge.Engines.Tooling;
+using Jellyfin.Plugin.ThemeForge.Logging;
 using Jellyfin.Plugin.ThemeForge.Tasks;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Plugins;
@@ -31,6 +32,11 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
     /// <inheritdoc />
     public void RegisterServices(IServiceCollection serviceCollection, IServerApplicationHost applicationHost)
     {
+        // Logging. Every engine takes IThemeForgeLogger<T> rather than ILogger<T>, so its
+        // output reaches both Jellyfin's log and ThemeForge's own file.
+        serviceCollection.AddSingleton<IThemeForgeLogSink>(ThemeForgeLogFile.Shared);
+        serviceCollection.AddSingleton(typeof(IThemeForgeLogger<>), typeof(ThemeForgeLogger<>));
+
         // Tooling
         serviceCollection.AddSingleton<IProcessRunner, ProcessRunner>();
         serviceCollection.AddSingleton<IFfmpegLocator, FfmpegLocator>();

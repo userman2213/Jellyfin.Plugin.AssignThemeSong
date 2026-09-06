@@ -66,11 +66,11 @@ internal sealed class SystemToolProvisioner : IToolProvisioner
 
 internal static class TestEngines
 {
-    public static ProcessRunner Runner() => new(NullLogger<ProcessRunner>.Instance);
+    public static ProcessRunner Runner() => new(NullThemeForgeLogger<ProcessRunner>.Instance);
 
     public static LoudnessNormalizer Normalizer() =>
-        new(new SystemToolProvisioner(), Runner(), NullLogger<LoudnessNormalizer>.Instance);
+        new(new SystemToolProvisioner(), Runner(), NullThemeForgeLogger<LoudnessNormalizer>.Instance);
 
     public static AudioProbe Probe() =>
-        new(new SystemToolProvisioner(), Runner(), NullLogger<AudioProbe>.Instance);
+        new(new SystemToolProvisioner(), Runner(), NullThemeForgeLogger<AudioProbe>.Instance);
 }
