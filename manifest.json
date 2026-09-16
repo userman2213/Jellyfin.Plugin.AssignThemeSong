@@ -9,6 +9,15 @@
         "description": "ThemeForge searches YouTube with yt-dlp, ranks every candidate with an explainable scoring engine, and writes the winner to theme.mp3 beside your media. High-confidence matches are assigned automatically; anything less certain waits in a review queue. Every theme is loudness-normalised at encode time so themes play at a consistent volume, which Jellyfin itself provides no way to control. All decisions are recorded in a persistent index, so re-runs are idempotent and manual choices are never overwritten.",
         "versions": [
             {
+                "version": "2.2.0.0",
+                "targetAbi": "10.11.0.0",
+                "framework": "net9.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_2.2.0.0.zip",
+                "checksum": "9b288e38839e881bcd0c5eac6c867124",
+                "timestamp": "2026-09-16T15:09:29Z",
+                "changelog": "ThemerrDB is now asked before anything that can defer an item. The retry backoff -- which exists to\nstop a failing search from running nightly forever -- used to sit in front of the catalogue lookup\ntoo, so every item that had failed once, or simply found nothing on YouTube, was invisible to\nThemerrDB for twelve hours to thirty days. Only a human decision or the library's overwrite rule\nstops the catalogue now. \"Nothing found\" is also its own state rather than being reported as a\nfailure, and the retry button releases every backoff.\n\nEverything the previous matcher gave up on is tried once more automatically.\n\nThe search finds more without accepting more. Season and episode numbers (\"Season 1\", \"S01E01\",\n\"Staffel 2\") are qualifiers, not siblings -- the previous version rejected \"Lost Season 1 Intro\".\nA year is evidence: the item's own year corroborates a match, and a different one (\"Battlestar\nGalactica (1978)\" for the 2004 series) rejects it, brackets included. A subtitle of two or more\nwords stands for the whole title. Claims to be a theme are recognised in several more languages.\n\nThe composer Jellyfin already records is searched for and recognised, and soundtrack uploads on\nrights-holders' \"- Topic\" channels -- titled by track, naming the show only on the album -- are\ngiven a hearing instead of being discarded unseen.\n\nItems with no theme now show what came closest and why, with a button to use one of them anyway.\nThe run summary says where its themes came from."
+            },
+            {
                 "version": "2.1.0.0",
                 "targetAbi": "10.11.0.0",
                 "framework": "net9.0",
