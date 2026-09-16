@@ -50,6 +50,23 @@ public interface IThemeOrchestrator
     bool IsRunning { get; }
 
     /// <summary>
+    /// Fetches every theme ThemeForge wrote again, from the source it was chosen from, and writes
+    /// it with the current audio settings.
+    /// </summary>
+    /// <remarks>
+    /// The way a change to how themes are written reaches the themes already in the library --
+    /// every theme written before 2.3 was normalised and faded -- without losing a single
+    /// decision. States, scores and review verdicts are untouched; only the files change.
+    /// </remarks>
+    /// <param name="progress">Progress reporter, 0 to 100.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A summary of what happened.</returns>
+    Task<RedownloadReport> RedownloadAsync(IProgress<double>? progress, CancellationToken cancellationToken);
+
+    /// <summary>Gets the most recent re-download's report, if there has been one.</summary>
+    RedownloadReport? LastRedownload { get; }
+
+    /// <summary>
     /// Downloads a specific source and makes it an item's theme, bypassing search and scoring.
     /// </summary>
     /// <param name="itemId">The item to give a theme.</param>
@@ -149,6 +166,9 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
     public RunReport? LastRun { get; private set; }
 
     /// <inheritdoc />
+    public RedownloadReport? LastRedownload { get; private set; }
+
+    /// <inheritdoc />
     public bool IsRunning => Volatile.Read(ref _running) == 1;
 
     /// <inheritdoc />
@@ -238,6 +258,187 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
 
         return report;
     }
+
+    /// <inheritdoc />
+    public async Task<RedownloadReport> RedownloadAsync(IProgress<double>? progress, CancellationToken cancellationToken)
+    {
+        if (Interlocked.CompareExchange(ref _running, 1, 0) == 1)
+        {
+            throw new InvalidOperationException("A ThemeForge run is already in progress.");
+        }
+
+        var configuration = Plugin.Config.ShallowCopy();
+
+        // Every file here passed the audio check when it was chosen, and every file replaced is
+        // ThemeForge's own, verified by hash a moment before -- so there is nothing to listen for
+        // again and nothing worth a backup copy.
+        configuration.RejectNonMusic = false;
+        configuration.BackupExistingThemes = false;
+
+        var report = new RedownloadReport();
+        LastRedownload = report;
+
+        try
+        {
+            await _index.LoadAsync(cancellationToken).ConfigureAwait(false);
+
+            var entries = _index.All()
+                .Where(entry => entry.ThemePath is not null
+                    && entry.Sha256 is not null
+                    && !string.IsNullOrWhiteSpace(entry.ChosenUrl))
+                .ToList();
+            report.Considered = entries.Count;
+            _logger.LogInformation("ThemeForge: re-downloading {Count} themes with the current audio settings.", entries.Count);
+
+            var processed = 0;
+            using var concurrency = new SemaphoreSlim(Math.Max(1, configuration.MaxConcurrency));
+
+            var work = entries.Select(async entry =>
+            {
+                await concurrency.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    var outcome = await RedownloadOneAsync(entry, configuration, report, cancellationToken).ConfigureAwait(false);
+                    lock (report)
+                    {
+                        report.Record(outcome);
+                    }
+                }
+                finally
+                {
+                    concurrency.Release();
+                    var done = Interlocked.Increment(ref processed);
+                    progress?.Report(entries.Count == 0 ? 100 : 100.0 * done / entries.Count);
+
+                    if (done % IndexFlushInterval == 0)
+                    {
+                        await _index.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+                    }
+                }
+            });
+
+            await Task.WhenAll(work).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            report.WasCancelled = true;
+            _logger.LogInformation("ThemeForge: the re-download was cancelled.");
+        }
+        catch (Exception ex)
+        {
+            report.FatalError = ex.Message;
+            _logger.LogError(ex, "ThemeForge: the re-download stopped early.");
+        }
+        finally
+        {
+            report.FinishedUtc = DateTime.UtcNow;
+            await _index.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+            Interlocked.Exchange(ref _running, 0);
+            _logger.LogInformation("ThemeForge: re-download finished — {Summary}", report.ToString());
+        }
+
+        return report;
+    }
+
+    private async Task<RedownloadOutcome> RedownloadOneAsync(
+        ThemeIndexEntry entry,
+        PluginConfiguration configuration,
+        RedownloadReport report,
+        CancellationToken cancellationToken)
+    {
+        var path = entry.ThemePath!;
+        if (!System.IO.File.Exists(path))
+        {
+            return RedownloadOutcome.Missing;
+        }
+
+        var actual = await FileHash.ComputeSha256Async(path, cancellationToken).ConfigureAwait(false);
+        if (!string.Equals(actual, entry.Sha256, StringComparison.OrdinalIgnoreCase))
+        {
+            // Replaced by hand since it was written: somebody's choice, and not ours to redo.
+            return RedownloadOutcome.KeptModified;
+        }
+
+        var item = _libraryManager.GetItemById(entry.ItemId);
+        if (item is null)
+        {
+            NoteFailure(report, entry, "it is no longer in the library");
+            return RedownloadOutcome.Failed;
+        }
+
+        try
+        {
+            await _throttle.WaitAsync(TimeSpan.FromMilliseconds(configuration.RequestDelayMs), cancellationToken).ConfigureAwait(false);
+
+            // Everything about the source is already recorded, so there is no metadata to fetch.
+            var url = entry.ChosenUrl!;
+            var candidate = new Candidate
+            {
+                Id = entry.ChosenId ?? ExtractVideoId(url),
+                Url = url,
+                Title = entry.ChosenTitle ?? url,
+                Channel = entry.ChosenChannel,
+                FoundBy = new SearchQuery(url, 0, "re-download"),
+                IsDirectAudio = LooksLikeDirectAudio(url),
+                IsHydrated = true,
+            };
+
+            var audio = await _acquisitionEngine.AcquireAsync(candidate, configuration, cancellationToken).ConfigureAwait(false);
+
+            try
+            {
+                // Our own file, verified a moment ago: the library's rule about existing themes
+                // is about other people's files and does not apply to it.
+                var replacing = new ResolvedThemePolicy(true, ThemeOverwritePolicy.ReplaceAny, string.Empty);
+                var placement = await _placementEngine.PlaceAsync(item, audio, configuration, replacing, cancellationToken).ConfigureAwait(false);
+                if (!placement.Success)
+                {
+                    NoteFailure(report, entry, placement.Reason ?? "the theme could not be written");
+                    return RedownloadOutcome.Failed;
+                }
+
+                entry.ThemePath = placement.Path;
+                entry.Sha256 = audio.Sha256;
+                entry.LoudnessLufs = audio.MeasuredLoudnessLufs;
+                entry.DurationSeconds = audio.DurationSeconds;
+                entry.LastError = null;
+                _index.Put(entry);
+
+                _logger.LogInformation("ThemeForge: re-downloaded the theme for \"{Item}\" — {Treatment}.", entry.Label, audio.Treatment);
+                return RedownloadOutcome.Redone;
+            }
+            finally
+            {
+                CleanUpStaging(audio);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "ThemeForge: could not re-download the theme for \"{Item}\" from {Url}.", entry.Label, entry.ChosenUrl);
+            NoteFailure(report, entry, ex.Message);
+            return RedownloadOutcome.Failed;
+        }
+    }
+
+    private static void NoteFailure(RedownloadReport report, ThemeIndexEntry entry, string reason)
+    {
+        lock (report)
+        {
+            if (report.Failures.Count < 20)
+            {
+                report.Failures.Add($"{entry.Label}: {reason}");
+            }
+        }
+    }
+
+    /// <summary>Whether a URL points straight at an audio file rather than at a page to extract one from.</summary>
+    internal static bool LooksLikeDirectAudio(string url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri)
+        && uri.AbsolutePath.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase);
 
     /// <inheritdoc />
     public async Task<ItemOutcome> ProcessItemAsync(

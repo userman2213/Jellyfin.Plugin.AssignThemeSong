@@ -205,34 +205,73 @@
                         <input is="emby-input" type="number" id="SpeechThreshold" min="0" max="20" step="0.1" label="Rejected as speech above" />
                     </div>
 
+                    <h3 class="checkboxListLabel">Audio processing</h3>
+                    <p class="fieldDescription" style="margin-bottom:1em;">
+                        By default a theme is written exactly as it was downloaded: the same audio stream at the
+                        same volume, kept in the format it arrived in (Opus, AAC or MP3). Everything below is off
+                        unless you turn it on, and a file is only re-encoded when one of these has to change it.
+                    </p>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="RaiseQuietThemes" />
+                        <span>Raise quiet themes</span>
+                    </label>
+                    <div class="fieldDescription" style="margin:.25em 0 1em 0;">
+                        Brings a theme that is quieter than the floor below up to it. Never lowers anything: a
+                        theme already at or above the floor is left exactly as it is.
+                    </div>
                     <div class="inputContainer">
-                        <input is="emby-input" type="number" id="AudioBitrate" min="64" max="320" step="8" label="MP3 bitrate (kbit/s)" />
+                        <input is="emby-input" type="number" id="QuietThemeFloorLufs" min="-40" max="-5" step="0.5" label="Floor for quiet themes (LUFS)" />
+                        <div class="fieldDescription">-16 is roughly where streaming services level music. Most uploads are already above it.</div>
                     </div>
                     <label class="emby-checkbox-label">
                         <input is="emby-checkbox" type="checkbox" id="EnableLoudnessNormalization" />
-                        <span>Normalise every theme to the same loudness</span>
+                        <span>Normalise every theme to one loudness (makes loud themes quieter too)</span>
                     </label>
-                    <div class="fieldDescription" style="margin-bottom:1.5em;">
-                        Jellyfin plays themes at the same volume as everything else and offers no theme volume
-                        control, so without this a theme is as loud as whoever uploaded it made it. Normalising
-                        at encode time fixes that on every client.
+                    <div class="fieldDescription" style="margin:.25em 0 1em 0;">
+                        Every theme ends up at the target below, whether that means raising it or lowering it.
+                        When this is on it takes precedence over raising quiet themes.
                     </div>
                     <div class="inputContainer">
-                        <input is="emby-input" type="number" id="TargetLoudnessLufs" min="-40" max="-5" step="0.5" label="Loudness target (LUFS)" />
-                        <div class="fieldDescription">-23 is the broadcast standard. Use a higher value such as -18 if themes feel too quiet.</div>
+                        <input is="emby-input" type="number" id="TargetLoudnessLufs" min="-40" max="-5" step="0.5" label="Normalisation target (LUFS)" />
                     </div>
                     <div class="inputContainer">
-                        <input is="emby-input" type="number" id="TargetTruePeakDb" min="-9" max="0" step="0.1" label="True peak ceiling (dBTP)" />
+                        <input is="emby-input" type="number" id="TargetTruePeakDb" min="-9" max="0" step="0.1" label="True peak ceiling (dBTP), for raising and normalising" />
+                    </div>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="TrimSilence" />
+                        <span>Cut silence from the start and the end</span>
+                    </label>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="FadeInSeconds" min="0" max="10" step="0.1" label="Fade in (seconds, 0 for none)" />
                     </div>
                     <div class="inputContainer">
-                        <input is="emby-input" type="number" id="MaxThemeSeconds" min="0" max="600" step="5" label="Trim to this many seconds (0 keeps the full theme)" />
+                        <input is="emby-input" type="number" id="FadeOutSeconds" min="0" max="30" step="0.5" label="Fade out (seconds, 0 for none)" />
                     </div>
                     <div class="inputContainer">
-                        <input is="emby-input" type="number" id="FadeInSeconds" min="0" max="10" step="0.1" label="Fade in (seconds)" />
+                        <input is="emby-input" type="number" id="MaxThemeSeconds" min="0" max="600" step="5" label="Cut to this many seconds (0 keeps the full theme)" />
+                    </div>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="AlwaysConvertToMp3" />
+                        <span>Always convert to MP3</span>
+                    </label>
+                    <div class="fieldDescription" style="margin:.25em 0 1em 0;">
+                        Off, a theme keeps the codec it was delivered in and loses nothing; Jellyfin transcodes
+                        for the rare client that cannot play it. Turn this on if you would rather every theme
+                        were an MP3 to begin with.
                     </div>
                     <div class="inputContainer">
-                        <input is="emby-input" type="number" id="FadeOutSeconds" min="0" max="30" step="0.5" label="Fade out (seconds)" />
+                        <input is="emby-input" type="number" id="AudioBitrate" min="64" max="320" step="8" label="MP3 bitrate (kbit/s), when a theme is re-encoded" />
                     </div>
+
+                    <h3 class="checkboxListLabel">Themes already written</h3>
+                    <div class="fieldDescription" style="margin-bottom:1em;">
+                        Themes written before version 2.3 were normalised to -23 LUFS and faded, which made most
+                        of them quieter than the upload they came from. This fetches every theme ThemeForge wrote
+                        again, from the same source, and writes it with the settings above. Nothing else changes:
+                        states, scores and your review decisions stay as they are, and a theme you have replaced
+                        by hand is left alone. Save your settings first.
+                    </div>
+                    <button is="emby-button" type="button" id="tfRedownload" class="raised block"><span>Re-download all themes with the current audio settings</span></button>
 
                     <h3 class="checkboxListLabel">Catalogues</h3>
                     <p class="fieldDescription" style="margin-bottom:1em;">
@@ -429,13 +468,14 @@
             var CHECKBOXES = [
                 'AutoProvisionYtDlp', 'ProcessSeries', 'ProcessMovies',
                 'BackupExistingThemes', 'RequireDedicatedFolder', 'DryRun',
-                'EnableLoudnessNormalization', 'StopLadderOnConfidentHit', 'TrustTopicChannels',
+                'EnableLoudnessNormalization', 'RaiseQuietThemes', 'TrimSilence', 'AlwaysConvertToMp3',
+                'StopLadderOnConfidentHit', 'TrustTopicChannels',
                 'EnableFileLogging', 'UseThemerrDb', 'UsePlexThemeArchive', 'RejectNonMusic',
                 'SyncThemerrDb'
             ];
             var NUMBERS = [
                 'AutoAssignThreshold', 'ReviewThreshold', 'MinimumTitleSimilarity', 'AudioBitrate',
-                'TargetLoudnessLufs', 'TargetTruePeakDb', 'MaxThemeSeconds', 'FadeInSeconds', 'FadeOutSeconds',
+                'TargetLoudnessLufs', 'TargetTruePeakDb', 'QuietThemeFloorLufs', 'MaxThemeSeconds', 'FadeInSeconds', 'FadeOutSeconds',
                 'SearchResultsPerQuery', 'HydrateTopCandidates', 'SeriesIdealMinSeconds', 'SeriesIdealMaxSeconds',
                 'MovieIdealMinSeconds', 'MovieIdealMaxSeconds', 'HardMinSeconds', 'HardMaxSeconds',
                 'MaxConcurrency', 'RequestDelayMs', 'MaxAttempts',
@@ -537,6 +577,9 @@
                     }
                     if (status.LastRunReasons && status.LastRunReasons.length) {
                         lines.push('Most common reasons: ' + status.LastRunReasons.map(esc).join('; '));
+                    }
+                    if (status.LastRedownloadSummary) {
+                        lines.push('Last re-download: ' + esc(status.LastRedownloadSummary));
                     }
                     el('tfStatus').innerHTML = lines.join('<br />');
                 }, function () {
@@ -695,6 +738,37 @@
                 api('POST', 'Run').then(function (result) {
                     Dashboard.alert(result.Message);
                     loadStatus();
+                });
+            });
+
+            el('tfRedownload').addEventListener('click', function () {
+                Dashboard.showLoadingMsg();
+                api('GET', 'Status').then(function (status) {
+                    Dashboard.hideLoadingMsg();
+                    if (status.IsRunning) {
+                        Dashboard.alert('A run is already in progress. Wait for it to finish first.');
+                        return;
+                    }
+                    var count = status.WrittenThemes || 0;
+                    if (!count) {
+                        Dashboard.alert('There are no themes written by ThemeForge to re-download.');
+                        return;
+                    }
+                    var question = 'Fetch ' + count + ' theme' + (count === 1 ? '' : 's') +
+                        ' again from where they came from and write them with the current audio settings?\n\n' +
+                        'Themes you have replaced by hand are left alone. This takes about as long as the run that found them.';
+                    if (!window.confirm(question)) {
+                        return;
+                    }
+                    api('POST', 'Themes/Redownload?confirm=true').then(function (result) {
+                        Dashboard.alert(result.Message);
+                        loadStatus();
+                    }, function () {
+                        Dashboard.alert('That did not work. Check the log.');
+                    });
+                }, function () {
+                    Dashboard.hideLoadingMsg();
+                    Dashboard.alert('Could not read the plugin status.');
                 });
             });
 

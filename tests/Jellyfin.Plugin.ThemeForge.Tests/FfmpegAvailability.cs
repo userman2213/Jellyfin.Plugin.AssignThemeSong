@@ -68,8 +68,8 @@ internal static class TestEngines
 {
     public static ProcessRunner Runner() => new(NullThemeForgeLogger<ProcessRunner>.Instance);
 
-    public static LoudnessNormalizer Normalizer() =>
-        new(new SystemToolProvisioner(), Runner(), NullThemeForgeLogger<LoudnessNormalizer>.Instance);
+    public static ThemeEncoder Encoder() =>
+        new(new SystemToolProvisioner(), Runner(), NullThemeForgeLogger<ThemeEncoder>.Instance);
 
     public static AudioProbe Probe() =>
         new(new SystemToolProvisioner(), Runner(), NullThemeForgeLogger<AudioProbe>.Instance);

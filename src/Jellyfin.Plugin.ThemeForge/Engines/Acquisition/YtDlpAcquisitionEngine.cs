@@ -20,7 +20,7 @@ namespace Jellyfin.Plugin.ThemeForge.Engines.Acquisition;
 public interface IAcquisitionEngine
 {
     /// <summary>
-    /// Downloads, normalises and verifies a candidate.
+    /// Downloads, verifies and finishes a candidate.
     /// </summary>
     /// <param name="candidate">The candidate to fetch.</param>
     /// <param name="configuration">Settings governing the encode.</param>
@@ -31,14 +31,14 @@ public interface IAcquisitionEngine
 }
 
 /// <summary>
-/// Fetches a candidate's audio with yt-dlp and hands it to the normaliser.
+/// Fetches a candidate's audio with yt-dlp and hands it to the encoder.
 /// </summary>
 /// <remarks>
 /// Work happens in a per-attempt staging directory and the result is verified before anyone
 /// else is told about it, so a partial download or a failed encode can never reach the library.
 /// The download deliberately asks for the best available audio rather than letting yt-dlp
-/// produce an MP3: that would mean encoding to MP3 twice, once by yt-dlp and again during
-/// normalisation, and throwing away quality for no reason.
+/// produce an MP3: by default the stream is kept exactly as delivered, and even when a setting
+/// asks for processing there is no reason to encode twice.
 /// </remarks>
 public sealed class YtDlpAcquisitionEngine : IAcquisitionEngine
 {
@@ -49,7 +49,7 @@ public sealed class YtDlpAcquisitionEngine : IAcquisitionEngine
 
     private readonly IToolProvisioner _toolProvisioner;
     private readonly IProcessRunner _processRunner;
-    private readonly ILoudnessNormalizer _normalizer;
+    private readonly IThemeEncoder _encoder;
     private readonly IAudioProbe _probe;
     private readonly IAudioVerifier _verifier;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -58,7 +58,7 @@ public sealed class YtDlpAcquisitionEngine : IAcquisitionEngine
     /// <summary>Initializes a new instance of the <see cref="YtDlpAcquisitionEngine"/> class.</summary>
     /// <param name="toolProvisioner">Supplies yt-dlp and ffmpeg.</param>
     /// <param name="processRunner">Runs yt-dlp.</param>
-    /// <param name="normalizer">Encodes the finished theme.</param>
+    /// <param name="encoder">Writes the finished theme.</param>
     /// <param name="probe">Verifies the finished theme.</param>
     /// <param name="verifier">Checks that what was downloaded is actually music.</param>
     /// <param name="httpClientFactory">Fetches candidates that are already audio files.</param>
@@ -66,7 +66,7 @@ public sealed class YtDlpAcquisitionEngine : IAcquisitionEngine
     public YtDlpAcquisitionEngine(
         IToolProvisioner toolProvisioner,
         IProcessRunner processRunner,
-        ILoudnessNormalizer normalizer,
+        IThemeEncoder encoder,
         IAudioProbe probe,
         IAudioVerifier verifier,
         IHttpClientFactory httpClientFactory,
@@ -74,7 +74,7 @@ public sealed class YtDlpAcquisitionEngine : IAcquisitionEngine
     {
         _toolProvisioner = toolProvisioner;
         _processRunner = processRunner;
-        _normalizer = normalizer;
+        _encoder = encoder;
         _probe = probe;
         _verifier = verifier;
         _httpClientFactory = httpClientFactory;
@@ -127,14 +127,14 @@ public sealed class YtDlpAcquisitionEngine : IAcquisitionEngine
                 throw new InvalidOperationException($"what was downloaded is not a theme: {assessment.Reason}");
             }
 
-            var finalPath = Path.Combine(workingDirectory, "theme.mp3");
-            var measurement = await _normalizer.EncodeAsync(
+            var encoded = await _encoder.EncodeAsync(
                 downloaded,
-                finalPath,
-                sourceProbe.DurationSeconds,
+                workingDirectory,
+                sourceProbe,
                 configuration,
                 new ThemeTag(candidate.Title, candidate.Url),
                 cancellationToken).ConfigureAwait(false);
+            var finalPath = encoded.Path;
 
             // The gate: nothing leaves this method unless ffprobe can read what was produced.
             var finalProbe = await _probe.ProbeAsync(finalPath, cancellationToken).ConfigureAwait(false);
@@ -150,11 +150,11 @@ public sealed class YtDlpAcquisitionEngine : IAcquisitionEngine
 
             var info = new FileInfo(finalPath);
             _logger.LogInformation(
-                "ThemeForge: acquired \"{Title}\" — {Duration:0}s, {Size:N0} bytes{Loudness}; audio check: {Verdict}{Measure}.",
+                "ThemeForge: acquired \"{Title}\" — {Duration:0}s, {Size:N0} bytes, {Treatment}; audio check: {Verdict}{Measure}.",
                 candidate.Title,
                 finalProbe.DurationSeconds,
                 info.Length,
-                measurement is null ? string.Empty : string.Create(CultureInfo.InvariantCulture, $", input {measurement.IntegratedLufs:0.#} LUFS normalised to {configuration.TargetLoudnessLufs:0.#}"),
+                encoded.Treatment,
                 assessment.Verdict,
                 assessment.BandDiffStd is null ? string.Empty : string.Create(CultureInfo.InvariantCulture, $" ({assessment.BandDiffStd:0.00})"));
 
@@ -162,7 +162,8 @@ public sealed class YtDlpAcquisitionEngine : IAcquisitionEngine
             {
                 StagingPath = finalPath,
                 DurationSeconds = finalProbe.DurationSeconds,
-                MeasuredLoudnessLufs = measurement?.IntegratedLufs,
+                MeasuredLoudnessLufs = encoded.Measurement?.IntegratedLufs,
+                Treatment = encoded.Treatment,
                 Sha256 = await FileHash.ComputeSha256Async(finalPath, cancellationToken).ConfigureAwait(false),
                 SizeBytes = info.Length,
                 SourceUrl = candidate.Url,
@@ -190,8 +191,8 @@ public sealed class YtDlpAcquisitionEngine : IAcquisitionEngine
             "--socket-timeout", "30",
             "--retries", "5",
 
-            // Audio only, best quality available, left in its delivered format so that
-            // normalisation is the only lossy step.
+            // Audio only, best quality available, left in its delivered format: by default that
+            // is exactly what ends up in the library.
             "-f", "bestaudio/best",
             "--ffmpeg-location", tools.Ffmpeg,
             "-o", Path.Combine(workingDirectory, "source.%(ext)s"),
@@ -225,7 +226,7 @@ public sealed class YtDlpAcquisitionEngine : IAcquisitionEngine
     /// <remarks>
     /// A catalogue that serves the audio itself has no page to extract from, so running yt-dlp
     /// over it would only add a process launch and a dependency to a plain HTTP GET. The file
-    /// still goes through the same probe, normalisation and verification as everything else.
+    /// still goes through the same probe, verification and encoder as everything else.
     /// </remarks>
     private async Task<string> FetchAsync(Candidate candidate, string workingDirectory, CancellationToken cancellationToken)
     {

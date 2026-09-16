@@ -4,7 +4,9 @@ A Jellyfin plugin that finds theme songs for your movies and TV shows, scores ev
 finds, and assigns the confident ones automatically. Anything it is unsure about waits in a
 review queue instead of guessing.
 
-Requires **Jellyfin 10.11**.
+Requires **Jellyfin 10.11 or 12**. Every release ships one build for each, and the plugin
+catalogue picks the one your server can run. (The optional item-page button needs the File
+Transformation plugin's own build for your Jellyfin version.)
 
 ## What it does
 
@@ -15,24 +17,36 @@ Point it at your library and it will, for each movie and series:
 3. Search YouTube with **yt-dlp** and collect candidates.
 4. Score every candidate against ten independent rules, each of which explains itself.
 5. Assign the winner if it is confident, queue it for you if it is not, and record either way.
-6. Download the audio, **normalise it to a consistent loudness**, fade it, verify it plays, and
-   write it as `theme.mp3` beside your media.
+6. Download the audio, verify it plays, and write it beside your media **exactly as it was
+   delivered** (`theme.opus`, `theme.m4a`, `theme.mp3`), unless you have asked for processing.
 
 Everything it decides is recorded, so re-running is cheap and safe: settled items are skipped,
 and anything you decided yourself is never touched again.
 
-## Theme song volume
+## What happens to the audio
 
-Themes downloaded from different uploaders arrive at wildly different volumes, and Jellyfin has
-no theme volume control to compensate with — [jellyfin-web#3086](https://github.com/jellyfin/jellyfin-web/issues/3086)
-is still open. A plugin cannot fix this from the browser either: Jellyfin's player re-reads its
-saved global volume every time it creates a media element, so a volume set from a script is
-overwritten moments later, and setting it at all leaks into your volume for normal playback.
+By default, **nothing**. The best audio stream yt-dlp can get is written beside your media exactly
+as it was delivered — the same stream at the same volume, in the container it arrived in
+(`theme.opus`, `theme.m4a`, `theme.mp3`). It is not re-encoded, not faded and not made quieter.
 
-ThemeForge fixes it in the file instead. Every theme is normalised to the same integrated
-loudness (EBU R128, `-23 LUFS` by default) when it is encoded, with a fade in and out and an
-optional length cap. That works on every client — including the ones no browser script can reach
-— and needs no per-user setting, because there is nothing left to correct.
+Jellyfin has no theme volume control of its own — [jellyfin-web#3086](https://github.com/jellyfin/jellyfin-web/issues/3086)
+is still open and Jellyfin 12 did not change that — so the level you hear is the level of the
+upload. If that bothers you for some themes, **Settings → Audio processing** offers these, every
+one of them off until you turn it on:
+
+| Option | What it does |
+|---|---|
+| **Raise quiet themes** | Lifts a theme quieter than the floor (`-16 LUFS` by default) up to it, as a plain gain. It never lowers anything. |
+| **Normalise every theme to one loudness** | Every theme ends up at the same level, which makes loud ones quieter too. |
+| **Cut silence from the start and the end** | Removes dead air around the music. |
+| **Fade in / fade out** | A length in seconds; `0` means no fade. |
+| **Cut to a maximum length** | `0` keeps the whole theme. |
+| **Always convert to MP3** | For a client that cannot play Opus or AAC and cannot let Jellyfin transcode for it. |
+
+A theme is only re-encoded — to MP3, at the configured bitrate — when one of these actually has
+to change it. Themes written by versions before 2.3 were normalised and faded; **Settings →
+Themes already written → Re-download all themes** fetches each of them again and writes it with
+your current settings, without touching a single decision.
 
 Whether theme songs play at all stays where it belongs: your own Jellyfin setting under
 **Display → Play theme music**.
@@ -93,7 +107,7 @@ films usually want different answers:
 
 Each library can also be switched off entirely, so ThemeForge ignores it.
 
-Replaced themes are copied aside first as `theme.mp3.themeforge-backup-<timestamp>` unless you
+Replaced themes are copied aside first as `theme.<ext>.themeforge-backup-<timestamp>` unless you
 turn backups off, and a theme assigned by hand or locked from the Library tab is never touched by
 any of these settings.
 
@@ -114,7 +128,7 @@ per-candidate scoring for one run without making the whole server log verbose.
 Uninstalling from the Jellyfin dashboard removes the plugin **and** everything it stored:
 `<jellyfin-data>/themeforge/` — the index, the logs, and the yt-dlp binary it downloaded.
 
-**Your theme files stay.** The `theme.mp3` files in your media folders are your media now, and
+**Your theme files stay.** The theme files in your media folders are your media now, and
 uninstalling a plugin should never delete your files as a side effect.
 
 If you *do* want them gone, use **Settings → Removing themes → Remove all ThemeForge themes**
@@ -165,10 +179,10 @@ plugin exposes to ordinary users. The plugin stores no per-user settings of its 
 ## Where themes are written
 
 Jellyfin looks for `theme.*` in an item's own folder, or any audio inside a `theme-music/`
-folder there. ThemeForge writes `theme.mp3` beside the item.
+folder there. ThemeForge writes `theme.<ext>` beside the item.
 
 **Films in a shared folder are skipped by default.** In a flat library every film lives in one
-directory, so a `theme.mp3` written there would become the theme for all of them. ThemeForge
+directory, so a theme written there would become the theme for all of them. ThemeForge
 detects this, refuses, and records the reason. Give each film its own folder, or turn off
 *"only write a theme when the item has its own folder"* if that is really what you want.
 
@@ -202,7 +216,7 @@ dotnet build Jellyfin.Plugin.ThemeForge.sln -c Release
 dotnet test  Jellyfin.Plugin.ThemeForge.sln -c Release
 ```
 
-The loudness tests drive a real ffmpeg. They skip themselves if one is not installed, so install
+The encoder tests drive a real ffmpeg. They skip themselves if one is not installed, so install
 ffmpeg to run the full suite.
 
 ## Layout
@@ -215,8 +229,8 @@ src/Jellyfin.Plugin.ThemeForge/
     Discovery/     runs yt-dlp and parses its output
     Scoring/       ten independent, explainable rules
     Decision/      applies the confidence thresholds
-    Acquisition/   downloads, normalises, verifies
-    Placement/     writes theme.mp3 and refreshes the item
+    Acquisition/   downloads, verifies, writes the theme file (a copy unless asked otherwise)
+    Placement/     puts theme.<ext> beside the item and refreshes it
     Index/         remembers every decision
     Tooling/       provisions yt-dlp, locates ffmpeg
     Orchestration/ drives the pipeline

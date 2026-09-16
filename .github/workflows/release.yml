@@ -24,10 +24,14 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
 
+      # Both: the plugin is built for Jellyfin 10.11 (net9.0) and Jellyfin 12 (net10.0) from one
+      # tree, and the net9.0 test run needs the .NET 9 runtime as well as the .NET 10 SDK.
       - name: Set up .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '9.0.x'
+          dotnet-version: |
+            9.0.x
+            10.0.x
 
       # The loudness tests drive a real encoder. Without ffmpeg they skip themselves, so a
       # release could otherwise be cut without the audio pipeline ever being exercised.
@@ -55,7 +59,8 @@ jobs:
 
       - name: Commit the manifest and package back to this branch
         run: |
-          git add manifest.json dist Directory.Build.props src/Jellyfin.Plugin.ThemeForge/meta.json
+          # Not dist: it is ignored here, and the packages live on the channel branch.
+          git add manifest.json Directory.Build.props src/Jellyfin.Plugin.ThemeForge/meta.json
           if git diff --cached --quiet; then
             echo "nothing to commit"
           else

@@ -13,9 +13,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The plugin marks these PrivateAssets, so the test project references them directly. -->
-    <PackageReference Include="Jellyfin.Controller" Version="10.11.0" />
-    <PackageReference Include="Jellyfin.Model" Version="10.11.0" />
+    <!-- The plugin marks these PrivateAssets, so the test project references them directly, at
+         the version for the Jellyfin line each target framework is built for. -->
+    <PackageReference Include="Jellyfin.Controller" Version="$(JellyfinVersion)" />
+    <PackageReference Include="Jellyfin.Model" Version="$(JellyfinVersion)" />
   </ItemGroup>
 
   <ItemGroup>

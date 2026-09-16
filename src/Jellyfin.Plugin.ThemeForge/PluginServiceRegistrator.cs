@@ -59,7 +59,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<IDecisionPolicy, DecisionPolicy>();
         serviceCollection.AddSingleton<IAudioProbe, AudioProbe>();
         serviceCollection.AddSingleton<IAudioVerifier, AudioVerifier>();
-        serviceCollection.AddSingleton<ILoudnessNormalizer, LoudnessNormalizer>();
+        serviceCollection.AddSingleton<IThemeEncoder, ThemeEncoder>();
         serviceCollection.AddSingleton<IAcquisitionEngine, YtDlpAcquisitionEngine>();
         serviceCollection.AddSingleton<IThemePlacementEngine, ThemePlacementEngine>();
         serviceCollection.AddSingleton<ILibraryPolicyResolver, LibraryPolicyResolver>();

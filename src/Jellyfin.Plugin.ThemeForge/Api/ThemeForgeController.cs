@@ -101,7 +101,15 @@ public class ThemeForgeController : ControllerBase
             NoCandidate = entries.Count(e => e.State == ThemeItemState.NoCandidate),
             Indexed = entries.Count,
             StaleDecisions = entries.Count(e => e.IsStale),
+            WrittenThemes = entries.Count(e => e.ThemePath is not null && e.Sha256 is not null && !string.IsNullOrWhiteSpace(e.ChosenUrl)),
         };
+
+        var lastRedownload = _orchestrator.LastRedownload;
+        if (lastRedownload is not null)
+        {
+            status.LastRedownloadSummary = lastRedownload.ToString();
+            status.LastRedownloadFinishedUtc = lastRedownload.FinishedUtc;
+        }
 
         var lastRun = _orchestrator.LastRun;
         if (lastRun is not null)
@@ -197,6 +205,44 @@ public class ThemeForgeController : ControllerBase
         });
 
         return new OperationResult(true, "Run started. Progress appears in the status panel and the server log.");
+    }
+
+    /// <summary>
+    /// Fetches every theme ThemeForge wrote again and writes it with the current audio settings.
+    /// </summary>
+    /// <remarks>
+    /// Detached like <see cref="StartRun"/>: it downloads every theme in the library, which takes
+    /// far longer than any HTTP timeout, and progress is polled through the status endpoint.
+    /// </remarks>
+    /// <param name="confirm">Must be true. Present so the endpoint cannot be triggered by accident.</param>
+    /// <returns>Whether the re-download was started.</returns>
+    [HttpPost("Themes/Redownload")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public ActionResult<OperationResult> RedownloadThemes([FromQuery] bool confirm)
+    {
+        if (!confirm)
+        {
+            return BadRequest("This rewrites every theme file ThemeForge wrote. Pass confirm=true to proceed.");
+        }
+
+        if (_orchestrator.IsRunning)
+        {
+            return new OperationResult(false, "A run is already in progress.");
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await _orchestrator.RedownloadAsync(null, CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "ThemeForge: the re-download started from the configuration page failed.");
+            }
+        });
+
+        return new OperationResult(true, "Re-download started. Progress appears in the status panel and the log.");
     }
 
     /// <summary>Lists the items awaiting a human decision.</summary>

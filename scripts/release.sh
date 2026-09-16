@@ -3,25 +3,38 @@
 # Cuts a ThemeForge release.
 #
 # Builds, tests, packages, and adds the new version to the plugin manifest so that Jellyfin
-# offers it as an update. With --publish it also pushes the manifest and the package to the
+# offers it as an update. With --publish it also pushes the manifest and the packages to the
 # release channel branch, which is the URL users have added to their server.
+#
+# One release is two packages: a net9.0 build for Jellyfin 10.11 and a net10.0 build for
+# Jellyfin 12, from the same source. The version given here is the 10.11 package's; the 12
+# package is numbered one higher in the last position (2.3.0.0 and 2.3.0.1), because Jellyfin
+# offers the highest version whose targetAbi the server satisfies and on a 12 server both
+# qualify. A 10.11 server never sees the 12 entry, since its targetAbi is too new for it.
 #
 # The point of this script is that the repository URL a user adds to Jellyfin never changes, and
 # nobody edits a checksum by hand. Getting either wrong means the install silently fails
 # verification, which is a miserable thing to debug from the Jellyfin end.
 #
 # Usage:
-#   scripts/release.sh 1.2.0.0             # build and update the manifest locally
-#   scripts/release.sh 1.2.0.0 --publish   # ...and push it to the release channel
+#   scripts/release.sh 2.3.0.0             # build and update the manifest locally
+#   scripts/release.sh 2.3.0.0 --publish   # ...and push it to the release channel
 #
 set -euo pipefail
 
 readonly REPO_SLUG="userman2213/Jellyfin.Plugin.AssignThemeSong"
 readonly CHANNEL_BRANCH="plugin-repo"
-readonly TARGET_ABI="10.11.0.0"
-readonly PROJECT="src/Jellyfin.Plugin.ThemeForge/Jellyfin.Plugin.ThemeForge.csproj"
 readonly SOLUTION="Jellyfin.Plugin.ThemeForge.sln"
 readonly META="src/Jellyfin.Plugin.ThemeForge/meta.json"
+readonly OUTPUT_ROOT="src/Jellyfin.Plugin.ThemeForge/bin/Release"
+
+# One line per package: target framework, targetAbi, and which Jellyfin line it is for. The
+# build decides each package's version and writes its meta.json from these same values (see
+# Directory.Build.props), and the packaging step below checks that the two agree.
+readonly -a BUILDS=(
+    "net9.0 10.11.0.0 10.11"
+    "net10.0 12.0.0.0 12"
+)
 
 cd "$(dirname "$0")/.."
 ROOT="$(pwd)"
@@ -35,9 +48,21 @@ PUBLISH="${2:-}"
 [ -n "$VERSION" ] || die "usage: scripts/release.sh <version> [--publish]"
 
 # Jellyfin's manifest parser expects a four-part version. A three-part one is accepted by the
-# JSON but then never compares as newer, so the update silently never appears.
-[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] \
-    || die "version must have four parts, for example 1.2.0.0 (got '$VERSION')"
+# JSON but then never compares as newer, so the update silently never appears. The last part
+# must be 0: it is the slot that tells the two builds of one release apart.
+[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.0$ ]] \
+    || die "version must have four parts and end in .0, for example 2.3.0.0 (got '$VERSION')"
+
+# The Jellyfin 12 package's version: the same release, one higher in the last position.
+VERSION12="${VERSION%.0}.1"
+
+package_version() {
+    case "$1" in
+        net9.0)  printf '%s' "$VERSION" ;;
+        net10.0) printf '%s' "$VERSION12" ;;
+        *) die "no version rule for target framework '$1'" ;;
+    esac
+}
 
 command -v dotnet >/dev/null || die "dotnet is not on PATH"
 command -v zip    >/dev/null || die "zip is not installed"
@@ -60,41 +85,70 @@ print(f"  Directory.Build.props and meta.json -> {version}")
 PY
 
 step "Building and testing"
+# Both target frameworks come out of one build; the tests run once per framework, one after the
+# other so the two runs do not fight over ffmpeg and CPU.
 dotnet build "$SOLUTION" -c Release --no-incremental
-dotnet test "$SOLUTION" -c Release --no-build
+dotnet test "$SOLUTION" -c Release --no-build -p:TestTfmsInParallel=false
 
 step "Packaging"
-OUT="src/Jellyfin.Plugin.ThemeForge/bin/Release/net9.0"
-ARCHIVE="dist/themeforge_${VERSION}.zip"
-
-[ -f "$OUT/Jellyfin.Plugin.ThemeForge.dll" ] || die "the build produced no plugin assembly"
-
 mkdir -p dist
-rm -f "$ARCHIVE"
-cp src/Jellyfin.Plugin.ThemeForge/images/icon.png "$OUT/"
-( cd "$OUT" && zip -q -r "$ROOT/$ARCHIVE" . )
+declare -A CHECKSUMS=()
 
-CHECKSUM="$(md5sum "$ARCHIVE" | cut -d' ' -f1)"
-printf '  %s\n  md5 %s\n' "$ARCHIVE" "$CHECKSUM"
+for build in "${BUILDS[@]}"; do
+    read -r tfm abi line <<<"$build"
+    pkg_version="$(package_version "$tfm")"
+    out="$OUTPUT_ROOT/$tfm"
+    archive="dist/themeforge_${pkg_version}.zip"
+
+    [ -f "$out/Jellyfin.Plugin.ThemeForge.dll" ] || die "the $tfm build produced no plugin assembly"
+    [ -f "$out/meta.json" ] || die "the $tfm build produced no meta.json"
+
+    # The build wrote meta.json from the same values this script uses; a disagreement means one
+    # of the two was edited without the other, and the package would lie to Jellyfin.
+    python3 - "$out/meta.json" "$pkg_version" "$abi" "$tfm" <<'PY'
+import json, sys
+meta = json.load(open(sys.argv[1]))
+expected = dict(zip(("version", "targetAbi", "framework"), sys.argv[2:5]))
+actual = {key: meta.get(key) for key in expected}
+if actual != expected:
+    sys.exit(f"meta.json in the build output says {actual}, but this release expects {expected}")
+PY
+
+    rm -f "$archive"
+    cp src/Jellyfin.Plugin.ThemeForge/images/icon.png "$out/"
+    ( cd "$out" && zip -q -r "$ROOT/$archive" . )
+
+    CHECKSUMS["$tfm"]="$(md5sum "$archive" | cut -d' ' -f1)"
+    printf '  %s (Jellyfin %s)\n  md5 %s\n' "$archive" "$line" "${CHECKSUMS[$tfm]}"
+done
 
 step "Updating the manifest"
-python3 - "$VERSION" "$CHECKSUM" "$REPO_SLUG" "$CHANNEL_BRANCH" "$TARGET_ABI" <<'PY'
-import json, sys, datetime
-version, checksum, slug, branch, abi = sys.argv[1:6]
+python3 - "$VERSION" "$VERSION12" "$REPO_SLUG" "$CHANNEL_BRANCH" \
+    "net9.0 10.11.0.0 10.11 ${CHECKSUMS[net9.0]}" \
+    "net10.0 12.0.0.0 12 ${CHECKSUMS[net10.0]}" <<'PY'
+import json, sys, datetime, os
+version, version12, slug, branch = sys.argv[1:5]
+builds = [line.split() for line in sys.argv[5:]]
+
+timestamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+changelog = open('CHANGELOG_NEXT.md').read().strip() if os.path.exists('CHANGELOG_NEXT.md') else f"Release {version}."
 
 manifest = json.load(open('manifest.json'))
-entry = {
-    "version": version,
-    "targetAbi": abi,
-    "framework": "net9.0",
-    "sourceUrl": f"https://github.com/{slug}/raw/{branch}/dist/themeforge_{version}.zip",
-    "checksum": checksum,
-    "timestamp": datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
-    "changelog": open('CHANGELOG_NEXT.md').read().strip() if __import__('os').path.exists('CHANGELOG_NEXT.md') else f"Release {version}.",
-}
 
-versions = [v for v in manifest[0]['versions'] if v['version'] != version]
-versions.insert(0, entry)
+# Both packages of a re-run release are replaced, never duplicated.
+versions = [v for v in manifest[0]['versions'] if v['version'] not in (version, version12)]
+
+for tfm, abi, line, checksum in builds:
+    pkg_version = version if tfm == "net9.0" else version12
+    versions.insert(0, {
+        "version": pkg_version,
+        "targetAbi": abi,
+        "framework": tfm,
+        "sourceUrl": f"https://github.com/{slug}/raw/{branch}/dist/themeforge_{pkg_version}.zip",
+        "checksum": checksum,
+        "timestamp": timestamp,
+        "changelog": f"Build for Jellyfin {line}.\n\n{changelog}",
+    })
 
 # Re-point every entry at the current channel. Older entries can carry a URL from before the
 # channel existed, or from a branch that has since been deleted, and a manifest that offers a
@@ -146,6 +200,17 @@ mkdir -p "$WORKTREE/dist"
 cp manifest.json "$WORKTREE/manifest.json"
 cp dist/*.zip "$WORKTREE/dist/"
 
+# The manifest must never offer a package the channel does not hold.
+python3 - "$WORKTREE" <<'PY'
+import json, os, sys
+worktree = sys.argv[1]
+manifest = json.load(open(os.path.join(worktree, 'manifest.json')))
+missing = [v['version'] for v in manifest[0]['versions']
+           if not os.path.exists(os.path.join(worktree, 'dist', os.path.basename(v['sourceUrl'])))]
+if missing:
+    sys.exit(f"the manifest offers versions whose package is not in the channel: {missing}")
+PY
+
 cat > "$WORKTREE/README.md" <<EOF
 # ThemeForge plugin repository
 
@@ -175,8 +240,14 @@ fi
 step "Verifying what the server will actually fetch"
 MANIFEST_URL="https://raw.githubusercontent.com/$REPO_SLUG/$CHANNEL_BRANCH/manifest.json"
 sleep 3
-SERVED="$(curl -fsSL "$MANIFEST_URL" | python3 -c 'import sys,json; v=json.load(sys.stdin)[0]["versions"][0]; print(v["version"], v["checksum"])')"
-echo "  manifest offers: $SERVED"
-echo "  expected       : $VERSION $CHECKSUM"
-[ "$SERVED" = "$VERSION $CHECKSUM" ] || die "the published manifest does not match the package that was built"
+SERVED="$(curl -fsSL "$MANIFEST_URL" | python3 -c '
+import sys, json
+by_version = {v["version"]: v["checksum"] for v in json.load(sys.stdin)[0]["versions"]}
+for version in sys.argv[1:]:
+    print(version, by_version.get(version, "missing"))
+' "$VERSION12" "$VERSION")"
+EXPECTED="$(printf '%s %s\n%s %s' "$VERSION12" "${CHECKSUMS[net10.0]}" "$VERSION" "${CHECKSUMS[net9.0]}")"
+echo "  manifest offers:"; echo "$SERVED" | sed 's/^/    /'
+echo "  expected       :"; echo "$EXPECTED" | sed 's/^/    /'
+[ "$SERVED" = "$EXPECTED" ] || die "the published manifest does not match the packages that were built"
 echo "  match"

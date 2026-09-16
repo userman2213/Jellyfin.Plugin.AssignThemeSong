@@ -184,7 +184,7 @@ public class PluginConfiguration : BasePluginConfiguration
 
     // ---- Acquisition and audio -----------------------------------------------------
 
-    /// <summary>Gets or sets the MP3 bitrate in kbit/s.</summary>
+    /// <summary>Gets or sets the MP3 bitrate in kbit/s, for the themes that are re-encoded at all.</summary>
     public int AudioBitrate { get; set; } = 192;
 
     /// <summary>
@@ -236,30 +236,57 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </remarks>
     public double SteadyNoiseCeiling { get; set; } = 2.0;
 
-    /// <summary>
-    /// Gets or sets a value indicating whether every theme is normalized to a common loudness.
-    /// This is what makes themes play at a consistent volume; Jellyfin has no theme volume
-    /// control of its own, so without it loudness is whatever the uploader mastered.
-    /// </summary>
-    public bool EnableLoudnessNormalization { get; set; } = true;
+    // Everything below is off by default. A theme is written exactly as it was downloaded --
+    // the same audio stream at the same volume -- unless one of these is switched on, and the
+    // stream is only re-encoded when something here actually has to change it.
 
-    /// <summary>Gets or sets the integrated loudness target in LUFS (EBU R128 default is -23).</summary>
+    /// <summary>
+    /// Gets or sets a value indicating whether a quiet theme is brought up to
+    /// <see cref="QuietThemeFloorLufs"/>. Never lowers anything: a theme already at or above the
+    /// floor is left exactly as it is.
+    /// </summary>
+    public bool RaiseQuietThemes { get; set; }
+
+    /// <summary>Gets or sets the integrated loudness, in LUFS, that a quiet theme is raised to.</summary>
+    /// <remarks>
+    /// -16 is roughly where streaming services level music. Most uploads already sit above it, so
+    /// with this on they are untouched and only the genuinely quiet ones move.
+    /// </remarks>
+    public double QuietThemeFloorLufs { get; set; } = -16;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether every theme is normalised to one loudness. This
+    /// makes loud themes quieter as well as quiet ones louder, which is why it is off by default.
+    /// </summary>
+    public bool EnableLoudnessNormalization { get; set; }
+
+    /// <summary>Gets or sets the integrated loudness target in LUFS for normalisation (EBU R128 is -23).</summary>
     public double TargetLoudnessLufs { get; set; } = -23;
 
-    /// <summary>Gets or sets the true-peak ceiling in dBTP.</summary>
+    /// <summary>Gets or sets the true-peak ceiling in dBTP, for both normalising and raising.</summary>
     public double TargetTruePeakDb { get; set; } = -1.5;
 
-    /// <summary>Gets or sets the target loudness range.</summary>
+    /// <summary>Gets or sets the target loudness range for normalisation.</summary>
     public double TargetLoudnessRange { get; set; } = 11;
 
-    /// <summary>Gets or sets a hard length cap in seconds, applied with a fade. Zero keeps the full theme.</summary>
+    /// <summary>Gets or sets a value indicating whether silence at the start and the end is cut off.</summary>
+    public bool TrimSilence { get; set; }
+
+    /// <summary>Gets or sets a hard length cap in seconds. Zero keeps the full theme.</summary>
     public int MaxThemeSeconds { get; set; }
 
-    /// <summary>Gets or sets the fade-in length in seconds, which stops themes starting abruptly.</summary>
-    public double FadeInSeconds { get; set; } = 0.5;
+    /// <summary>Gets or sets the fade-in length in seconds. Zero, the default, means no fade.</summary>
+    public double FadeInSeconds { get; set; }
 
-    /// <summary>Gets or sets the fade-out length in seconds.</summary>
-    public double FadeOutSeconds { get; set; } = 3;
+    /// <summary>Gets or sets the fade-out length in seconds. Zero, the default, means no fade.</summary>
+    public double FadeOutSeconds { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether every theme is re-encoded to MP3 even when nothing
+    /// else needs changing. Off, a theme keeps the codec it was delivered in (Opus, AAC, MP3) and
+    /// loses nothing; on, it becomes an MP3 at <see cref="AudioBitrate"/> for a client that needs one.
+    /// </summary>
+    public bool AlwaysConvertToMp3 { get; set; }
 
     // ---- Placement -----------------------------------------------------------------
 

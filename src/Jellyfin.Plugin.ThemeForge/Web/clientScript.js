@@ -6,9 +6,9 @@
  * This script deliberately contains no playback or volume code. Jellyfin plays theme songs
  * through the same player as everything else and reloads its saved global volume whenever it
  * creates a media element, so a volume set from here is overwritten moments later and, worse,
- * leaks into the user's volume for normal playback. ThemeForge solves loudness by normalising
- * every theme when it is encoded, which works on every client rather than only in the browser.
- * Whether themes play at all remains Jellyfin's own per-user display setting.
+ * leaks into the user's volume for normal playback. Anything ThemeForge does to a theme's
+ * level is done in the file itself, and only when a setting asks for it. Whether themes play
+ * at all remains Jellyfin's own per-user display setting.
  */
 (function () {
     'use strict';
@@ -120,7 +120,7 @@
             }
 
             save.disabled = true;
-            status.textContent = 'Downloading and normalising. This can take a minute.';
+            status.textContent = 'Downloading. This can take a minute.';
 
             request('POST', 'Items/' + itemId + '/Assign', { Url: url }).then(function (result) {
                 status.textContent = result.Message;

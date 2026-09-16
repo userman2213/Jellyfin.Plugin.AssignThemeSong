@@ -176,26 +176,41 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     }
 
     /// <summary>
-    /// Brings a saved search ladder that is still a previous default up to the current one.
+    /// Brings saved settings that are still a previous default up to the current one.
     /// </summary>
     /// <remarks>
     /// A better default reaches nobody who has already installed the plugin otherwise: the saved
-    /// settings hold whatever they were saved with. Only a ladder identical to a previous shipped
+    /// settings hold whatever they were saved with. Only a value identical to a previous shipped
     /// default is touched; any edit at all marks it as the user's and it is left alone.
     /// </remarks>
     private void UpgradeShippedDefaults()
     {
         try
         {
+            var changed = false;
+
             if (ShippedTemplates.Upgrade(Configuration))
             {
-                SaveConfiguration();
+                changed = true;
                 _logger.LogInformation("ThemeForge: the search ladders were still the previous defaults and have been brought up to date.");
+            }
+
+            if (AudioDefaults.Upgrade(Configuration))
+            {
+                changed = true;
+                _logger.LogInformation(
+                    "ThemeForge: audio processing was still at the previous defaults (normalise to -23 LUFS, fade in and out) and is now off, " +
+                    "so themes are written as downloaded. \"Re-download all themes\" under Settings redoes the ones already written.");
+            }
+
+            if (changed)
+            {
+                SaveConfiguration();
             }
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "ThemeForge: could not check the saved search ladders.");
+            _logger.LogWarning(ex, "ThemeForge: could not check the saved settings against the shipped defaults.");
         }
     }
 

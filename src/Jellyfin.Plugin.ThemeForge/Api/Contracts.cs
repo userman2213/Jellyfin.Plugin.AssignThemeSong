@@ -182,6 +182,15 @@ public sealed class StatusDto
 
     /// <summary>Gets or sets what the local ThemerrDB copy holds, and how old it is.</summary>
     public CatalogueStatus Themerr { get; set; } = new();
+
+    /// <summary>Gets or sets how many theme files ThemeForge wrote and still has the source of, so they can be fetched again.</summary>
+    public int WrittenThemes { get; set; }
+
+    /// <summary>Gets or sets the summary of the last re-download of written themes.</summary>
+    public string? LastRedownloadSummary { get; set; }
+
+    /// <summary>Gets or sets when the last re-download finished.</summary>
+    public DateTime? LastRedownloadFinishedUtc { get; set; }
 }
 
 /// <summary>What the local copy of a catalogue holds.</summary>

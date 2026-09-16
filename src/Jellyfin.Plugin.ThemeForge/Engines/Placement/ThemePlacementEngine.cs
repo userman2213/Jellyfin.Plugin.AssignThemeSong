@@ -1,5 +1,6 @@
 using Jellyfin.Plugin.ThemeForge.Logging;
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -60,16 +61,32 @@ public interface IThemePlacementEngine
 }
 
 /// <summary>
-/// Writes <c>theme.mp3</c> beside an item and prompts Jellyfin to notice it.
+/// Writes <c>theme.&lt;ext&gt;</c> beside an item and prompts Jellyfin to notice it.
 /// </summary>
 /// <remarks>
-/// Jellyfin finds theme music by looking for a file named <c>theme.*</c> in the item's own
+/// <para>
+/// Jellyfin finds theme music by looking for an audio file named <c>theme.*</c> in the item's own
 /// folder, or any audio inside a <c>theme-music</c> folder there. That convention is the reason
 /// this engine cares so much about which directory an item really owns.
+/// </para>
+/// <para>
+/// The extension is whatever the encoder produced -- a copied Opus stream is <c>theme.opus</c>,
+/// a processed one <c>theme.mp3</c> -- so replacing a theme has to clear every <c>theme.*</c>
+/// file that is already there, not just the one with the same name. Jellyfin plays all of them
+/// otherwise, alternating between the old theme and the new.
+/// </para>
 /// </remarks>
 public sealed class ThemePlacementEngine : IThemePlacementEngine
 {
-    private const string ThemeFileName = "theme.mp3";
+    private const string ThemeStem = "theme";
+    private const string BackupMarker = ".themeforge-backup-";
+
+    /// <summary>The audio extensions Jellyfin accepts for a theme file; anything else named theme.* is not one.</summary>
+    private static readonly HashSet<string> AudioExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".mp3", ".m4a", ".m4b", ".aac", ".ogg", ".oga", ".opus", ".flac", ".wav", ".wma", ".mka",
+        ".ac3", ".eac3", ".dts", ".aif", ".aiff", ".alac", ".ape", ".mpc", ".wv", ".mp2",
+    };
 
     private readonly IFileSystem _fileSystem;
     private readonly IThemeForgeLogger<ThemePlacementEngine> _logger;
@@ -121,7 +138,7 @@ public sealed class ThemePlacementEngine : IThemePlacementEngine
         }
 
         // Both shapes Jellyfin recognises count as "already has a theme".
-        if (Directory.EnumerateFiles(directory, "theme.*").Any())
+        if (ExistingThemeFiles(directory).Count > 0)
         {
             return true;
         }
@@ -149,28 +166,43 @@ public sealed class ThemePlacementEngine : IThemePlacementEngine
             return PlacementResult.Skipped(reason ?? "the theme directory could not be resolved");
         }
 
-        var target = Path.Combine(directory, ThemeFileName);
+        var target = Path.Combine(directory, ThemeStem + Path.GetExtension(audio.StagingPath));
 
         try
         {
-            if (File.Exists(target))
+            var existing = ExistingThemeFiles(directory);
+            if (existing.Count > 0 && policy.Overwrite == ThemeOverwritePolicy.Never)
             {
-                if (policy.Overwrite == ThemeOverwritePolicy.Never)
+                return PlacementResult.Skipped("a theme already exists here and this library is set never to replace one");
+            }
+
+            // Copy to a temporary name in the destination folder first and move into place at the
+            // end: a reader never sees a partially written theme, a failed copy leaves the previous
+            // one intact, and the old theme is only cleared once the new one is safely in the
+            // folder beside it. Same-directory moves are atomic on every supported platform.
+            var temporary = Path.Combine(directory, ".themeforge-" + Guid.NewGuid().ToString("N") + ".tmp");
+            File.Copy(audio.StagingPath, temporary, overwrite: true);
+
+            foreach (var file in existing)
+            {
+                if (string.Equals(file, target, StringComparison.Ordinal))
                 {
-                    return PlacementResult.Skipped("a theme already exists here and this library is set never to replace one");
+                    // Replaced by the move below; backed up first when asked.
+                    if (configuration.BackupExistingThemes)
+                    {
+                        BackUp(file);
+                    }
+
+                    continue;
                 }
 
-                if (configuration.BackupExistingThemes)
+                // A theme under another extension would play alongside the new one.
+                if (!configuration.BackupExistingThemes || !BackUp(file))
                 {
-                    BackUp(target);
+                    File.Delete(file);
                 }
             }
 
-            // Copy to a temporary name in the destination folder and move into place, so a
-            // reader never sees a partially written theme and a failed copy leaves the
-            // previous one intact. Same-directory moves are atomic on every supported platform.
-            var temporary = Path.Combine(directory, ".themeforge-" + Guid.NewGuid().ToString("N") + ".tmp");
-            File.Copy(audio.StagingPath, temporary, overwrite: true);
             File.Move(temporary, target, overwrite: true);
 
             _logger.LogInformation("ThemeForge: wrote the theme for \"{Item}\" to {Path}.", item.Name, target);
@@ -190,23 +222,39 @@ public sealed class ThemePlacementEngine : IThemePlacementEngine
         }
     }
 
+    /// <summary>
+    /// The theme files Jellyfin would play from this folder: <c>theme.&lt;audio&gt;</c>, not our
+    /// backups of them and not a stray file that merely shares the name.
+    /// </summary>
+    internal static IReadOnlyList<string> ExistingThemeFiles(string directory) =>
+        Directory.EnumerateFiles(directory, ThemeStem + ".*")
+            .Where(path =>
+                !path.Contains(BackupMarker, StringComparison.Ordinal)
+                && AudioExtensions.Contains(Path.GetExtension(path)))
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToList();
+
     /// <summary>Moves an existing theme aside rather than destroying somebody's manual choice.</summary>
-    private void BackUp(string target)
+    /// <returns><see langword="true"/> when the file was moved; a caller that must clear it deletes it otherwise.</returns>
+    private bool BackUp(string target)
     {
         var backup = string.Format(
             CultureInfo.InvariantCulture,
-            "{0}.themeforge-backup-{1:yyyyMMddHHmmss}",
+            "{0}{1}{2:yyyyMMddHHmmss}",
             target,
+            BackupMarker,
             DateTime.UtcNow);
 
         try
         {
             File.Move(target, backup, overwrite: false);
             _logger.LogInformation("ThemeForge: kept the previous theme as {Path}.", backup);
+            return true;
         }
         catch (IOException ex)
         {
             _logger.LogWarning(ex, "ThemeForge: could not back up the existing theme at {Path}; it will be replaced.", target);
+            return false;
         }
     }
 

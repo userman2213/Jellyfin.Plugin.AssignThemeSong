@@ -1,8 +1,8 @@
 namespace Jellyfin.Plugin.ThemeForge.Engines.Acquisition;
 
 /// <summary>
-/// A downloaded, normalized and verified theme sitting in the staging directory,
-/// ready for the placement engine to publish into the library.
+/// A downloaded and verified theme sitting in the staging directory, ready for the placement
+/// engine to publish into the library.
 /// </summary>
 public sealed class AcquiredAudio
 {
@@ -12,8 +12,14 @@ public sealed class AcquiredAudio
     /// <summary>Gets the duration ffprobe measured on the finished file.</summary>
     public required double DurationSeconds { get; init; }
 
-    /// <summary>Gets the integrated loudness ffmpeg measured, in LUFS, after normalization.</summary>
+    /// <summary>
+    /// Gets the integrated loudness of the download, in LUFS, when a setting asked for it to be
+    /// measured. By default nothing does, and this is null.
+    /// </summary>
     public double? MeasuredLoudnessLufs { get; init; }
+
+    /// <summary>Gets what was done to the audio, in a few words: copied as delivered, or how it was processed.</summary>
+    public string Treatment { get; init; } = string.Empty;
 
     /// <summary>Gets the SHA-256 of the finished file, so the index can detect external edits.</summary>
     public required string Sha256 { get; init; }
@@ -25,7 +31,7 @@ public sealed class AcquiredAudio
     public required string SourceUrl { get; init; }
 
     /// <summary>
-    /// Gets what listening to the file concluded, before it was normalised.
+    /// Gets what listening to the download concluded.
     /// </summary>
     /// <remarks>
     /// Recorded whatever the verdict, including when it was accepted. The measure separates music
