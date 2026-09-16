@@ -9,6 +9,24 @@
         "description": "ThemeForge searches YouTube with yt-dlp, ranks every candidate with an explainable scoring engine, and writes the winner beside your media exactly as it was delivered. High-confidence matches are assigned automatically; anything less certain waits in a review queue. Audio processing -- raising quiet themes, normalising, fades, trimming -- is available but off until you turn it on, so nothing is ever made quieter without asking. All decisions are recorded in a persistent index, so re-runs are idempotent and manual choices are never overwritten.",
         "versions": [
             {
+                "version": "2.3.0.1",
+                "targetAbi": "12.0.0.0",
+                "framework": "net10.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_2.3.0.1.zip",
+                "checksum": "eaad6dc5f3d9c3f25959b5b08f057174",
+                "timestamp": "2026-09-16T18:37:44Z",
+                "changelog": "Build for Jellyfin 12.\n\nThemes are now written exactly as they were downloaded. Until now every theme was normalised to\n-23 LUFS and faded in and out, and both were on by default, which made most themes quieter than\nthe upload they came from. Both are off. The best audio stream yt-dlp finds is kept as it is --\nthe same stream at the same volume, in the format it arrived in (theme.opus, theme.m4a or\ntheme.mp3) -- instead of being re-encoded to MP3. Nothing lowers the volume unless you ask for it.\n\nAudio processing is opt-in under Settings: raise quiet themes to a floor (this never lowers\nanything), normalise everything to one level, cut silence from the ends, fade, cap the length, or\nalways convert to MP3. A theme is only re-encoded when one of these has to change it.\n\nSettings still at the old defaults are switched off for you; anything you had changed is kept.\n\"Re-download all themes\", also under Settings, fetches every theme ThemeForge wrote again and\nwrites it with the current settings, without touching a single decision.\n\nBuilds for Jellyfin 10.11 and Jellyfin 12 are now published side by side, and the catalogue picks\nthe right one for your server."
+            },
+            {
+                "version": "2.3.0.0",
+                "targetAbi": "10.11.0.0",
+                "framework": "net9.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_2.3.0.0.zip",
+                "checksum": "6083c450f1c34df77139e6c76572b806",
+                "timestamp": "2026-09-16T18:37:44Z",
+                "changelog": "Build for Jellyfin 10.11.\n\nThemes are now written exactly as they were downloaded. Until now every theme was normalised to\n-23 LUFS and faded in and out, and both were on by default, which made most themes quieter than\nthe upload they came from. Both are off. The best audio stream yt-dlp finds is kept as it is --\nthe same stream at the same volume, in the format it arrived in (theme.opus, theme.m4a or\ntheme.mp3) -- instead of being re-encoded to MP3. Nothing lowers the volume unless you ask for it.\n\nAudio processing is opt-in under Settings: raise quiet themes to a floor (this never lowers\nanything), normalise everything to one level, cut silence from the ends, fade, cap the length, or\nalways convert to MP3. A theme is only re-encoded when one of these has to change it.\n\nSettings still at the old defaults are switched off for you; anything you had changed is kept.\n\"Re-download all themes\", also under Settings, fetches every theme ThemeForge wrote again and\nwrites it with the current settings, without touching a single decision.\n\nBuilds for Jellyfin 10.11 and Jellyfin 12 are now published side by side, and the catalogue picks\nthe right one for your server."
+            },
+            {
                 "version": "2.2.0.0",
                 "targetAbi": "10.11.0.0",
                 "framework": "net9.0",
