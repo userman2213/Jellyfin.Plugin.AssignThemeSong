@@ -112,22 +112,22 @@ public class ThemeEncoderIntegrationTests : IDisposable
     [FfmpegFact]
     public async Task ByDefaultTheAudioIsCopiedExactlyAsDelivered()
     {
-        var source = await MakeToneAsync("source.wav", amplitude: 0.5, seconds: 10).ConfigureAwait(false);
-        var before = await MeasureLoudnessAsync(source).ConfigureAwait(false);
+        var source = await MakeToneAsync("source.wav", amplitude: 0.5, seconds: 10);
+        var before = await MeasureLoudnessAsync(source);
 
-        var encoded = await EncodeAsync(source, TestData.Config(), "copy").ConfigureAwait(false);
+        var encoded = await EncodeAsync(source, TestData.Config(), "copy");
 
         Assert.Equal("theme.wav", Path.GetFileName(encoded.Path));
         Assert.Contains("copied as delivered", encoded.Treatment, StringComparison.Ordinal);
         Assert.Null(encoded.Measurement);
 
-        var probe = await ProbeAsync(encoded.Path).ConfigureAwait(false);
+        var probe = await ProbeAsync(encoded.Path);
         Assert.True(probe.IsValid, probe.Problem);
         Assert.Equal("pcm_s16le", probe.CodecName);
         Assert.False(probe.HasVideoStream);
         Assert.InRange(probe.DurationSeconds, 9.5, 10.5);
 
-        var after = await MeasureLoudnessAsync(encoded.Path).ConfigureAwait(false);
+        var after = await MeasureLoudnessAsync(encoded.Path);
         Assert.True(Math.Abs(after - before) <= 0.5, $"a copy must not change the level: {before:0.00} became {after:0.00} LUFS");
     }
 
@@ -135,12 +135,12 @@ public class ThemeEncoderIntegrationTests : IDisposable
     public async Task AnOpusDownloadStaysOpus()
     {
         // What yt-dlp delivers from YouTube most of the time.
-        var source = await MakeToneAsync("source.webm", amplitude: 0.5, seconds: 10, codec: new[] { "-c:a", "libopus", "-b:a", "96k" }).ConfigureAwait(false);
+        var source = await MakeToneAsync("source.webm", amplitude: 0.5, seconds: 10, codec: new[] { "-c:a", "libopus", "-b:a", "96k" });
 
-        var encoded = await EncodeAsync(source, TestData.Config(), "opus").ConfigureAwait(false);
+        var encoded = await EncodeAsync(source, TestData.Config(), "opus");
 
         Assert.Equal("theme.opus", Path.GetFileName(encoded.Path));
-        var probe = await ProbeAsync(encoded.Path).ConfigureAwait(false);
+        var probe = await ProbeAsync(encoded.Path);
         Assert.True(probe.IsValid, probe.Problem);
         Assert.Equal("opus", probe.CodecName);
         Assert.InRange(probe.DurationSeconds, 9.5, 10.5);
@@ -154,22 +154,22 @@ public class ThemeEncoderIntegrationTests : IDisposable
 
         // ffmpeg's sine source sits near -22 LUFS at unity, so these land at about -42 and about
         // -12 LUFS: one well under the -16 floor, one well over it.
-        var quiet = await MakeToneAsync("quiet.wav", amplitude: 0.1, seconds: 12).ConfigureAwait(false);
-        var loud = await MakeToneAsync("loud.wav", amplitude: 3.0, seconds: 12).ConfigureAwait(false);
-        var loudBefore = await MeasureLoudnessAsync(loud).ConfigureAwait(false);
+        var quiet = await MakeToneAsync("quiet.wav", amplitude: 0.1, seconds: 12);
+        var loud = await MakeToneAsync("loud.wav", amplitude: 3.0, seconds: 12);
+        var loudBefore = await MeasureLoudnessAsync(loud);
 
-        var quietOut = await EncodeAsync(quiet, configuration, "quiet").ConfigureAwait(false);
-        var loudOut = await EncodeAsync(loud, configuration, "loud").ConfigureAwait(false);
+        var quietOut = await EncodeAsync(quiet, configuration, "quiet");
+        var loudOut = await EncodeAsync(loud, configuration, "loud");
 
         Assert.Equal(".mp3", Path.GetExtension(quietOut.Path));
-        var raised = await MeasureLoudnessAsync(quietOut.Path).ConfigureAwait(false);
+        var raised = await MeasureLoudnessAsync(quietOut.Path);
         Assert.True(
             Math.Abs(raised - configuration.QuietThemeFloorLufs) <= 1.5,
             $"expected the quiet theme at about {configuration.QuietThemeFloorLufs} LUFS, measured {raised:0.00}");
 
         // The loud one was never re-encoded, let alone turned down.
         Assert.Equal(".wav", Path.GetExtension(loudOut.Path));
-        var loudAfter = await MeasureLoudnessAsync(loudOut.Path).ConfigureAwait(false);
+        var loudAfter = await MeasureLoudnessAsync(loudOut.Path);
         Assert.True(Math.Abs(loudAfter - loudBefore) <= 0.5, $"the loud theme changed from {loudBefore:0.00} to {loudAfter:0.00} LUFS");
     }
 
@@ -181,15 +181,15 @@ public class ThemeEncoderIntegrationTests : IDisposable
 
         // Two sources 20 dB apart — the everyday case of one uploader mastering hot and
         // another leaving plenty of headroom.
-        var loud = await MakeToneAsync("loud.wav", amplitude: 0.9, seconds: 12).ConfigureAwait(false);
-        var quiet = await MakeToneAsync("quiet.wav", amplitude: 0.09, seconds: 12).ConfigureAwait(false);
+        var loud = await MakeToneAsync("loud.wav", amplitude: 0.9, seconds: 12);
+        var quiet = await MakeToneAsync("quiet.wav", amplitude: 0.09, seconds: 12);
 
         var results = new List<double>();
         foreach (var (source, name) in new[] { (loud, "normalised-loud"), (quiet, "normalised-quiet") })
         {
-            var encoded = await EncodeAsync(source, configuration, name).ConfigureAwait(false);
+            var encoded = await EncodeAsync(source, configuration, name);
             Assert.Equal(".mp3", Path.GetExtension(encoded.Path));
-            results.Add(await MeasureLoudnessAsync(encoded.Path).ConfigureAwait(false));
+            results.Add(await MeasureLoudnessAsync(encoded.Path));
         }
 
         Assert.All(results, loudness =>
@@ -208,14 +208,14 @@ public class ThemeEncoderIntegrationTests : IDisposable
         var configuration = TestData.Config();
         configuration.AlwaysConvertToMp3 = true;
 
-        var source = await MakeToneAsync("source.wav", amplitude: 0.5, seconds: 10).ConfigureAwait(false);
-        var encoded = await EncodeAsync(source, configuration, "mp3").ConfigureAwait(false);
+        var source = await MakeToneAsync("source.wav", amplitude: 0.5, seconds: 10);
+        var encoded = await EncodeAsync(source, configuration, "mp3");
 
         Assert.Equal("theme.mp3", Path.GetFileName(encoded.Path));
         Assert.StartsWith("encoded to MP3", encoded.Treatment, StringComparison.Ordinal);
 
         // This is the verification gate that keeps unplayable files out of the library.
-        var probe = await ProbeAsync(encoded.Path).ConfigureAwait(false);
+        var probe = await ProbeAsync(encoded.Path);
         Assert.True(probe.IsValid, probe.Problem);
         Assert.Equal("mp3", probe.CodecName);
         Assert.False(probe.HasVideoStream);
@@ -229,10 +229,10 @@ public class ThemeEncoderIntegrationTests : IDisposable
         configuration.MaxThemeSeconds = 5;
         configuration.FadeOutSeconds = 2;
 
-        var source = await MakeToneAsync("long.wav", amplitude: 0.5, seconds: 20).ConfigureAwait(false);
-        var encoded = await EncodeAsync(source, configuration, "cut").ConfigureAwait(false);
+        var source = await MakeToneAsync("long.wav", amplitude: 0.5, seconds: 20);
+        var encoded = await EncodeAsync(source, configuration, "cut");
 
-        var probe = await ProbeAsync(encoded.Path).ConfigureAwait(false);
+        var probe = await ProbeAsync(encoded.Path);
         Assert.True(probe.IsValid, probe.Problem);
         Assert.Equal("mp3", probe.CodecName);
         Assert.InRange(probe.DurationSeconds, 4.5, 5.6);
@@ -245,13 +245,13 @@ public class ThemeEncoderIntegrationTests : IDisposable
         configuration.TrimSilence = true;
 
         // Six seconds of tone with two seconds of nothing before and after it.
-        var source = await MakeToneAsync("padded.wav", amplitude: 0.5, seconds: 6, extraFilter: "adelay=2000,apad=pad_dur=2").ConfigureAwait(false);
-        var sourceProbe = await ProbeAsync(source).ConfigureAwait(false);
+        var source = await MakeToneAsync("padded.wav", amplitude: 0.5, seconds: 6, extraFilter: "adelay=2000,apad=pad_dur=2");
+        var sourceProbe = await ProbeAsync(source);
         Assert.InRange(sourceProbe.DurationSeconds, 9.5, 10.5);
 
-        var encoded = await EncodeAsync(source, configuration, "trimmed").ConfigureAwait(false);
+        var encoded = await EncodeAsync(source, configuration, "trimmed");
 
-        var probe = await ProbeAsync(encoded.Path).ConfigureAwait(false);
+        var probe = await ProbeAsync(encoded.Path);
         Assert.True(probe.IsValid, probe.Problem);
         Assert.InRange(probe.DurationSeconds, 5.5, 6.6);
     }
@@ -260,9 +260,9 @@ public class ThemeEncoderIntegrationTests : IDisposable
     public async Task ProbeRejectsAFileThatIsNotAudio()
     {
         var garbage = Path.Combine(_workspace, "garbage.mp3");
-        await File.WriteAllTextAsync(garbage, "this is not an mp3").ConfigureAwait(false);
+        await File.WriteAllTextAsync(garbage, "this is not an mp3");
 
-        var probe = await ProbeAsync(garbage).ConfigureAwait(false);
+        var probe = await ProbeAsync(garbage);
 
         Assert.False(probe.IsValid);
         Assert.NotNull(probe.Problem);
@@ -272,9 +272,9 @@ public class ThemeEncoderIntegrationTests : IDisposable
     public async Task ProbeRejectsAnEmptyFile()
     {
         var empty = Path.Combine(_workspace, "empty.mp3");
-        await File.WriteAllBytesAsync(empty, Array.Empty<byte>()).ConfigureAwait(false);
+        await File.WriteAllBytesAsync(empty, Array.Empty<byte>());
 
-        var probe = await ProbeAsync(empty).ConfigureAwait(false);
+        var probe = await ProbeAsync(empty);
 
         Assert.False(probe.IsValid);
     }

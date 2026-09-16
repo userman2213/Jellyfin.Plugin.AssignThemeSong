@@ -82,7 +82,7 @@ public class ThemePlacementTests : IDisposable
 
         var result = await Engine()
             .PlaceAsync(item, Staged("theme.opus"), configuration, Policy(ThemeOverwritePolicy.ReplaceAny), CancellationToken.None)
-            .ConfigureAwait(false);
+            ;
 
         Assert.True(result.Success, result.Reason);
         Assert.Equal(Path.Combine(folder, "theme.opus"), result.Path);
@@ -99,7 +99,7 @@ public class ThemePlacementTests : IDisposable
 
         var result = await Engine()
             .PlaceAsync(item, Staged("theme.opus"), configuration, Policy(ThemeOverwritePolicy.ReplaceOwn), CancellationToken.None)
-            .ConfigureAwait(false);
+            ;
 
         Assert.True(result.Success, result.Reason);
 
@@ -122,7 +122,7 @@ public class ThemePlacementTests : IDisposable
 
         var result = await Engine()
             .PlaceAsync(item, Staged("theme.mp3"), configuration, Policy(ThemeOverwritePolicy.ReplaceAny), CancellationToken.None)
-            .ConfigureAwait(false);
+            ;
 
         Assert.True(result.Success, result.Reason);
         Assert.Equal(new[] { "theme.mp3" }, ThemeFilesIn(folder));
@@ -137,7 +137,7 @@ public class ThemePlacementTests : IDisposable
 
         var result = await Engine()
             .PlaceAsync(item, Staged("theme.opus"), TestData.Config(), Policy(ThemeOverwritePolicy.Never), CancellationToken.None)
-            .ConfigureAwait(false);
+            ;
 
         Assert.False(result.Success);
         Assert.Contains("never", result.Reason, StringComparison.Ordinal);
