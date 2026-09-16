@@ -137,6 +137,106 @@ public class TitleAnchorTests
         Assert.False(TitleAnchor.ClaimsToBeATheme("Marshmello - FRIENDS"));
     }
 
+    [Theory]
+    [InlineData("Lost", "Lost Season 1 Intro")]
+    [InlineData("The Office", "The Office Season 3 Intro")]
+    [InlineData("Friends", "Friends S01E01 Opening")]
+    [InlineData("Lost", "Lost Staffel 2 Vorspann")]
+    [InlineData("Lost", "Lost 1x03 Intro")]
+    public void ASeasonOrEpisodeNumberIsAQualifier(string wanted, string candidate)
+    {
+        // A first version doubled every number as a sibling marker and rejected all of these.
+        var result = TitleAnchor.Match(wanted, candidate);
+        Assert.False(result.Rejected, result.Reason);
+        Assert.Equal(1.0, result.Residual);
+    }
+
+    [Fact]
+    public void ABareNumberBesideAShortTitleIsStillASibling()
+    {
+        Assert.True(TitleAnchor.Match("Titanic", "Titanic 2 Theme Song").Rejected);
+        Assert.True(TitleAnchor.Match("Halo", "Halo 3 Main Theme").Rejected);
+    }
+
+    [Fact]
+    public void TheItemsOwnYearCorroboratesTheMatch()
+    {
+        var result = TitleAnchor.Match("Lost", "Lost 2004 Intro", 2004);
+
+        Assert.False(result.Rejected, result.Reason);
+        Assert.True(result.YearConfirmed);
+        Assert.Equal(1.0, result.Residual);
+    }
+
+    [Fact]
+    public void ADifferentYearIsADifferentProductionEvenInBrackets()
+    {
+        // Brackets are otherwise somebody else's business, but "(1978)" beside a title is exactly
+        // how uploads tell two productions of the same name apart.
+        Assert.True(TitleAnchor.Match("Battlestar Galactica", "Battlestar Galactica (1978) Theme", 2004).Rejected);
+        Assert.True(TitleAnchor.Match("Battlestar Galactica", "Battlestar Galactica 1978 Intro (4K)", 2004).Rejected);
+        Assert.False(TitleAnchor.Match("Battlestar Galactica", "Battlestar Galactica (1978) Theme", 1978).Rejected);
+    }
+
+    [Fact]
+    public void AYearBesideARecordingWordIsWhenItWasRecorded() =>
+        Assert.False(TitleAnchor.Match("Firefly", "Firefly Theme (2019 Remaster)", 2002).Rejected);
+
+    [Fact]
+    public void ARangeStartingAtTheRightYearIsTheRightWork()
+    {
+        var result = TitleAnchor.Match("Battlestar Galactica", "Battlestar Galactica 2004-2009 Opening", 2004);
+        Assert.False(result.Rejected, result.Reason);
+        Assert.True(result.YearConfirmed);
+    }
+
+    [Fact]
+    public void AYearThatIsTheTitleIsNotADate()
+    {
+        Assert.False(TitleAnchor.Match("1883", "1883 Main Theme", 2021).Rejected);
+        Assert.True(TitleAnchor.Match("2012", "2012 (2009) Main Theme", 2009).YearConfirmed);
+    }
+
+    [Fact]
+    public void WithNoYearKnownAStatedYearIsNeutral()
+    {
+        var result = TitleAnchor.Match("Lost", "Lost 1998 Intro");
+        Assert.False(result.Rejected, result.Reason);
+        Assert.False(result.YearConfirmed);
+    }
+
+    [Fact]
+    public void TwoWorksSetAgainstEachOtherAreNeither() =>
+        Assert.True(TitleAnchor.Match("Battlestar Galactica", "Battlestar Galactica 1978 vs 2004 comparison", 2004).Rejected);
+
+    [Fact]
+    public void ASubtitleOfTwoWordsStandsForTheWhole()
+    {
+        var result = TitleAnchor.Match("Star Wars: The Clone Wars", "The Clone Wars Main Theme");
+
+        Assert.False(result.Rejected, result.Reason);
+        Assert.True(result.Score < 1.0, "a match on the subtitle alone is weaker evidence");
+        Assert.True(result.RequiresCorroboration, "and needs something else to agree");
+    }
+
+    [Fact]
+    public void AOneWordSubtitleDoesNot() =>
+        Assert.True(TitleAnchor.Match("Star Trek: Voyager", "Voyager Theme").Rejected);
+
+    [Fact]
+    public void AClaimInAnotherLanguageEndsTheRegionToo() =>
+        Assert.Equal(1.0, TitleAnchor.Match("Dark", "Dark Vorspann Staffel 1").Residual);
+
+    [Theory]
+    [InlineData("Bear McCreary", "Battlestar Galactica Main Title - Bear McCreary", true)]
+    [InlineData("Bear McCreary", "Bear McCreary - Topic", true)]
+    [InlineData("Vangelis", "Blade Runner (Vangelis)", true)]
+    [InlineData("Hans Zimmer", "Hans Zimmermann Piano Tutorial", false)]
+    [InlineData("Hans Zimmer", "Interstellar Main Theme", false)]
+    [InlineData("", "Anything", false)]
+    public void APersonIsNamedAsWholeWordsAnywhere(string name, string text, bool expected) =>
+        Assert.Equal(expected, TitleAnchor.Names(name, text));
+
     [Fact]
     public void AnEmptyTitleIsRejectedRatherThanMatchingEverything()
     {

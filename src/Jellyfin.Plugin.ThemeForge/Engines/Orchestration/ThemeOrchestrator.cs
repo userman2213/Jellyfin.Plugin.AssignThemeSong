@@ -92,6 +92,12 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
     /// <summary>How many items are processed between index saves during a run.</summary>
     private const int IndexFlushInterval = 25;
 
+    /// <summary>How many candidates discarded before hydration are remembered per item.</summary>
+    private const int MaxOverlookedRecorded = 8;
+
+    /// <summary>How many runners-up, seen or unseen, an index entry keeps.</summary>
+    private const int MaxRejectedRecorded = 8;
+
     private int _running;
 
     /// <summary>Initializes a new instance of the <see cref="ThemeOrchestrator"/> class.</summary>
@@ -264,31 +270,35 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         // they stayed there after dry run was switched off again.
         var dryRun = configuration.DryRun;
 
-        var skipReason = ShouldSkip(item, entry, configuration, policy);
-        if (skipReason is not null)
-        {
-            // Recorded rather than only logged: "why was this skipped" is the first question asked
-            // when a settings change appears to do nothing, and the log is not where people look.
-            if (!dryRun)
-            {
-                entry.LastSkipReason = skipReason;
-                entry.LastSkipUtc = DateTime.UtcNow;
-                _index.Put(entry);
-            }
-
-            _logger.LogDebug("ThemeForge: skipping \"{Item}\" — {Reason}.", identity.Label, skipReason);
-            return ItemOutcome.Skipped;
-        }
-
-        entry.LastSkipReason = null;
-        entry.LastSkipUtc = null;
+        // Three gates, in this order, and the order is the point. Whether a theme may be written at
+        // all is decided first and stops everything. The catalogues come next and are never behind
+        // a backoff: a lookup keyed on the item's own id costs nothing for a miss, and the backoff
+        // exists to stop a *search* that keeps failing from running nightly forever. It used to sit
+        // in front of the catalogue too, so every item that had once failed -- a stale yt-dlp, or
+        // simply nothing acceptable on YouTube -- was invisible to ThemerrDB for up to thirty days.
+        var foreignTheme = policy.Overwrite != ThemeOverwritePolicy.ReplaceAny
+            && entry.ThemePath is null
+            && _placementEngine.HasExistingTheme(item, configuration);
+        var eligibility = Eligibility.Decide(entry, policy, foreignTheme, configuration, DateTime.UtcNow);
 
         try
         {
-            // Asked first, and on a hit nothing else runs. A catalogue keyed on the item's own
-            // TVDB or TMDB id answers "the theme for this work"; a search answers "videos whose
-            // titles look right". Scoring the first against the second's yardstick could only
-            // make it worse, so a hit is applied on where it came from.
+            if (!eligibility.CatalogueAllowed)
+            {
+                return Skip(entry, identity, eligibility.StopReason!, dryRun);
+            }
+
+            if (eligibility.RetriedAfterUpgrade)
+            {
+                _logger.LogInformation(
+                    "ThemeForge: \"{Item}\" was last decided by an earlier version of the matcher; trying again regardless of its backoff.",
+                    identity.Label);
+            }
+
+            // Gate two: the catalogues. A catalogue keyed on the item's own TVDB or TMDB id
+            // answers "the theme for this work"; a search answers "videos whose titles look
+            // right". Scoring the first against the second's yardstick could only make it worse,
+            // so a hit is applied on where it came from and nothing else runs.
             var known = await LookUpAsync(identity, configuration, cancellationToken).ConfigureAwait(false);
             if (known is not null)
             {
@@ -302,11 +312,26 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
                     return WouldAssign(identity, certain);
                 }
 
-                RecordCandidates(entry, new[] { certain.Best! }, certain);
+                Begin(entry);
+                RecordCandidates(entry, new[] { certain.Best! }, certain, Array.Empty<ScoreResult>());
                 return await AssignAsync(item, identity, entry, certain, configuration, policy, report, cancellationToken).ConfigureAwait(false);
             }
 
-            var ranked = await SearchAndRankAsync(identity, configuration, cancellationToken).ConfigureAwait(false);
+            // Gate three: only the search is subject to backoff and attempt limits.
+            if (!eligibility.SearchAllowed)
+            {
+                return Skip(entry, identity, eligibility.SearchDeferral!, dryRun);
+            }
+
+            entry.LastSkipReason = null;
+            entry.LastSkipUtc = null;
+
+            if (!dryRun)
+            {
+                Begin(entry);
+            }
+
+            var (ranked, overlooked) = await SearchAndRankAsync(identity, configuration, cancellationToken).ConfigureAwait(false);
             var decision = _decisionPolicy.Decide(ranked, configuration);
 
             if (dryRun)
@@ -316,7 +341,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
                     : Report(identity, decision, report);
             }
 
-            RecordCandidates(entry, ranked, decision);
+            RecordCandidates(entry, ranked, decision, overlooked);
 
             return decision.Outcome switch
             {
@@ -348,6 +373,32 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
                 _index.Put(entry);
             }
         }
+    }
+
+    /// <summary>
+    /// Marks the start of one genuine attempt at an item: the generation of the matcher deciding
+    /// it, and one more try against the limit. Exactly once per processed item, so a search that
+    /// throws counts the same as one that finds nothing.
+    /// </summary>
+    private static void Begin(ThemeIndexEntry entry)
+    {
+        entry.DecidedByMatcher = ThemeIndexEntry.CurrentMatcher;
+        entry.Attempts++;
+    }
+
+    /// <summary>Leaves an item alone this run, and says why where the user will look.</summary>
+    private ItemOutcome Skip(ThemeIndexEntry entry, MediaIdentity identity, string reason, bool dryRun)
+    {
+        // Recorded rather than only logged: "why was this skipped" is the first question asked
+        // when a settings change appears to do nothing, and the log is not where people look.
+        if (!dryRun)
+        {
+            entry.LastSkipReason = reason;
+            entry.LastSkipUtc = DateTime.UtcNow;
+        }
+
+        _logger.LogDebug("ThemeForge: skipping \"{Item}\" — {Reason}.", identity.Label, reason);
+        return ItemOutcome.Skipped;
     }
 
     /// <summary>Notes an item a real run would have assigned, without recording anything.</summary>
@@ -615,7 +666,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
     /// worth a full metadata fetch, then again once that fetch has supplied duration, view count
     /// and channel. Scoring twice costs nothing and saves most of the network traffic.
     /// </remarks>
-    private async Task<IReadOnlyList<ScoreResult>> SearchAndRankAsync(
+    private async Task<(IReadOnlyList<ScoreResult> Ranked, IReadOnlyList<ScoreResult> Overlooked)> SearchAndRankAsync(
         MediaIdentity identity,
         PluginConfiguration configuration,
         CancellationToken cancellationToken)
@@ -629,6 +680,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
 
         var plan = _queryPlanner.Plan(identity, configuration);
         var best = new Dictionary<string, ScoreResult>(StringComparer.Ordinal);
+        var overlooked = new Dictionary<string, ScoreResult>(StringComparer.Ordinal);
         var autoAssign = Math.Max(configuration.AutoAssignThreshold, configuration.ReviewThreshold);
 
         foreach (var query in plan)
@@ -647,11 +699,23 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
             }
 
             // Rank on titles alone, then spend a network round trip only on the shortlist.
-            var shortlist = _scoringEngine.Rank(found, context)
+            var flat = _scoringEngine.Rank(found, context);
+            var shortlist = flat
                 .Where(result => !result.IsVetoed)
                 .Take(Math.Max(1, configuration.HydrateTopCandidates))
                 .Select(result => result.Candidate)
                 .ToList();
+
+            // A candidate vetoed here is never hydrated and used to vanish without a trace, so the
+            // one question that matters afterwards -- "why was the right video not used?" -- had
+            // no answer. Kept, so the index can say what was discarded unseen and why.
+            foreach (var result in flat.Where(result => result.IsVetoed))
+            {
+                if (overlooked.Count < MaxOverlookedRecorded)
+                {
+                    overlooked.TryAdd(result.Candidate.Id, result);
+                }
+            }
 
             if (shortlist.Count == 0)
             {
@@ -677,7 +741,9 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
             }
         }
 
-        return best.Values.OrderByDescending(result => result.Total).ToList();
+        var ranked = best.Values.OrderByDescending(result => result.Total).ToList();
+        var unseen = overlooked.Values.Where(result => !best.ContainsKey(result.Candidate.Id)).ToList();
+        return (ranked, unseen);
     }
 
     private async Task<ItemOutcome> AssignAsync(
@@ -694,7 +760,6 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         // recorded. This method's job is to act, and everything it does is a write.
         var best = decision.Best!;
 
-        entry.Attempts++;
         var audio = await _acquisitionEngine.AcquireAsync(best.Candidate, configuration, cancellationToken).ConfigureAwait(false);
 
         try
@@ -731,6 +796,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
             entry.LastError = null;
             entry.NextRetryUtc = null;
 
+            report.NoteAssignedBy(best.Candidate.Provenance ?? "search");
             return ItemOutcome.Assigned;
         }
         finally
@@ -743,6 +809,9 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
     {
         entry.State = ThemeItemState.PendingReview;
         entry.LastError = null;
+
+        // A stale backoff on a review item skipped it before anyone looked at it again.
+        entry.NextRetryUtc = null;
         report.NoteReason("scored below the auto-assign threshold, so it needs review");
         _logger.LogDebug("ThemeForge: queued \"{Item}\" for review — {Reason}.", entry.Label, decision.Reason);
         return ItemOutcome.Queued;
@@ -754,8 +823,9 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         PluginConfiguration configuration,
         RunReport report)
     {
-        entry.State = ThemeItemState.Failed;
-        entry.Attempts++;
+        // Its own state, not Failed: nothing broke, the search simply found nothing acceptable.
+        // The two used to be indistinguishable, so "cannot be mapped" read as "download failed".
+        entry.State = ThemeItemState.NoCandidate;
         entry.LastError = decision.Reason;
         entry.NextRetryUtc = NextRetry(entry.Attempts, configuration);
         report.NoteReason(decision.Reason);
@@ -769,52 +839,6 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         entry.NextRetryUtc = NextRetry(entry.Attempts, configuration);
         report.NoteReason(error);
         return ItemOutcome.Failed;
-    }
-
-    /// <summary>
-    /// Decides which items are worth looking at, and why an item should be left alone.
-    /// </summary>
-    /// <returns>A reason to skip, or null to process the item.</returns>
-    private string? ShouldSkip(BaseItem item, ThemeIndexEntry entry, PluginConfiguration configuration, ResolvedThemePolicy policy)
-    {
-        // A human's decision always outranks the pipeline's.
-        if (entry.IsSettledByHuman)
-        {
-            return string.Format(CultureInfo.InvariantCulture, "it is marked {0}", entry.State);
-        }
-
-        // A theme ThemeForge chose is only revisited when the library allows replacing one.
-        if (entry.State is ThemeItemState.AutoAssigned or ThemeItemState.Approved
-            && policy.Overwrite == ThemeOverwritePolicy.Never)
-        {
-            return "it already has a theme assigned by ThemeForge";
-        }
-
-        if (entry.NextRetryUtc is { } retryAt && retryAt > DateTime.UtcNow)
-        {
-            return string.Format(CultureInfo.InvariantCulture, "the retry backoff runs until {0:u}", retryAt);
-        }
-
-        if (entry.Attempts >= configuration.MaxAttempts && entry.State == ThemeItemState.Failed)
-        {
-            return string.Format(CultureInfo.InvariantCulture, "it has failed {0} times", entry.Attempts);
-        }
-
-        // A theme file already on disk that ThemeForge did not write belongs to the user, and is
-        // only replaced when the library is explicitly set to replace anything.
-        //
-        // This is deliberately NOT recorded as a state. It used to latch the item to
-        // ManualOverride, which is checked before the policy, so the item could never be
-        // reconsidered no matter how the library rule changed afterwards. Whether a theme file
-        // exists is a fact about right now; it is re-read on every run and judged against the
-        // policy in force at the time.
-        if (policy.Overwrite != ThemeOverwritePolicy.ReplaceAny
-            && _placementEngine.HasExistingTheme(item, configuration))
-        {
-            return "it already has a theme that ThemeForge did not write, and this library is not set to replace those";
-        }
-
-        return null;
     }
 
     private IReadOnlyList<BaseItem> GetLibraryItems(PluginConfiguration configuration)
@@ -856,7 +880,11 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
     /// Records the chosen candidate and the runners-up, so the review queue can show alternatives
     /// and a later run can see what was already considered.
     /// </summary>
-    private static void RecordCandidates(ThemeIndexEntry entry, IReadOnlyList<ScoreResult> ranked, ThemeDecision decision)
+    private static void RecordCandidates(
+        ThemeIndexEntry entry,
+        IReadOnlyList<ScoreResult> ranked,
+        ThemeDecision decision,
+        IReadOnlyList<ScoreResult> overlooked)
     {
         entry.DecidedByMatcher = ThemeIndexEntry.CurrentMatcher;
 
@@ -871,7 +899,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
             entry.ScoreBreakdown = ScoringEngine.Describe(best).ToList();
         }
 
-        entry.Rejected = ranked
+        var seen = ranked
             .Where(result => !ReferenceEquals(result, best))
             .Take(5)
             .Select(result => new RejectedCandidateRecord
@@ -883,8 +911,22 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
                 Reason = result.IsVetoed
                     ? result.VetoReason ?? "disqualified"
                     : string.Join("; ", result.TopSignals(2).Select(signal => signal.Reason)),
-            })
-            .ToList();
+            });
+
+        // Candidates discarded on their title before hydration, marked as such: they were never
+        // inspected, and knowing that is the difference between "the search never found it" and
+        // "the search found it and the matcher threw it away".
+        var unseen = overlooked
+            .Select(result => new RejectedCandidateRecord
+            {
+                Id = result.Candidate.Id,
+                Title = result.Candidate.Title,
+                Url = result.Candidate.Url,
+                Score = result.Total,
+                Reason = "not inspected — " + (result.VetoReason ?? "disqualified on its title"),
+            });
+
+        entry.Rejected = seen.Concat(unseen).Take(MaxRejectedRecorded).ToList();
     }
 
     /// <summary>

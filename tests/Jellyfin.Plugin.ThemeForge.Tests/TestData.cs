@@ -14,22 +14,24 @@ internal static class TestData
 {
     public static readonly SearchQuery DefaultQuery = new("test query", 0, "{title} theme");
 
-    public static MediaIdentity Series(string title, int? year = 2005, IReadOnlyList<string>? alternates = null) => new()
+    public static MediaIdentity Series(string title, int? year = 2005, IReadOnlyList<string>? alternates = null, IReadOnlyList<string>? composers = null) => new()
     {
         ItemId = Guid.NewGuid(),
         Title = title,
         NormalizedTitle = TitleNormalizer.Normalize(title),
         AlternateTitles = alternates ?? Array.Empty<string>(),
         Year = year,
+        Composers = composers ?? Array.Empty<string>(),
         Kind = BaseItemKind.Series,
     };
 
-    public static MediaIdentity Movie(string title, int? year = 2005) => new()
+    public static MediaIdentity Movie(string title, int? year = 2005, IReadOnlyList<string>? composers = null) => new()
     {
         ItemId = Guid.NewGuid(),
         Title = title,
         NormalizedTitle = TitleNormalizer.Normalize(title),
         Year = year,
+        Composers = composers ?? Array.Empty<string>(),
         Kind = BaseItemKind.Movie,
     };
 
@@ -79,5 +81,6 @@ internal static class TestData
         new Engines.Scoring.Rules.AvailabilityRule(),
         new Engines.Scoring.Rules.DuplicateRule(),
         new Engines.Scoring.Rules.QuerySpecificityRule(),
+        new Engines.Scoring.Rules.ComposerRule(),
     });
 }

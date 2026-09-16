@@ -38,9 +38,11 @@ public sealed class ThemeIndexEntry
     /// <remarks>
     /// Raised whenever a change makes past decisions untrustworthy rather than merely different.
     /// Generation 2 replaced a title matcher that scored any substring of a candidate's title as
-    /// a perfect match, so everything it chose has to be looked at again.
+    /// a perfect match, so everything it chose has to be looked at again. Generation 3 taught the
+    /// matcher what a season number and a year are, and gave soundtrack uploads a hearing, so
+    /// everything generation 2 gave up on is worth one more look.
     /// </remarks>
-    public const int CurrentMatcher = 2;
+    public const int CurrentMatcher = 3;
 
     /// <summary>Gets or sets the Jellyfin item id.</summary>
     public Guid ItemId { get; set; }
@@ -133,7 +135,10 @@ public sealed class ThemeIndexEntry
     /// </summary>
     public bool IsStale =>
         DecidedByMatcher < CurrentMatcher
-        && State is ThemeItemState.AutoAssigned or ThemeItemState.PendingReview or ThemeItemState.Failed;
+        && State is ThemeItemState.AutoAssigned
+            or ThemeItemState.PendingReview
+            or ThemeItemState.Failed
+            or ThemeItemState.NoCandidate;
 
     /// <summary>
     /// Gets or sets the music-versus-speech measure taken on the downloaded audio.

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text.Json;
 
 namespace Jellyfin.Plugin.ThemeForge.Engines.Discovery;
@@ -69,6 +70,9 @@ public static class YtDlpJson
                 return null;
             }
 
+            var description = GetString(root, "description");
+            var credits = ReadMusicCredits(description);
+
             return new Candidate
             {
                 Id = id,
@@ -81,8 +85,14 @@ public static class YtDlpJson
                 DurationSeconds = GetDouble(root, "duration"),
                 ViewCount = GetLong(root, "view_count"),
                 UploadDate = GetUploadDate(root),
-                Description = GetString(root, "description"),
+                Description = description,
                 Tags = GetStringArray(root, "tags"),
+
+                // yt-dlp exposes release metadata for music uploads directly; older releases and
+                // some uploads carry it only in the description's distributor block.
+                Album = GetString(root, "album") ?? credits.Album,
+                Artist = GetString(root, "artist") ?? GetString(root, "creator") ?? credits.Artist,
+                Track = GetString(root, "track") ?? credits.Track,
                 IsLive = GetBool(root, "is_live") ?? IsLiveStatus(GetString(root, "live_status")),
                 Availability = GetString(root, "availability"),
                 FoundBy = foundBy,
@@ -95,6 +105,55 @@ public static class YtDlpJson
             return null;
         }
     }
+
+    /// <summary>
+    /// Reads the track, artist and album out of the block a distributor's upload starts with.
+    /// </summary>
+    /// <remarks>
+    /// Every auto-generated music upload begins the same way:
+    /// <c>Provided to YouTube by …</c>, a blank line, <c>Track · Artist</c>, a blank line, then the
+    /// album. It is the only place a rights-holder upload titled by track names the work it
+    /// belongs to, which is what lets "Main Title" be recognised as a theme at all.
+    /// </remarks>
+    /// <param name="description">The upload's description.</param>
+    /// <returns>Whatever the block supplied; each part null when absent.</returns>
+    public static (string? Track, string? Artist, string? Album) ReadMusicCredits(string? description)
+    {
+        if (string.IsNullOrWhiteSpace(description)
+            || !description.TrimStart().StartsWith("Provided to YouTube by", StringComparison.OrdinalIgnoreCase))
+        {
+            return (null, null, null);
+        }
+
+        var lines = description
+            .Split('\n')
+            .Select(line => line.Trim())
+            .Where(line => line.Length > 0)
+            .ToList();
+
+        string? track = null;
+        string? artist = null;
+        string? album = null;
+
+        if (lines.Count > 1)
+        {
+            var credit = lines[1].Split(" \u00b7 ", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            track = credit.Length > 0 ? credit[0] : null;
+            artist = credit.Length > 1 ? string.Join(", ", credit.Skip(1)) : null;
+        }
+
+        if (lines.Count > 2
+            && !lines[2].StartsWith("\u2117", StringComparison.Ordinal)
+            && !lines[2].StartsWith("Released on", StringComparison.OrdinalIgnoreCase)
+            && !lines[2].StartsWith("Auto-generated", StringComparison.OrdinalIgnoreCase))
+        {
+            album = lines[2];
+        }
+
+        return (Blank(track), Blank(artist), Blank(album));
+    }
+
+    private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 
     /// <summary>
     /// Builds a watch URL. Flat search listings put a full URL in "url", but older yt-dlp

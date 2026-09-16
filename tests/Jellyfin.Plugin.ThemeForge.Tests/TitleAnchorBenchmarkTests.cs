@@ -88,6 +88,20 @@ public class TitleAnchorBenchmarkTests
         ("Marvel's Agents of S.H.I.E.L.D.", "Agents of SHIELD Main Theme"),
         ("Spider-Man", "Spider Man Theme Song"),
         ("Rocky II", "Rocky 2 - Main Theme"),
+
+        // Season and episode numbers are qualifiers, not siblings. A first version counted every
+        // number double and rejected all of these -- the commonest shapes television uploads take.
+        ("Lost", "Lost Season 1 Intro"),
+        ("The Office", "The Office Season 3 Intro"),
+        ("Friends", "Friends S01E01 Opening"),
+        ("Dark", "Dark Season 2 Official Opening Credits"),
+        ("Dark", "Dark Vorspann Staffel 1"),
+        ("Battlestar Galactica", "Battlestar Galactica Season 1 Title intro"),
+        ("Lost", "Lost 1x01 Intro"),
+
+        // A subtitle at least two words long stands for the whole.
+        ("Star Wars: The Clone Wars", "The Clone Wars Main Theme"),
+        ("Star Trek: The Next Generation", "The Next Generation Opening Titles"),
     };
 
     /// <summary>Titles that must not be accepted as naming the wanted work.</summary>
@@ -138,6 +152,32 @@ public class TitleAnchorBenchmarkTests
         ("Firefly", "Owl City - Fireflies"),
         ("The Wire", "Wireless charging explained"),
         ("Fringe", "Fringe Festival 2019 Highlights"),
+
+        // A one-word subtitle does not stand for the whole, and two works set against each other
+        // are neither of them.
+        ("Star Trek: Voyager", "Voyager Probe Documentary"),
+        ("Battlestar Galactica", "Battlestar Galactica 1978 vs 2004 comparison"),
+    };
+
+    /// <summary>
+    /// Cases that only the item's production year can decide. Each is a title from the real
+    /// search captures for the 2004 series, with the verdict a person would give.
+    /// </summary>
+    public static readonly (string Wanted, int Year, string Candidate, bool Accept)[] WithYear =
+    {
+        ("Battlestar Galactica", 2004, "Battlestar Galactica Season 1 Title intro", true),
+        ("Battlestar Galactica", 2004, "Battlestar Galactica Opening Credits 2", true),
+        ("Battlestar Galactica", 2004, "Battlestar Galactica Intro", true),
+        ("Battlestar Galactica", 2004, "Battlestar Galactica 2004-2009 Opening", true),
+        ("Battlestar Galactica", 2004, "Battlestar Galactica (1978) Theme", false),
+        ("Battlestar Galactica", 2004, "Battlestar Galactica 1978 Intro (4K)", false),
+        ("Hawaii Five-0", 2010, "Hawaii Five-0 (2010) Theme", true),
+        ("Hawaii Five-0", 2010, "Hawaii Five-0 1968 Theme", false),
+        ("Lost", 2004, "Lost 2004 Intro", true),
+        ("Firefly", 2002, "Firefly Theme (2019 Remaster)", true),
+        ("Doctor Who", 2005, "Doctor Who Theme (1963)", false),
+        ("1883", 2021, "1883 Main Theme", true),
+        ("2012", 2009, "2012 (2009) Main Theme", true),
     };
 
     /// <summary>
@@ -178,6 +218,19 @@ public class TitleAnchorBenchmarkTests
             .ToList();
 
         Report("false accepts", failures, MustReject.Length);
+        Assert.Empty(failures);
+    }
+
+    [Fact]
+    public void TheYearDecidesBetweenTwoProductionsOfTheSameName()
+    {
+        var failures = WithYear
+            .Select(row => (row, result: TitleAnchor.Match(row.Wanted, row.Candidate, row.Year)))
+            .Where(x => x.result.Rejected == x.row.Accept)
+            .Select(x => $"  {x.row.Wanted} ({x.row.Year}) <- {x.row.Candidate}  ({(x.row.Accept ? "wrongly rejected" : "wrongly accepted")}: {x.result.Reason})")
+            .ToList();
+
+        Report("year verdicts wrong", failures, WithYear.Length);
         Assert.Empty(failures);
     }
 

@@ -45,6 +45,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<IToolProvisioner, YtDlpProvisioner>();
 
         // Pipeline engines
+        serviceCollection.AddSingleton<IPeopleLookup, JellyfinPeopleLookup>();
         serviceCollection.AddSingleton<IMediaIdentityResolver, MediaIdentityResolver>();
         serviceCollection.AddSingleton<IQueryPlanner, QueryPlanner>();
         serviceCollection.AddSingleton<ICandidateSource, YtDlpCandidateSource>();
@@ -75,6 +76,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<IScoringRule, AvailabilityRule>();
         serviceCollection.AddSingleton<IScoringRule, DuplicateRule>();
         serviceCollection.AddSingleton<IScoringRule, QuerySpecificityRule>();
+        serviceCollection.AddSingleton<IScoringRule, ComposerRule>();
         serviceCollection.AddSingleton<IScoringEngine, ScoringEngine>();
 
         serviceCollection.AddSingleton<IThemeOrchestrator, ThemeOrchestrator>();

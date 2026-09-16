@@ -93,6 +93,16 @@ public sealed class LibraryRowDto
     /// threshold is set sensibly for it.
     /// </remarks>
     public double? BandDiffStd { get; set; }
+
+    /// <summary>
+    /// Gets or sets the candidates that came closest without being used, with why they were not.
+    /// </summary>
+    /// <remarks>
+    /// "Nothing acceptable found" is the end of the pipeline's road but not of the user's: seeing
+    /// what was rejected and why turns an unmapped title into a one-click decision, or a bug
+    /// report with the evidence attached.
+    /// </remarks>
+    public IReadOnlyList<AlternateDto> NearestMisses { get; set; } = Array.Empty<AlternateDto>();
 }
 
 /// <summary>The plugin's current state, for the status panel.</summary>
@@ -127,6 +137,9 @@ public sealed class StatusDto
 
     /// <summary>Gets or sets how many items are in a failed state.</summary>
     public int Failed { get; set; }
+
+    /// <summary>Gets or sets how many items were searched for and found nothing acceptable.</summary>
+    public int NoCandidate { get; set; }
 
     /// <summary>Gets or sets how many index entries exist in total.</summary>
     public int Indexed { get; set; }
@@ -163,6 +176,9 @@ public sealed class StatusDto
 
     /// <summary>Gets or sets a value indicating whether the last run wrote nothing.</summary>
     public bool LastRunWasDryRun { get; set; }
+
+    /// <summary>Gets or sets where the last run's themes came from, most first, as "12 via ThemerrDB".</summary>
+    public IReadOnlyList<string> LastRunAssignedBy { get; set; } = Array.Empty<string>();
 
     /// <summary>Gets or sets what the local ThemerrDB copy holds, and how old it is.</summary>
     public CatalogueStatus Themerr { get; set; } = new();

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 
 namespace Jellyfin.Plugin.ThemeForge.Engines.Orchestration;
 
@@ -82,6 +83,27 @@ public sealed class RunReport
     /// <summary>Gets the most common reasons items did not get a theme, most frequent first.</summary>
     public Dictionary<string, int> TopReasons { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Gets how many themes each source supplied.
+    /// </summary>
+    /// <remarks>
+    /// "Assigned 40" says nothing about whether the catalogue or the search did the work, and
+    /// that split is what decides where to spend effort next.
+    /// </remarks>
+    public Dictionary<string, int> AssignedBy { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>Records which source a theme came from.</summary>
+    /// <param name="source">The catalogue's name, or "search".</param>
+    public void NoteAssignedBy(string source)
+    {
+        if (string.IsNullOrWhiteSpace(source))
+        {
+            return;
+        }
+
+        AssignedBy[source] = AssignedBy.TryGetValue(source, out var count) ? count + 1 : 1;
+    }
+
     /// <summary>Records a reason an item did not get a theme.</summary>
     /// <param name="reason">The reason text.</param>
     public void NoteReason(string reason)
@@ -123,11 +145,16 @@ public sealed class RunReport
             Skipped)
         : string.Format(
             CultureInfo.InvariantCulture,
-            "{0} considered, {1} assigned, {2} queued for review, {3} without a candidate, {4} failed, {5} skipped",
+            "{0} considered, {1} assigned{6}, {2} queued for review, {3} without a candidate, {4} failed, {5} skipped",
             Considered,
             Assigned,
             Queued,
             NoCandidate,
             Failed,
-            Skipped);
+            Skipped,
+            AssignedBy.Count == 0
+                ? string.Empty
+                : " (" + string.Join(", ", AssignedBy
+                    .OrderByDescending(pair => pair.Value)
+                    .Select(pair => string.Format(CultureInfo.InvariantCulture, "{0} via {1}", pair.Value, pair.Key))) + ")");
 }

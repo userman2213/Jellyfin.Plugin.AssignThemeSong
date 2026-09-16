@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using MediaBrowser.Model.Plugins;
 using Microsoft.Extensions.Logging;
 
@@ -97,24 +98,15 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <summary>Gets or sets how many of the best results get a full metadata fetch. Hydration is the expensive part.</summary>
     public int HydrateTopCandidates { get; set; } = 5;
 
-    /// <summary>Gets or sets the search ladder for series, most specific first. <c>{title}</c> and <c>{year}</c> are substituted.</summary>
-    public string[] SeriesQueryTemplates { get; set; } =
-    {
-        "{title} opening theme song",
-        "{title} main title theme",
-        "{title} theme song",
-        "{title} intro",
-        "{title} soundtrack main theme",
-    };
+    /// <summary>
+    /// Gets or sets the search ladder for series, most specific first. <c>{title}</c>,
+    /// <c>{year}</c> and <c>{composer}</c> are substituted; a template naming the composer is
+    /// skipped for an item that has none on record.
+    /// </summary>
+    public string[] SeriesQueryTemplates { get; set; } = ShippedTemplates.Series.ToArray();
 
     /// <summary>Gets or sets the search ladder for films, most specific first.</summary>
-    public string[] MovieQueryTemplates { get; set; } =
-    {
-        "{title} {year} main theme soundtrack",
-        "{title} main title theme",
-        "{title} theme song",
-        "{title} soundtrack suite",
-    };
+    public string[] MovieQueryTemplates { get; set; } = ShippedTemplates.Movies.ToArray();
 
     // ---- Decision ------------------------------------------------------------------
 

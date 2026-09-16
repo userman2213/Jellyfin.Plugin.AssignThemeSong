@@ -63,7 +63,7 @@ public class ScoringEngineTests
             TestData.Context(TestData.Series("Firefly")));
 
         // The review queue is only useful if every point is traceable to a named rule.
-        Assert.Equal(10, result.Breakdown.Count);
+        Assert.Equal(11, result.Breakdown.Count);
         Assert.All(result.Breakdown, signal =>
         {
             Assert.False(string.IsNullOrWhiteSpace(signal.Rule));
@@ -95,7 +95,7 @@ public class ScoringEngineTests
 
         var lines = ScoringEngine.Describe(result);
         Assert.StartsWith("Total:", lines[0], StringComparison.Ordinal);
-        Assert.Equal(11, lines.Count);
+        Assert.Equal(12, lines.Count);
     }
 
     [Fact]

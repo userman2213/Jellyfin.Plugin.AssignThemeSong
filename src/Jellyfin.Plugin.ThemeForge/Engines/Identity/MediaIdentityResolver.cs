@@ -24,6 +24,15 @@ public interface IMediaIdentityResolver
 /// </summary>
 public sealed class MediaIdentityResolver : IMediaIdentityResolver
 {
+    private readonly IPeopleLookup _people;
+
+    /// <summary>Initializes a new instance of the <see cref="MediaIdentityResolver"/> class.</summary>
+    /// <param name="people">
+    /// Reads the people credited on an item. Optional: without it, items are identified by title
+    /// and ids alone, as they always were.
+    /// </param>
+    public MediaIdentityResolver(IPeopleLookup? people = null) => _people = people ?? NoPeopleLookup.Instance;
+
     /// <inheritdoc />
     public MediaIdentity? Resolve(BaseItem item)
     {
@@ -53,6 +62,7 @@ public sealed class MediaIdentityResolver : IMediaIdentityResolver
             OriginalTitle = item.OriginalTitle,
             AlternateTitles = BuildAlternateTitles(item, normalized),
             Year = item.ProductionYear,
+            Composers = _people.Composers(item),
             Kind = kind.Value,
             TvdbId = NullIfEmpty(item.GetProviderId(MetadataProvider.Tvdb)),
             TmdbId = NullIfEmpty(item.GetProviderId(MetadataProvider.Tmdb)),

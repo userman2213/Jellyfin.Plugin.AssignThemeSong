@@ -62,6 +62,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         }
 
         SweepStagingDirectory();
+        UpgradeShippedDefaults();
 
         _logger.LogInformation("ThemeForge {Version} initialised; data directory {Path}.", Version, DataPath);
 
@@ -172,6 +173,30 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         }
 
         base.OnUninstalling();
+    }
+
+    /// <summary>
+    /// Brings a saved search ladder that is still a previous default up to the current one.
+    /// </summary>
+    /// <remarks>
+    /// A better default reaches nobody who has already installed the plugin otherwise: the saved
+    /// settings hold whatever they were saved with. Only a ladder identical to a previous shipped
+    /// default is touched; any edit at all marks it as the user's and it is left alone.
+    /// </remarks>
+    private void UpgradeShippedDefaults()
+    {
+        try
+        {
+            if (ShippedTemplates.Upgrade(Configuration))
+            {
+                SaveConfiguration();
+                _logger.LogInformation("ThemeForge: the search ladders were still the previous defaults and have been brought up to date.");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "ThemeForge: could not check the saved search ladders.");
+        }
     }
 
     /// <summary>

@@ -98,6 +98,7 @@ public class ThemeForgeController : ControllerBase
             PendingReview = entries.Count(e => e.State == ThemeItemState.PendingReview),
             Assigned = entries.Count(e => e.State is ThemeItemState.AutoAssigned or ThemeItemState.Approved),
             Failed = entries.Count(e => e.State == ThemeItemState.Failed),
+            NoCandidate = entries.Count(e => e.State == ThemeItemState.NoCandidate),
             Indexed = entries.Count,
             StaleDecisions = entries.Count(e => e.IsStale),
         };
@@ -108,6 +109,10 @@ public class ThemeForgeController : ControllerBase
             status.LastRunSummary = lastRun.ToString();
             status.LastRunFinishedUtc = lastRun.FinishedUtc;
             status.LastRunWasDryRun = lastRun.WasDryRun;
+            status.LastRunAssignedBy = lastRun.AssignedBy
+                .OrderByDescending(pair => pair.Value)
+                .Select(pair => $"{pair.Value} via {pair.Key}")
+                .ToList();
             status.LastRunReasons = lastRun.TopReasons
                 .OrderByDescending(pair => pair.Value)
                 .Take(5)
@@ -531,24 +536,36 @@ public class ThemeForgeController : ControllerBase
     {
         await _index.LoadAsync(cancellationToken).ConfigureAwait(false);
 
+        // Every backoff, whatever state carries it. Clearing only Failed entries left a review
+        // item with a stale retry time skipped before anyone looked at it again.
         var released = 0;
-        foreach (var entry in _index.All().Where(e => e.State == ThemeItemState.Failed))
+        foreach (var entry in _index.All())
         {
-            entry.State = ThemeItemState.Unprocessed;
-            entry.Attempts = 0;
+            var gaveUp = entry.State is ThemeItemState.Failed or ThemeItemState.NoCandidate;
+            if (!gaveUp && entry.NextRetryUtc is null)
+            {
+                continue;
+            }
+
+            if (gaveUp)
+            {
+                entry.State = ThemeItemState.Unprocessed;
+                entry.Attempts = 0;
+                entry.LastError = null;
+            }
+
             entry.NextRetryUtc = null;
-            entry.LastError = null;
             _index.Put(entry);
             released++;
         }
 
         await _index.FlushAsync(cancellationToken).ConfigureAwait(false);
-        _logger.LogInformation("ThemeForge: cleared the retry backoff on {Count} failed items.", released);
+        _logger.LogInformation("ThemeForge: released {Count} items from their retry backoff.", released);
 
         return new OperationResult(
             true,
             released == 0
-                ? "No failed items to retry."
+                ? "Nothing is waiting on a retry."
                 : $"{released} items will be tried again on the next run.");
     }
 
@@ -729,6 +746,12 @@ public class ThemeForgeController : ControllerBase
                 LastError = entry?.LastError,
                 SkipReason = entry?.LastSkipReason,
                 BandDiffStd = entry?.BandDiffStd,
+                NearestMisses = entry is null
+                    ? Array.Empty<AlternateDto>()
+                    : entry.Rejected
+                        .Take(3)
+                        .Select(r => new AlternateDto(r.Id, r.Title, r.Url, r.Score, r.Reason))
+                        .ToList(),
             });
         }
 

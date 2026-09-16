@@ -60,10 +60,16 @@ public interface IScoringRule
     double WeightFrom(ScoringWeights weights);
 
     /// <summary>
-    /// Gets a value indicating whether this rule can push a score up. Rules that only ever
-    /// subtract are excluded from the normalisation denominator, so a perfect candidate still
-    /// scores 100.
+    /// Gets a value indicating whether this rule's weight is part of what a perfect candidate is
+    /// expected to earn.
     /// </summary>
+    /// <remarks>
+    /// Two kinds of rule say no. Rules that only ever subtract, so that a perfect candidate still
+    /// scores 100. And rules that reward something most correct candidates do not have -- a
+    /// composer credit, say -- because counting such a rule's weight towards the total would lower
+    /// every candidate that lacks the rare extra. A rule outside the denominator can only lift a
+    /// candidate; the total is capped at 100 regardless.
+    /// </remarks>
     bool ContributesPositively => true;
 
     /// <summary>Judges one candidate.</summary>

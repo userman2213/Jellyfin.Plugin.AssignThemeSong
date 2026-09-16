@@ -10,9 +10,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.ThemeForge.Configuration;
 using Jellyfin.Plugin.ThemeForge.Engines.Catalogue;
+using Jellyfin.Plugin.ThemeForge.Engines.Identity;
 using Jellyfin.Plugin.ThemeForge.Engines.Index;
 using Jellyfin.Plugin.ThemeForge.Engines.Policy;
 using Jellyfin.Plugin.ThemeForge.Logging;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Library;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -74,6 +77,18 @@ public sealed class DiagnosticsDto
     /// <summary>Gets or sets what the local ThemerrDB copy holds.</summary>
     public CatalogueStatus Themerr { get; set; } = new();
 
+    /// <summary>Gets or sets how many films the library holds.</summary>
+    public int Movies { get; set; }
+
+    /// <summary>Gets or sets how many of those have no TMDB id, which is what ThemerrDB is keyed on.</summary>
+    public int MoviesWithoutTmdbId { get; set; }
+
+    /// <summary>Gets or sets how many series the library holds.</summary>
+    public int Series { get; set; }
+
+    /// <summary>Gets or sets how many of those have no TMDB id, so ThemerrDB can only match them by name.</summary>
+    public int SeriesWithoutTmdbId { get; set; }
+
     /// <summary>Gets or sets where that copy is kept.</summary>
     public string ThemerrPath { get; set; } = string.Empty;
 }
@@ -100,19 +115,27 @@ public class DiagnosticsController : ControllerBase
     private readonly IThemeIndex _index;
     private readonly ILibraryPolicyResolver _policyResolver;
     private readonly IThemerrDbCatalogue _themerrDb;
+    private readonly ILibraryManager _libraryManager;
+    private readonly IMediaIdentityResolver _identityResolver;
 
     /// <summary>Initializes a new instance of the <see cref="DiagnosticsController"/> class.</summary>
     /// <param name="index">The decision index, for recorded skip reasons.</param>
     /// <param name="policyResolver">Resolves libraries and their rules.</param>
     /// <param name="themerrDb">The local ThemerrDB copy.</param>
+    /// <param name="libraryManager">The library, to count items and their ids.</param>
+    /// <param name="identityResolver">Reads provider ids off items.</param>
     public DiagnosticsController(
         IThemeIndex index,
         ILibraryPolicyResolver policyResolver,
-        IThemerrDbCatalogue themerrDb)
+        IThemerrDbCatalogue themerrDb,
+        ILibraryManager libraryManager,
+        IMediaIdentityResolver identityResolver)
     {
         _index = index;
         _policyResolver = policyResolver;
         _themerrDb = themerrDb;
+        _libraryManager = libraryManager;
+        _identityResolver = identityResolver;
     }
 
     /// <summary>Reports the configuration in force, the resolved library rules and why items were skipped.</summary>
@@ -155,8 +178,20 @@ public class DiagnosticsController : ControllerBase
                 + "to discover it is not in the database. Run the \"Update the ThemerrDB catalogue\" scheduled task.");
         }
 
+        var ids = CountProviderIds();
+        if (ids.SeriesWithoutTmdb > 0)
+        {
+            problems.Add(
+                $"{ids.SeriesWithoutTmdb} of {ids.Series} series have no TMDB id. ThemerrDB keys shows on TMDB and nothing else, "
+                + "so those can only be matched against it by name. Enabling TheMovieDb as a metadata provider for the library fixes this.");
+        }
+
         return new DiagnosticsDto
         {
+            Movies = ids.Movies,
+            MoviesWithoutTmdbId = ids.MoviesWithoutTmdb,
+            Series = ids.Series,
+            SeriesWithoutTmdbId = ids.SeriesWithoutTmdb,
             ConfigurationFilePath = Plugin.Instance?.ConfigurationFilePath ?? string.Empty,
             ConfigurationReadable = onDisk is not null,
             ConfigurationSavedUtc = LastWritten(Plugin.Instance?.ConfigurationFilePath),
@@ -179,6 +214,57 @@ public class DiagnosticsController : ControllerBase
                 AgeHours = themerr.IsUsable ? themerr.Age.TotalHours : null,
             },
         };
+    }
+
+    /// <summary>
+    /// Counts the items ThemerrDB cannot be asked about by id.
+    /// </summary>
+    /// <remarks>
+    /// The single most common reason a title the database has never resolves: Jellyfin never
+    /// recorded the id the database is keyed on. Invisible from the settings page and from the
+    /// run summary, which just says "nothing found".
+    /// </remarks>
+    private (int Movies, int MoviesWithoutTmdb, int Series, int SeriesWithoutTmdb) CountProviderIds()
+    {
+        try
+        {
+            var items = _libraryManager.GetItemList(new InternalItemsQuery
+            {
+                IncludeItemTypes = new[] { Jellyfin.Data.Enums.BaseItemKind.Movie, Jellyfin.Data.Enums.BaseItemKind.Series },
+                Recursive = true,
+                IsVirtualItem = false,
+            });
+
+            int movies = 0, moviesWithout = 0, series = 0, seriesWithout = 0;
+
+            foreach (var item in items)
+            {
+                var identity = _identityResolver.Resolve(item);
+                if (identity is null)
+                {
+                    continue;
+                }
+
+                var missing = string.IsNullOrWhiteSpace(identity.TmdbId);
+                if (identity.IsSeries)
+                {
+                    series++;
+                    seriesWithout += missing ? 1 : 0;
+                }
+                else
+                {
+                    movies++;
+                    moviesWithout += missing ? 1 : 0;
+                }
+            }
+
+            return (movies, moviesWithout, series, seriesWithout);
+        }
+        catch (Exception)
+        {
+            // The library being unavailable is reported elsewhere; the counts are just zero here.
+            return (0, 0, 0, 0);
+        }
     }
 
     private static DateTime? LastWritten(string? path)

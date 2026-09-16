@@ -214,6 +214,7 @@ public class MatcherGenerationTests
     [InlineData(ThemeItemState.AutoAssigned)]
     [InlineData(ThemeItemState.PendingReview)]
     [InlineData(ThemeItemState.Failed)]
+    [InlineData(ThemeItemState.NoCandidate)]
     public void ADecisionFromAnOlderMatcherIsStale(ThemeItemState state) =>
         Assert.True(Entry(state, 0).IsStale);
 

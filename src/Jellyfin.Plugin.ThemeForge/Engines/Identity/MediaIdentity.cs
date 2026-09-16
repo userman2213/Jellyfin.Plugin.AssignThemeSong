@@ -28,6 +28,15 @@ public sealed class MediaIdentity
     /// <summary>Gets the production year, when known.</summary>
     public int? Year { get; init; }
 
+    /// <summary>
+    /// Gets the composers Jellyfin has on record for the item. Empty when it has none.
+    /// </summary>
+    /// <remarks>
+    /// The one name that resolves a soundtrack upload titled by track rather than by show, and a
+    /// far more specific thing to search for than the title alone.
+    /// </remarks>
+    public IReadOnlyList<string> Composers { get; init; } = Array.Empty<string>();
+
     /// <summary>Gets the kind of item — only <see cref="BaseItemKind.Movie"/> and <see cref="BaseItemKind.Series"/> are processed.</summary>
     public required BaseItemKind Kind { get; init; }
 

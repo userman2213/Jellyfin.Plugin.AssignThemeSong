@@ -32,4 +32,14 @@ public class ScoringWeights
 
     /// <summary>Gets or sets the weight for the bonus given to hits from a more specific query.</summary>
     public double QuerySpecificity { get; set; } = 8;
+
+    /// <summary>
+    /// Gets or sets the weight for the item's composer being named on the candidate.
+    /// </summary>
+    /// <remarks>
+    /// Jellyfin already holds the composer for most films. An upload that names both the work and
+    /// its composer is about as unambiguous as a title gets, so this is also what lets an ordinary
+    /// title such as <c>Lost</c> be trusted without asking.
+    /// </remarks>
+    public double Composer { get; set; } = 12;
 }

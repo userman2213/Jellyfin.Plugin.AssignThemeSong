@@ -32,4 +32,14 @@ public enum ThemeItemState
 
     /// <summary>Pinned by a human. Never touched again by any automated run.</summary>
     Locked = 8,
+
+    /// <summary>
+    /// The search ran and nothing acceptable came back.
+    /// </summary>
+    /// <remarks>
+    /// Kept apart from <see cref="Failed"/> so that "we found nothing" is not reported as
+    /// "something broke", and so it can be retried when the matcher changes rather than only when
+    /// a timer runs out. Stored by name, so adding it does not disturb an existing index.
+    /// </remarks>
+    NoCandidate = 9,
 }

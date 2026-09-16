@@ -40,6 +40,29 @@ public sealed record Candidate
     /// <summary>Gets the uploader-supplied tags.</summary>
     public IReadOnlyList<string> Tags { get; init; } = Array.Empty<string>();
 
+    /// <summary>
+    /// Gets the release the track belongs to, when the upload is a music release.
+    /// </summary>
+    /// <remarks>
+    /// A rights-holder upload is titled by track — "Main Title", "The Ballad of Serenity" — and
+    /// names the work only on the album: "Battlestar Galactica: Season 1 (Original Soundtrack)".
+    /// Without this, the best-sourced recording of a theme cannot be recognised as one.
+    /// </remarks>
+    public string? Album { get; init; }
+
+    /// <summary>Gets the credited artist of the track, when the upload is a music release.</summary>
+    public string? Artist { get; init; }
+
+    /// <summary>Gets the track title as the release lists it, when the upload is a music release.</summary>
+    public string? Track { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether this came from one of YouTube's auto-generated "- Topic"
+    /// channels, which carry tracks delivered by a distributor rather than uploaded by a person.
+    /// </summary>
+    public bool IsTopicChannel =>
+        Channel is not null && Channel.EndsWith("- Topic", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>Gets a value indicating whether this is a live stream, which is never a theme.</summary>
     public bool IsLive { get; init; }
 

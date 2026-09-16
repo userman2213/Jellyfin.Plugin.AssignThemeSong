@@ -42,11 +42,12 @@
                         <span>Refresh</span>
                     </button>
                     <button is="emby-button" type="button" id="tfRetryFailed" class="raised block">
-                        <span>Retry failed items</span>
+                        <span>Retry everything that failed or found nothing</span>
                     </button>
                     <div class="fieldDescription">
-                        Failures back off for hours before being retried. Use this after fixing whatever
-                        was breaking the run, so you do not have to wait it out.
+                        A search that fails or finds nothing backs off for hours to days before it is tried
+                        again. Use this after fixing whatever was breaking the run, so you do not have to wait
+                        it out. Catalogue lookups are never held back by the backoff.
                     </div>
                 </div>
             </div>
@@ -500,6 +501,9 @@
                     if (status.ToolProblem) {
                         lines.push('<span style="color:#ff5f56;">Tooling problem: ' + esc(status.ToolProblem) + '</span>');
                     }
+                    if (status.LastRunAssignedBy && status.LastRunAssignedBy.length) {
+                        lines.push('Last run\'s themes came from: ' + status.LastRunAssignedBy.map(esc).join(', '));
+                    }
                     var themerr = status.Themerr || {};
                     if (themerr.UpdatedUtc) {
                         lines.push('ThemerrDB: ' + themerr.Movies + ' films, ' + themerr.Shows + ' shows, ' +
@@ -526,6 +530,7 @@
                     lines.push('Indexed: ' + status.Indexed +
                                ' &middot; assigned: ' + status.Assigned +
                                ' &middot; awaiting review: ' + status.PendingReview +
+                               ' &middot; found nothing: ' + (status.NoCandidate || 0) +
                                ' &middot; failed: ' + status.Failed);
                     if (status.LastRunSummary) {
                         lines.push('Last run: ' + esc(status.LastRunSummary));
@@ -798,13 +803,53 @@
                                 '<td>' + (row.BandDiffStd === null || row.BandDiffStd === undefined ? '&mdash;' : row.BandDiffStd.toFixed(2)) + '</td>' +
                                 '</tr>' +
                                 (row.LastError ? '<tr><td colspan="7" style="color:#c88;font-size:.85em;padding-bottom:.5em;">' + esc(row.LastError) + '</td></tr>' : '') +
-                                (row.SkipReason ? '<tr><td colspan="7" style="color:#999;font-size:.85em;padding-bottom:.5em;">Passed over because ' + esc(row.SkipReason) + '</td></tr>' : '');
+                                (row.SkipReason ? '<tr><td colspan="7" style="color:#999;font-size:.85em;padding-bottom:.5em;">Passed over because ' + esc(row.SkipReason) + '</td></tr>' : '') +
+                                nearestMisses(row);
                         }).join('') +
                         '</tbody></table>';
                 }, function () {
                     Dashboard.hideLoadingMsg();
                     el('tfLibrary').textContent = 'Could not load the library overview.';
                 });
+            });
+
+            // What came closest for an item that has no theme, each with a way to take it anyway.
+            // "Nothing acceptable found" is where the pipeline stops; it need not be where you do.
+            function nearestMisses(row) {
+                var unmapped = row.State === 'NoCandidate' || row.State === 'Failed' || row.State === 'Unprocessed';
+                if (!unmapped || !row.NearestMisses || !row.NearestMisses.length) {
+                    return '';
+                }
+
+                return '<tr><td colspan="7" style="font-size:.85em;padding:0 0 .75em 1.5em;color:#aaa;">' +
+                    'Came closest:' +
+                    row.NearestMisses.map(function (miss) {
+                        return '<div style="margin:.25em 0;">' +
+                            '<a href="' + esc(miss.Url) + '" target="_blank" rel="noopener">' + esc(miss.Title) + '</a>' +
+                            ' <span style="color:#777;">&mdash; ' + esc(miss.Reason) + '</span> ' +
+                            '<button is="emby-button" type="button" class="raised tfUseThis" style="font-size:.85em;padding:.1em .6em;min-width:0;"' +
+                            ' data-item="' + esc(row.ItemId) + '" data-url="' + esc(miss.Url) + '"><span>Use this</span></button>' +
+                            '</div>';
+                    }).join('') +
+                    '</td></tr>';
+            }
+
+            el('tfLibrary').addEventListener('click', function (event) {
+                var button = event.target.closest('.tfUseThis');
+                if (!button) {
+                    return;
+                }
+
+                Dashboard.showLoadingMsg();
+                api('POST', 'Items/' + button.getAttribute('data-item') + '/Assign', { Url: button.getAttribute('data-url') })
+                    .then(function (result) {
+                        Dashboard.hideLoadingMsg();
+                        Dashboard.alert(result.Message);
+                        el('tfLoadLibrary').click();
+                    }, function () {
+                        Dashboard.hideLoadingMsg();
+                        Dashboard.alert('That did not work. Check the log.');
+                    });
             });
 
             // ---------------------------------------------------------- diagnostics
