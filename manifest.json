@@ -9,6 +9,24 @@
         "description": "ThemeForge searches YouTube with yt-dlp, ranks every candidate with an explainable scoring engine, and writes the winner beside your media exactly as it was delivered. High-confidence matches are assigned automatically; anything less certain waits in a review queue. Audio processing -- raising quiet themes, normalising, fades, trimming -- is available but off until you turn it on, so nothing is ever made quieter without asking. All decisions are recorded in a persistent index, so re-runs are idempotent and manual choices are never overwritten.",
         "versions": [
             {
+                "version": "2.4.0.1",
+                "targetAbi": "12.0.0.0",
+                "framework": "net10.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_2.4.0.1.zip",
+                "checksum": "77045d8a7a133625d7c5faac3b635724",
+                "timestamp": "2026-09-17T17:53:24Z",
+                "changelog": "Build for Jellyfin 12.\n\nYou can now search for a theme yourself and pick a different one. Until now a theme that was\nsimply wrong was a dead end: the runners-up were only ever shown for items that had no theme at\nall, so the only way to change one was to go and find a YouTube link by hand.\n\nThe control sits on the item page in Jellyfin, on every row of the Library tab, and on each item in\nthe review queue. It searches the moment it opens, with the same words an unattended run would have\nused, and you can edit them and search again. Every result shows its title, channel and length, a\nlink to listen, and what ThemeForge makes of it with a one-line reason -- including the results the\nrules reject, greyed out with the reason, because those are often the very video you were after.\n\nA theme picked this way is recorded as your decision and no later run replaces it, whatever the\nlibrary's rule says.\n\nThe score recorded against an item is now cleared when you assign a different video, and that video\nstops being listed as a runner-up that was passed over. Both used to be left describing the theme\nthat had been replaced."
+            },
+            {
+                "version": "2.4.0.0",
+                "targetAbi": "10.11.0.0",
+                "framework": "net9.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_2.4.0.0.zip",
+                "checksum": "9207bb8cc5ab481225678efe7a554188",
+                "timestamp": "2026-09-17T17:53:24Z",
+                "changelog": "Build for Jellyfin 10.11.\n\nYou can now search for a theme yourself and pick a different one. Until now a theme that was\nsimply wrong was a dead end: the runners-up were only ever shown for items that had no theme at\nall, so the only way to change one was to go and find a YouTube link by hand.\n\nThe control sits on the item page in Jellyfin, on every row of the Library tab, and on each item in\nthe review queue. It searches the moment it opens, with the same words an unattended run would have\nused, and you can edit them and search again. Every result shows its title, channel and length, a\nlink to listen, and what ThemeForge makes of it with a one-line reason -- including the results the\nrules reject, greyed out with the reason, because those are often the very video you were after.\n\nA theme picked this way is recorded as your decision and no later run replaces it, whatever the\nlibrary's rule says.\n\nThe score recorded against an item is now cleared when you assign a different video, and that video\nstops being listed as a runner-up that was passed over. Both used to be left describing the theme\nthat had been replaced."
+            },
+            {
                 "version": "2.3.0.1",
                 "targetAbi": "12.0.0.0",
                 "framework": "net10.0",
