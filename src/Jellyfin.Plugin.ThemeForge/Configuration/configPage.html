@@ -497,6 +497,13 @@
                 return div.innerHTML;
             }
 
+            // esc() escapes & < > but not quotes, which is enough for element content and not
+            // enough for an attribute. Search results carry raw YouTube titles, and a double
+            // quote in a title is an ordinary thing.
+            function attr(text) {
+                return esc(text).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+            }
+
             function api(method, path, body) {
                 var request = {
                     type: method,
@@ -800,7 +807,7 @@
                 }).join('');
 
                 return '' +
-                    '<div class="verticalSection" style="border-bottom:1px solid #333;padding-bottom:1em;margin-bottom:1em;">' +
+                    '<div class="verticalSection tfQueueItem" style="border-bottom:1px solid #333;padding-bottom:1em;margin-bottom:1em;">' +
                         '<h3 style="margin-bottom:.25em;">' + esc(item.Label) + ' <small>(' + esc(item.Kind) + ')</small></h3>' +
                         '<div>Proposed: <a href="' + esc(item.CandidateUrl) + '" target="_blank" rel="noopener">' +
                             esc(item.CandidateTitle) + '</a>' +
@@ -813,7 +820,8 @@
                         '<div style="margin-top:.75em;">' +
                             '<button is="emby-button" type="button" class="raised button-submit tfApprove" data-id="' + item.ItemId + '"><span>Approve</span></button> ' +
                             '<button is="emby-button" type="button" class="raised tfReject" data-id="' + item.ItemId + '"><span>Reject</span></button> ' +
-                            '<button is="emby-button" type="button" class="raised tfBlock" data-id="' + item.ItemId + '"><span>Reject and block this video</span></button>' +
+                            '<button is="emby-button" type="button" class="raised tfBlock" data-id="' + item.ItemId + '"><span>Reject and block this video</span></button> ' +
+                            '<button is="emby-button" type="button" class="raised tfChangeTheme" data-item="' + attr(item.ItemId) + '"><span>Search for a different one</span></button>' +
                         '</div>' +
                     '</div>';
             }
@@ -863,7 +871,7 @@
                     el('tfLibrary').innerHTML =
                         '<table style="width:100%;border-collapse:collapse;font-size:.9em;">' +
                         '<thead><tr style="text-align:left;border-bottom:1px solid #444;">' +
-                        '<th>Title</th><th>State</th><th>File</th><th>Theme</th><th>Score</th><th>Loudness</th><th>Audio</th></tr></thead><tbody>' +
+                        '<th>Title</th><th>State</th><th>File</th><th>Theme</th><th>Score</th><th>Loudness</th><th>Audio</th><th></th></tr></thead><tbody>' +
                         rows.map(function (row) {
                             return '<tr style="border-bottom:1px solid #2a2a2a;">' +
                                 '<td>' + esc(row.Label) + '</td>' +
@@ -875,9 +883,12 @@
                                 '<td>' + (row.Score === null || row.Score === undefined ? '&mdash;' : row.Score.toFixed(1)) + '</td>' +
                                 '<td>' + (row.LoudnessLufs === null || row.LoudnessLufs === undefined ? '&mdash;' : row.LoudnessLufs.toFixed(1) + ' LUFS') + '</td>' +
                                 '<td>' + (row.BandDiffStd === null || row.BandDiffStd === undefined ? '&mdash;' : row.BandDiffStd.toFixed(2)) + '</td>' +
+                                '<td><button is="emby-button" type="button" class="raised tfChangeTheme"' +
+                                ' style="font-size:.85em;padding:.1em .6em;min-width:0;white-space:nowrap;"' +
+                                ' data-item="' + attr(row.ItemId) + '"><span>Change theme</span></button></td>' +
                                 '</tr>' +
-                                (row.LastError ? '<tr><td colspan="7" style="color:#c88;font-size:.85em;padding-bottom:.5em;">' + esc(row.LastError) + '</td></tr>' : '') +
-                                (row.SkipReason ? '<tr><td colspan="7" style="color:#999;font-size:.85em;padding-bottom:.5em;">Passed over because ' + esc(row.SkipReason) + '</td></tr>' : '') +
+                                (row.LastError ? '<tr><td colspan="8" style="color:#c88;font-size:.85em;padding-bottom:.5em;">' + esc(row.LastError) + '</td></tr>' : '') +
+                                (row.SkipReason ? '<tr><td colspan="8" style="color:#999;font-size:.85em;padding-bottom:.5em;">Passed over because ' + esc(row.SkipReason) + '</td></tr>' : '') +
                                 nearestMisses(row);
                         }).join('') +
                         '</tbody></table>';
@@ -895,7 +906,7 @@
                     return '';
                 }
 
-                return '<tr><td colspan="7" style="font-size:.85em;padding:0 0 .75em 1.5em;color:#aaa;">' +
+                return '<tr><td colspan="8" style="font-size:.85em;padding:0 0 .75em 1.5em;color:#aaa;">' +
                     'Came closest:' +
                     row.NearestMisses.map(function (miss) {
                         return '<div style="margin:.25em 0;">' +
@@ -908,22 +919,157 @@
                     '</td></tr>';
             }
 
-            el('tfLibrary').addEventListener('click', function (event) {
-                var button = event.target.closest('.tfUseThis');
-                if (!button) {
+            // ------------------------------------------------- search for a theme by hand
+            // The same panel serves the library and the review queue: type words, see what the
+            // search finds, take one. It is the way out of a theme that is simply wrong, which
+            // is otherwise a dead end -- "came closest" is only recorded for items that never
+            // got a theme at all.
+
+            function mmss(seconds) {
+                if (seconds === null || seconds === undefined) {
+                    return '';
+                }
+                var whole = Math.round(seconds);
+                return Math.floor(whole / 60) + ':' + ('0' + (whole % 60)).slice(-2);
+            }
+
+            function searchPanel(itemId) {
+                return '<div class="tfSearchPanel" data-item="' + attr(itemId) + '" style="padding:.5em 0 1em 0;">' +
+                    '<div style="display:flex;gap:.5em;align-items:center;">' +
+                        '<input class="tfQuery" type="text" style="flex:1;min-width:12em;padding:.4em;border-radius:4px;' +
+                        'border:1px solid #444;background:#111;color:#fff;" placeholder="What to search for" />' +
+                        '<button is="emby-button" type="button" class="raised tfSearchGo" style="min-width:0;"><span>Search</span></button>' +
+                    '</div>' +
+                    '<div class="tfResults" style="margin-top:.5em;font-size:.9em;"></div>' +
+                    '</div>';
+            }
+
+            function renderSearchResults(found, panel) {
+                var results = panel.querySelector('.tfResults');
+
+                if (!found.Success || !found.Results.length) {
+                    results.textContent = found.Message || 'Nothing found for that search.';
                     return;
                 }
 
-                Dashboard.showLoadingMsg();
-                api('POST', 'Items/' + button.getAttribute('data-item') + '/Assign', { Url: button.getAttribute('data-url') })
-                    .then(function (result) {
-                        Dashboard.hideLoadingMsg();
-                        Dashboard.alert(result.Message);
-                        el('tfLoadLibrary').click();
+                var itemId = panel.getAttribute('data-item');
+                var current = found.CurrentUrl
+                    ? '<div style="color:#888;margin-bottom:.5em;">Using now: ' +
+                      '<a href="' + attr(found.CurrentUrl) + '" target="_blank" rel="noopener">' +
+                      esc(found.CurrentTitle || found.CurrentUrl) + '</a></div>'
+                    : '';
+
+                results.innerHTML = current + found.Results.map(function (row) {
+                    var facts = [row.Channel, mmss(row.DurationSeconds)].filter(function (part) {
+                        return part;
+                    }).map(esc).join(' &middot; ');
+
+                    return '<div style="margin:0 0 .6em 0;padding-left:.75em;border-left:2px solid ' +
+                            (row.IsCurrent ? '#00a4dc' : (row.IsVetoed ? '#5a3a3a' : '#3a3a3a')) + ';">' +
+                        '<div><a href="' + attr(row.Url) + '" target="_blank" rel="noopener">' + esc(row.Title) + '</a>' +
+                            (row.IsCurrent ? ' <span style="color:#00a4dc;">&mdash; in use now</span>' : '') + '</div>' +
+                        (facts ? '<div style="color:#888;">' + facts + '</div>' : '') +
+                        '<div style="color:#777;">' +
+                            (row.IsVetoed ? 'ThemeForge would not use this: ' : Math.round(row.Score) + '/100 &mdash; ') +
+                            esc(row.Reason) +
+                            (row.IsInspected ? '' : ' (not looked at closely)') +
+                        '</div>' +
+                        '<button is="emby-button" type="button" class="raised tfUseThis"' +
+                            ' style="font-size:.85em;padding:.1em .6em;min-width:0;margin-top:.25em;"' +
+                            ' data-item="' + attr(itemId) + '" data-url="' + attr(row.Url) + '"><span>Use this</span></button>' +
+                        '</div>';
+                }).join('');
+            }
+
+            function runSearch(panel) {
+                var results = panel.querySelector('.tfResults');
+                results.textContent = 'Searching. This takes a few seconds.';
+
+                // Deliberately not Dashboard.showLoadingMsg(): a search runs for several seconds
+                // and that would freeze the whole dashboard while it did.
+                api('POST', 'Items/' + panel.getAttribute('data-item') + '/Search',
+                    { Query: panel.querySelector('.tfQuery').value.trim() })
+                    .then(function (found) {
+                        if (found.Query) {
+                            panel.querySelector('.tfQuery').value = found.Query;
+                        }
+                        renderSearchResults(found, panel);
                     }, function () {
-                        Dashboard.hideLoadingMsg();
-                        Dashboard.alert('That did not work. Check the log.');
+                        results.textContent = 'The search did not work. Check the log.';
                     });
+            }
+
+            // One handler per container rather than per button: both lists replace their
+            // innerHTML wholesale when they reload, which strips listeners bound to buttons.
+            function wireSearchPanels(container, toggle, reload) {
+                container.addEventListener('click', function (event) {
+                    var open = event.target.closest('.tfChangeTheme');
+                    if (open) {
+                        toggle(open);
+                        return;
+                    }
+
+                    var go = event.target.closest('.tfSearchGo');
+                    if (go) {
+                        runSearch(go.closest('.tfSearchPanel'));
+                        return;
+                    }
+
+                    var use = event.target.closest('.tfUseThis');
+                    if (!use) {
+                        return;
+                    }
+
+                    Dashboard.showLoadingMsg();
+                    api('POST', 'Items/' + use.getAttribute('data-item') + '/Assign', { Url: use.getAttribute('data-url') })
+                        .then(function (result) {
+                            Dashboard.hideLoadingMsg();
+                            Dashboard.alert(result.Message);
+                            reload();
+                        }, function () {
+                            Dashboard.hideLoadingMsg();
+                            Dashboard.alert('That did not work. Check the log.');
+                        });
+                });
+
+                container.addEventListener('keydown', function (event) {
+                    if (event.key === 'Enter' && event.target.classList.contains('tfQuery')) {
+                        event.preventDefault();
+                        runSearch(event.target.closest('.tfSearchPanel'));
+                    }
+                });
+            }
+
+            wireSearchPanels(el('tfLibrary'), function (button) {
+                var row = button.closest('tr');
+                var next = row.nextElementSibling;
+
+                // A second press closes it again.
+                if (next && next.classList.contains('tfPanelRow')) {
+                    next.parentNode.removeChild(next);
+                    return;
+                }
+
+                row.insertAdjacentHTML('afterend',
+                    '<tr class="tfPanelRow"><td colspan="8">' + searchPanel(button.getAttribute('data-item')) + '</td></tr>');
+                runSearch(row.nextElementSibling.querySelector('.tfSearchPanel'));
+            }, function () {
+                el('tfLoadLibrary').click();
+            });
+
+            wireSearchPanels(el('tfQueue'), function (button) {
+                var section = button.closest('.tfQueueItem');
+                var existing = section.querySelector('.tfSearchPanel');
+
+                if (existing) {
+                    existing.parentNode.removeChild(existing);
+                    return;
+                }
+
+                button.insertAdjacentHTML('afterend', searchPanel(button.getAttribute('data-item')));
+                runSearch(section.querySelector('.tfSearchPanel'));
+            }, function () {
+                loadQueue();
             });
 
             // ---------------------------------------------------------- diagnostics

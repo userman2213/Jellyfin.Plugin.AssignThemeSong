@@ -224,6 +224,72 @@ public sealed class AssignRequest
     public string Url { get; set; } = string.Empty;
 }
 
+/// <summary>A request to search for a theme for one item.</summary>
+public sealed class SearchRequest
+{
+    /// <summary>
+    /// Gets or sets what to search for. Left empty, the item is searched for the way an
+    /// unattended run would search for it.
+    /// </summary>
+    public string? Query { get; set; }
+}
+
+/// <summary>
+/// One candidate a search turned up, with everything needed to judge it without leaving the page.
+/// </summary>
+/// <remarks>
+/// Deliberately wider than <see cref="AlternateDto"/>, which was shaped for a one-line runner-up:
+/// choosing between twenty videos takes the channel and the length as well, and the scoring
+/// breakdown for the cases where the obvious answer was rejected and the question is why.
+/// </remarks>
+/// <param name="Id">Source video id.</param>
+/// <param name="Title">Candidate title.</param>
+/// <param name="Url">Watch URL.</param>
+/// <param name="Channel">Uploading channel, when known.</param>
+/// <param name="DurationSeconds">Length in seconds, when known.</param>
+/// <param name="ViewCount">View count, when known.</param>
+/// <param name="Score">What ThemeForge makes of it, out of 100. Zero for anything disqualified.</param>
+/// <param name="Reason">Why it scored that, in one line.</param>
+/// <param name="IsVetoed">Whether a rule disqualified it outright.</param>
+/// <param name="IsInspected">Whether its full metadata was fetched, or only the listing was read.</param>
+/// <param name="IsCurrent">Whether this is the theme the item already has.</param>
+/// <param name="Breakdown">The full explanation, one formatted signal per line.</param>
+public sealed record CandidateDto(
+    string Id,
+    string Title,
+    string Url,
+    string? Channel,
+    double? DurationSeconds,
+    long? ViewCount,
+    double Score,
+    string Reason,
+    bool IsVetoed,
+    bool IsInspected,
+    bool IsCurrent,
+    IReadOnlyList<string> Breakdown);
+
+/// <summary>What a search asked for by hand found.</summary>
+public sealed class ManualSearchDto
+{
+    /// <summary>Gets or sets a value indicating whether the search could be run.</summary>
+    public bool Success { get; set; }
+
+    /// <summary>Gets or sets what to tell the user: why it could not run, or a note about the results.</summary>
+    public string Message { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the words that were searched for, so the box can show them.</summary>
+    public string Query { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the title of the theme this item has now, if any.</summary>
+    public string? CurrentTitle { get; set; }
+
+    /// <summary>Gets or sets where the theme this item has now came from, if any.</summary>
+    public string? CurrentUrl { get; set; }
+
+    /// <summary>Gets or sets the candidates, best first, disqualified ones last.</summary>
+    public IReadOnlyList<CandidateDto> Results { get; set; } = Array.Empty<CandidateDto>();
+}
+
 /// <summary>The result of an operation the UI reports back to the user.</summary>
 /// <param name="Success">Whether it worked.</param>
 /// <param name="Message">What to tell the user.</param>

@@ -63,6 +63,29 @@ public interface IThemeOrchestrator
     /// <returns>A summary of what happened.</returns>
     Task<RedownloadReport> RedownloadAsync(IProgress<double>? progress, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Searches for themes for one item on demand, without deciding anything.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is how a wrong theme gets put right: the same search, the same rules and the same
+    /// explanations an automated run uses, pointed at whatever words the administrator types, with
+    /// every result handed back -- including the ones the rules reject, since those are precisely
+    /// what somebody overriding the decision may be looking for.
+    /// </para>
+    /// <para>
+    /// It lives here rather than in the controller because the throttle that keeps a run from
+    /// being rate limited belongs to this class, and a search started from a settings page has to
+    /// queue behind the same gate. Nothing is recorded: a search is a question, not an attempt, so
+    /// it must not consume a retry or move an item out of the state it is in.
+    /// </para>
+    /// </remarks>
+    /// <param name="itemId">The item to search for.</param>
+    /// <param name="query">What to search for, or null to use the first rung of the item's own ladder.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The candidates found, best first, and what the item already has.</returns>
+    Task<ManualSearchResult> SearchForItemAsync(Guid itemId, string? query, CancellationToken cancellationToken);
+
     /// <summary>Gets the most recent re-download's report, if there has been one.</summary>
     RedownloadReport? LastRedownload { get; }
 
@@ -114,6 +137,24 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
 
     /// <summary>How many runners-up, seen or unseen, an index entry keeps.</summary>
     private const int MaxRejectedRecorded = 8;
+
+    /// <summary>How many results a search asked for by hand returns.</summary>
+    /// <remarks>
+    /// Larger than a ladder rung fetches, because a person scanning a list wants to see past the
+    /// first few, and the whole point of searching by hand is that the obvious answer was missed.
+    /// </remarks>
+    private const int ManualSearchResults = 20;
+
+    /// <summary>How many of those results have their full metadata fetched.</summary>
+    /// <remarks>
+    /// Hydration is one request for the whole batch, so this is about how long the page waits
+    /// rather than how many requests are made. The rest are shown as the listing described them
+    /// and marked as not looked at closely.
+    /// </remarks>
+    private const int ManualSearchInspected = 10;
+
+    /// <summary>The longest query that will be sent to a search, in characters.</summary>
+    private const int MaxQueryLength = 200;
 
     private int _running;
 
@@ -441,6 +482,161 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         && uri.AbsolutePath.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase);
 
     /// <inheritdoc />
+    public async Task<ManualSearchResult> SearchForItemAsync(Guid itemId, string? query, CancellationToken cancellationToken)
+    {
+        var item = _libraryManager.GetItemById(itemId);
+        if (item is null)
+        {
+            return ManualSearchResult.Failed("That item is no longer in the library.");
+        }
+
+        var identity = _identityResolver.Resolve(item);
+        if (identity is null)
+        {
+            return ManualSearchResult.Failed("ThemeForge only handles movies and series.");
+        }
+
+        var configuration = Plugin.Config;
+
+        // The fallback is the first rung of the ladder this item would be searched with
+        // unattended, so the box opens showing what ThemeForge would have done and the person
+        // edits from there.
+        var text = ResolveQuery(
+            query,
+            () => _queryPlanner.Plan(identity, configuration).FirstOrDefault()?.Text ?? identity.Title);
+
+        if (text.Length == 0)
+        {
+            return ManualSearchResult.Failed("There is nothing to search for.");
+        }
+
+        await _index.LoadAsync(cancellationToken).ConfigureAwait(false);
+        var entry = _index.Get(itemId);
+
+        var context = new ScoringContext
+        {
+            Identity = identity,
+            Configuration = configuration,
+            FindExistingAssignment = videoId => _index.FindAssignmentOwner(videoId, identity.ItemId),
+        };
+
+        // Rank 0 gives the full specificity bonus, and rightly: these are the words a person chose.
+        var search = new SearchQuery(text, 0, "manual search");
+
+        await _throttle.WaitAsync(TimeSpan.FromMilliseconds(configuration.RequestDelayMs), cancellationToken).ConfigureAwait(false);
+        var found = await _candidateSource.SearchAsync(search, ManualSearchResults, cancellationToken).ConfigureAwait(false);
+
+        if (found.Count == 0)
+        {
+            return new ManualSearchResult(
+                true,
+                $"Nothing found for \u201c{text}\u201d.",
+                text,
+                entry?.ChosenId,
+                entry?.ChosenTitle,
+                entry?.ChosenUrl,
+                Array.Empty<ScoreResult>());
+        }
+
+        var results = await InspectAsync(found, context, configuration, cancellationToken).ConfigureAwait(false);
+
+        _logger.LogInformation(
+            "ThemeForge: searched for \"{Query}\" on behalf of \"{Item}\" — {Count} results, {Usable} of them usable.",
+            text,
+            identity.Label,
+            results.Count,
+            results.Count(result => !result.IsVetoed));
+
+        return new ManualSearchResult(
+            true,
+            string.Empty,
+            text,
+            entry?.ChosenId,
+            entry?.ChosenTitle,
+            entry?.ChosenUrl,
+            results);
+    }
+
+    /// <summary>
+    /// Scores a listing, fetches the full metadata of the most promising part of it, and scores
+    /// that again.
+    /// </summary>
+    /// <remarks>
+    /// The second pass is not a formality: hydration decides verdicts in both directions. A
+    /// rights-holder upload titled by track name anchors on its album and stops being rejected,
+    /// and a listing whose duration was unknown can turn out to be an hour long. Whatever the
+    /// fuller picture says is what is shown.
+    /// </remarks>
+    private async Task<IReadOnlyList<ScoreResult>> InspectAsync(
+        IReadOnlyList<Candidate> found,
+        ScoringContext context,
+        PluginConfiguration configuration,
+        CancellationToken cancellationToken)
+    {
+        var ranked = _scoringEngine.Rank(found, context);
+
+        // Taken in ranked order, vetoed candidates included rather than skipped: a veto on a flat
+        // listing is often only the absence of the very metadata this fetch supplies.
+        var shortlist = ranked.Take(ManualSearchInspected).Select(result => result.Candidate).ToList();
+
+        await _throttle.WaitAsync(TimeSpan.FromMilliseconds(configuration.RequestDelayMs), cancellationToken).ConfigureAwait(false);
+        var hydrated = await _candidateSource.HydrateAsync(shortlist, cancellationToken).ConfigureAwait(false);
+
+        return Merge(ranked, _scoringEngine.Rank(hydrated, context));
+    }
+
+    /// <summary>
+    /// Combines what the listing said with what the full metadata said, preferring the latter.
+    /// </summary>
+    /// <param name="ranked">Every candidate, scored on the listing alone.</param>
+    /// <param name="inspected">The subset whose metadata was fetched, scored again.</param>
+    /// <returns>Every candidate, best first; a veto scores zero and so falls to the bottom.</returns>
+    internal static IReadOnlyList<ScoreResult> Merge(
+        IReadOnlyList<ScoreResult> ranked,
+        IReadOnlyList<ScoreResult> inspected)
+    {
+        ArgumentNullException.ThrowIfNull(ranked);
+        ArgumentNullException.ThrowIfNull(inspected);
+
+        var better = inspected.ToDictionary(result => result.Candidate.Id, StringComparer.Ordinal);
+
+        return ranked
+            .Select(result => better.TryGetValue(result.Candidate.Id, out var full) ? full : result)
+            .OrderByDescending(result => result.Total)
+            .ThenBy(result => result.Candidate.Title, StringComparer.Ordinal)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Works out what to search for: what was typed, or failing that whatever the caller offers.
+    /// </summary>
+    /// <remarks>
+    /// The cap is not about safety -- arguments reach yt-dlp as an array and never through a
+    /// shell, so any character is merely text -- but about not sending a paragraph to a search
+    /// engine that will make nothing of it.
+    /// </remarks>
+    /// <param name="query">What was typed, which may be nothing.</param>
+    /// <param name="fallback">Supplies the query to use when nothing was typed.</param>
+    /// <returns>The query text, trimmed and capped, or an empty string when there is none.</returns>
+    internal static string ResolveQuery(string? query, Func<string?> fallback)
+    {
+        ArgumentNullException.ThrowIfNull(fallback);
+
+        var text = query?.Trim();
+        if (string.IsNullOrEmpty(text))
+        {
+            text = fallback()?.Trim();
+        }
+
+        if (string.IsNullOrEmpty(text))
+        {
+            return string.Empty;
+        }
+
+        return text.Length > MaxQueryLength ? text[..MaxQueryLength].Trim() : text;
+    }
+
+    /// <inheritdoc />
     public async Task<ItemOutcome> ProcessItemAsync(
         BaseItem item,
         RunReport report,
@@ -677,6 +873,8 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
                     return (false, placement.Reason ?? "The theme could not be written.");
                 }
 
+                SettleScoreForNewChoice(entry, candidate.Id, DateTime.UtcNow);
+
                 entry.State = state;
                 entry.ChosenId = candidate.Id;
                 entry.ChosenTitle = candidate.Title;
@@ -711,6 +909,41 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
             _index.Put(entry);
             await _index.FlushAsync(CancellationToken.None).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    /// Discards a score that no longer describes the theme an item has.
+    /// </summary>
+    /// <remarks>
+    /// A score belongs to the candidate that earned it. Assigning a different video used to leave
+    /// the old number sitting beside the new theme in the library view, and the newly chosen video
+    /// listed underneath as a runner-up that had been passed over -- both plainly wrong, and both
+    /// far more visible now that changing a theme by hand is a normal thing to do. Approving the
+    /// candidate that was already proposed changes nothing, so its score survives.
+    /// </remarks>
+    /// <param name="entry">The index entry about to be updated.</param>
+    /// <param name="chosenId">The source id of the video now being assigned.</param>
+    /// <param name="nowUtc">The current time, for the note left in place of the breakdown.</param>
+    internal static void SettleScoreForNewChoice(ThemeIndexEntry entry, string chosenId, DateTime nowUtc)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+
+        // Compared on the id, not the URL: the same video is reached by several forms of address
+        // and DescribeAsync has already reduced them all to one id.
+        if (string.Equals(entry.ChosenId, chosenId, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        entry.Score = null;
+        entry.ScoreBreakdown = new List<string>
+        {
+            string.Format(CultureInfo.InvariantCulture, "Chosen by hand on {0:yyyy-MM-dd}.", nowUtc),
+        };
+
+        entry.Rejected = entry.Rejected
+            .Where(rejected => !string.Equals(rejected.Id, chosenId, StringComparison.Ordinal))
+            .ToList();
     }
 
     /// <summary>

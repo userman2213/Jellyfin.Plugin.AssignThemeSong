@@ -15,7 +15,7 @@ Point it at your library and it will, for each movie and series:
 1. Work out what the item actually is — title, alternate titles, year, TVDB/TMDB/IMDb ids.
 2. Build an ordered list of searches, most specific first.
 3. Search YouTube with **yt-dlp** and collect candidates.
-4. Score every candidate against ten independent rules, each of which explains itself.
+4. Score every candidate against eleven independent rules, each of which explains itself.
 5. Assign the winner if it is confident, queue it for you if it is not, and record either way.
 6. Download the audio, verify it plays, and write it beside your media **exactly as it was
    delivered** (`theme.opus`, `theme.m4a`, `theme.mp3`), unless you have asked for processing.
@@ -90,6 +90,30 @@ source tree.
   missing. ThemeForge never edits Jellyfin's `index.html` on disk, so a server update cannot
   leave it in a broken state.
 
+## Changing a theme by hand
+
+When the song is wrong, or you simply want a different one, search for it yourself. The control is
+in three places and behaves the same in all of them:
+
+- on a movie or series page in Jellyfin, the **music note** button (needs the File Transformation
+  plugin);
+- on the plugin page under **Library**, the **Change theme** button on any row;
+- under **Review queue**, **Search for a different one** on any item waiting for a decision.
+
+It searches as soon as it opens, using the same words an unattended run would have used, and shows
+you the box so you can change them and search again. Each result gives the title, the channel, the
+length, a link to watch it, and what ThemeForge makes of it out of 100 with a one-line reason.
+
+**Results the scoring rules reject are shown too**, greyed out with the reason they were rejected —
+those are often exactly the video you are looking for, and your judgement beats the rules'. Press
+**Use this** on any of them.
+
+A theme chosen this way is final: it is recorded as your decision, and no later run will replace
+it whatever the library's rule says. The recorded score is cleared at the same time, because a
+score describes the candidate that earned it and not the one you picked.
+
+If you already have a link, the item-page dialog still takes a pasted URL.
+
 ## What happens to themes you already have
 
 By default, **nothing**. On its first pass ThemeForge notices that an item already has a
@@ -146,7 +170,7 @@ Transformation plugin, in memory, per request.
 
 ## How scoring works
 
-Each candidate is judged by ten rules. Each returns a named signal with a reason, and the review
+Each candidate is judged by eleven rules. Each returns a named signal with a reason, and the review
 queue shows you the whole breakdown, so a score is always something you can argue with.
 
 | Rule | What it looks at |

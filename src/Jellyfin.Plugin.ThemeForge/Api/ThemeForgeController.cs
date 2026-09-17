@@ -14,6 +14,7 @@ using Jellyfin.Plugin.ThemeForge.Engines.Index;
 using Jellyfin.Plugin.ThemeForge.Engines.Orchestration;
 using Jellyfin.Plugin.ThemeForge.Engines.Placement;
 using Jellyfin.Plugin.ThemeForge.Engines.Policy;
+using Jellyfin.Plugin.ThemeForge.Engines.Scoring;
 using Jellyfin.Plugin.ThemeForge.Engines.Tooling;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -49,6 +50,9 @@ public class ThemeForgeController : ControllerBase
     private readonly ILibraryPolicyResolver _policyResolver;
     private readonly IThemerrDbCatalogue _themerrDb;
     private readonly IThemeForgeLogger<ThemeForgeController> _logger;
+
+    /// <summary>How long a search asked for by hand is given before the request is abandoned.</summary>
+    private static readonly TimeSpan SearchDeadline = TimeSpan.FromSeconds(90);
 
     /// <summary>Initializes a new instance of the <see cref="ThemeForgeController"/> class.</summary>
     /// <param name="orchestrator">The pipeline.</param>
@@ -359,6 +363,80 @@ public class ThemeForgeController : ControllerBase
 
         return new OperationResult(success, message);
     }
+
+    /// <summary>
+    /// Searches for a theme for one item, so a wrong or unwanted one can be replaced by hand.
+    /// </summary>
+    /// <remarks>
+    /// Bounded deliberately. The search and the metadata fetch behind it each allow three minutes,
+    /// and a reverse proxy in front of Jellyfin usually gives up long before that, so the request
+    /// is cut off at ninety seconds and says so rather than leaving a page waiting on a connection
+    /// somebody else has already closed.
+    /// </remarks>
+    /// <param name="itemId">The item to search for.</param>
+    /// <param name="request">What to search for; an empty query searches the way a run would.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The candidates found, best first.</returns>
+    [HttpPost("Items/{itemId}/Search")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<ActionResult<ManualSearchDto>> Search(
+        [FromRoute] Guid itemId,
+        [FromBody] SearchRequest request,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(SearchDeadline);
+
+        try
+        {
+            var found = await _orchestrator
+                .SearchForItemAsync(itemId, request.Query, deadline.Token)
+                .ConfigureAwait(false);
+
+            var current = found.CurrentId;
+
+            return new ManualSearchDto
+            {
+                Success = found.Success,
+                Message = found.Message,
+                Query = found.Query,
+                CurrentTitle = found.CurrentTitle,
+                CurrentUrl = found.CurrentUrl,
+                Results = found.Results.Select(result => new CandidateDto(
+                    result.Candidate.Id,
+                    result.Candidate.Title,
+                    result.Candidate.Url,
+                    result.Candidate.Channel,
+                    result.Candidate.DurationSeconds,
+                    result.Candidate.ViewCount,
+                    result.Total,
+                    Explain(result),
+                    result.IsVetoed,
+                    result.Candidate.IsHydrated,
+                    string.Equals(result.Candidate.Id, current, StringComparison.Ordinal),
+                    ScoringEngine.Describe(result))).ToList(),
+            };
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogWarning("ThemeForge: the search for item {ItemId} took too long and was given up on.", itemId);
+            return new ManualSearchDto
+            {
+                Success = false,
+                Message = "The search took too long. Try again, or paste the address of a video you have already found.",
+                Query = request.Query ?? string.Empty,
+            };
+        }
+    }
+
+    /// <summary>Says why a candidate scored what it did, in one line.</summary>
+    /// <remarks>Worded exactly as the runners-up recorded against an item are, so the two read alike.</remarks>
+    private static string Explain(ScoreResult result) =>
+        result.IsVetoed
+            ? result.VetoReason ?? "disqualified"
+            : string.Join("; ", result.TopSignals(2).Select(signal => signal.Reason));
 
     /// <summary>Pins an item so no automated run ever changes its theme.</summary>
     /// <param name="itemId">The item.</param>
