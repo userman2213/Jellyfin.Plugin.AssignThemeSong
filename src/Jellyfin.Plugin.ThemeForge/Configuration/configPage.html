@@ -647,7 +647,7 @@
                         }).join('');
 
                         return '' +
-                            '<div class="verticalSection" data-library="' + esc(library.Id) + '" data-name="' + esc(library.Name) + '"' +
+                            '<div class="verticalSection" data-library="' + attr(library.Id) + '" data-name="' + attr(library.Name) + '"' +
                             ' style="border-bottom:1px solid #333;padding-bottom:1em;margin-bottom:1em;">' +
                                 '<h3 style="margin-bottom:.25em;">' + esc(library.Name) +
                                     ' <small style="color:#888;">(' + esc(library.CollectionType) + ')</small></h3>' +
@@ -800,16 +800,16 @@
 
             function renderQueueItem(item) {
                 var alternates = (item.Alternates || []).map(function (alt) {
-                    return '<li><a href="' + esc(alt.Url) + '" target="_blank" rel="noopener">' + esc(alt.Title) + '</a>' +
+                    return '<li><a href="' + attr(alt.Url) + '" target="_blank" rel="noopener">' + esc(alt.Title) + '</a>' +
                            ' &mdash; ' + alt.Score.toFixed(1) + ' (' + esc(alt.Reason) + ')' +
                            ' <button is="emby-button" type="button" class="raised tfApprove" data-id="' + item.ItemId +
-                           '" data-url="' + esc(alt.Url) + '"><span>Use this</span></button></li>';
+                           '" data-url="' + attr(alt.Url) + '"><span>Use this</span></button></li>';
                 }).join('');
 
                 return '' +
                     '<div class="verticalSection tfQueueItem" style="border-bottom:1px solid #333;padding-bottom:1em;margin-bottom:1em;">' +
                         '<h3 style="margin-bottom:.25em;">' + esc(item.Label) + ' <small>(' + esc(item.Kind) + ')</small></h3>' +
-                        '<div>Proposed: <a href="' + esc(item.CandidateUrl) + '" target="_blank" rel="noopener">' +
+                        '<div>Proposed: <a href="' + attr(item.CandidateUrl) + '" target="_blank" rel="noopener">' +
                             esc(item.CandidateTitle) + '</a>' +
                             (item.CandidateChannel ? ' by ' + esc(item.CandidateChannel) : '') +
                             ' &mdash; <strong>' + (item.Score === null ? '?' : item.Score.toFixed(1)) + '/100</strong></div>' +
@@ -878,7 +878,7 @@
                                 '<td>' + esc(row.State) + '</td>' +
                                 '<td>' + (row.HasThemeFile ? 'yes' : '&mdash;') + '</td>' +
                                 '<td>' + (row.ThemeUrl
-                                    ? '<a href="' + esc(row.ThemeUrl) + '" target="_blank" rel="noopener">' + esc(row.ThemeTitle || 'source') + '</a>'
+                                    ? '<a href="' + attr(row.ThemeUrl) + '" target="_blank" rel="noopener">' + esc(row.ThemeTitle || 'source') + '</a>'
                                     : '&mdash;') + '</td>' +
                                 '<td>' + (row.Score === null || row.Score === undefined ? '&mdash;' : row.Score.toFixed(1)) + '</td>' +
                                 '<td>' + (row.LoudnessLufs === null || row.LoudnessLufs === undefined ? '&mdash;' : row.LoudnessLufs.toFixed(1) + ' LUFS') + '</td>' +
@@ -910,10 +910,10 @@
                     'Came closest:' +
                     row.NearestMisses.map(function (miss) {
                         return '<div style="margin:.25em 0;">' +
-                            '<a href="' + esc(miss.Url) + '" target="_blank" rel="noopener">' + esc(miss.Title) + '</a>' +
+                            '<a href="' + attr(miss.Url) + '" target="_blank" rel="noopener">' + esc(miss.Title) + '</a>' +
                             ' <span style="color:#777;">&mdash; ' + esc(miss.Reason) + '</span> ' +
                             '<button is="emby-button" type="button" class="raised tfUseThis" style="font-size:.85em;padding:.1em .6em;min-width:0;"' +
-                            ' data-item="' + esc(row.ItemId) + '" data-url="' + esc(miss.Url) + '"><span>Use this</span></button>' +
+                            ' data-item="' + attr(row.ItemId) + '" data-url="' + attr(miss.Url) + '"><span>Use this</span></button>' +
                             '</div>';
                     }).join('') +
                     '</td></tr>';
