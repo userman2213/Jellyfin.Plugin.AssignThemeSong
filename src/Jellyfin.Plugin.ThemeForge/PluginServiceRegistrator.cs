@@ -1,5 +1,6 @@
 using Jellyfin.Plugin.ThemeForge.Engines.Acquisition;
 using Jellyfin.Plugin.ThemeForge.Engines.Catalogue;
+using Jellyfin.Plugin.ThemeForge.Engines.Credits;
 using Jellyfin.Plugin.ThemeForge.Engines.Decision;
 using Jellyfin.Plugin.ThemeForge.Engines.Discovery;
 using Jellyfin.Plugin.ThemeForge.Engines.Identity;
@@ -44,8 +45,18 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<IFfmpegLocator, FfmpegLocator>();
         serviceCollection.AddSingleton<IToolProvisioner, YtDlpProvisioner>();
 
+        // Who wrote the music. Jellyfin records a composer for very few items, so the databases
+        // are asked once per work and the answer kept; the decorator is what puts it in front of
+        // the rest of the pipeline, which goes on asking one synchronous question as before.
+        serviceCollection.AddSingleton<ICreditsSource, WikidataCreditsSource>();
+        serviceCollection.AddSingleton<ICreditsSource, MusicBrainzCreditsSource>();
+        serviceCollection.AddSingleton<IComposerCatalogue, ComposerCatalogue>();
+
         // Pipeline engines
-        serviceCollection.AddSingleton<IPeopleLookup, JellyfinPeopleLookup>();
+        serviceCollection.AddSingleton<JellyfinPeopleLookup>();
+        serviceCollection.AddSingleton<IPeopleLookup>(services => new ResearchedPeopleLookup(
+            services.GetRequiredService<JellyfinPeopleLookup>(),
+            services.GetRequiredService<IComposerCatalogue>()));
         serviceCollection.AddSingleton<IMediaIdentityResolver, MediaIdentityResolver>();
         serviceCollection.AddSingleton<IQueryPlanner, QueryPlanner>();
         serviceCollection.AddSingleton<ICandidateSource, YtDlpCandidateSource>();

@@ -25,6 +25,14 @@ namespace Jellyfin.Plugin.ThemeForge.Engines.Scoring.Rules;
 /// </remarks>
 public sealed class ComposerRule : IScoringRule
 {
+    /// <summary>What naming somebody else credited on the music is worth, against naming the composer.</summary>
+    /// <remarks>
+    /// Half. A conductor or arranger is real evidence that an upload is about this work's music
+    /// rather than somebody else's, but it is weaker evidence than the composer's name: a
+    /// conductor records dozens of scores, and the same name on two of them says less each time.
+    /// </remarks>
+    private const double CrewShare = 0.5;
+
     /// <inheritdoc />
     public string Name => "Composer";
 
@@ -50,19 +58,30 @@ public sealed class ComposerRule : IScoringRule
         ArgumentNullException.ThrowIfNull(candidate);
         ArgumentNullException.ThrowIfNull(context);
 
-        var composers = context.Identity.Composers;
-        if (composers is null || composers.Count == 0)
+        var composers = context.Identity.Composers ?? Array.Empty<string>();
+        var crew = context.Identity.MusicCredits ?? Array.Empty<string>();
+
+        if (composers.Count == 0 && crew.Count == 0)
         {
-            return RuleVerdict.Abstain("no composer is recorded for this item");
+            return RuleVerdict.Abstain("nobody is recorded as having written this item's music");
         }
 
-        var named = NamedComposer(composers, candidate);
-        if (named is null)
+        if (composers.Count > 0 && NamedComposer(composers, candidate) is { } composer)
         {
-            return RuleVerdict.Abstain("the composer is not named");
+            return new RuleVerdict(1.0, string.Format(CultureInfo.InvariantCulture, "names the composer, {0}", composer));
         }
 
-        return new RuleVerdict(1.0, string.Format(CultureInfo.InvariantCulture, "names the composer, {0}", named));
+        // Only consulted when the composer is not named, so a candidate naming both is scored on
+        // the stronger of the two rather than on whichever was checked last.
+        if (crew.Count > 0 && NamedComposer(crew, candidate) is { } member)
+        {
+            return new RuleVerdict(
+                CrewShare,
+                string.Format(CultureInfo.InvariantCulture, "names {0}, credited on this item's music", member));
+        }
+
+        return RuleVerdict.Abstain(
+            composers.Count > 0 ? "the composer is not named" : "nobody credited on the music is named");
     }
 
     /// <summary>
@@ -73,7 +92,7 @@ public sealed class ComposerRule : IScoringRule
     /// The description is left out on purpose: it routinely lists every composer whose work an
     /// uploader admires.
     /// </remarks>
-    /// <param name="composers">The item's composers.</param>
+    /// <param name="composers">The names to look for.</param>
     /// <param name="candidate">The candidate.</param>
     /// <returns>The composer named, or <see langword="null"/>.</returns>
     public static string? NamedComposer(System.Collections.Generic.IReadOnlyList<string> composers, Candidate candidate)

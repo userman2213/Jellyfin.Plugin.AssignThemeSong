@@ -37,6 +37,16 @@ public sealed class MediaIdentity
     /// </remarks>
     public IReadOnlyList<string> Composers { get; init; } = Array.Empty<string>();
 
+    /// <summary>
+    /// Gets everybody else credited on the item's music -- lyricist, conductor, arranger.
+    /// </summary>
+    /// <remarks>
+    /// Scored, never searched for. An upload naming the conductor of this score is talking about
+    /// this work's music and deserves a nod; a query built from a lyricist's name would return
+    /// the songs they wrote for everybody else.
+    /// </remarks>
+    public IReadOnlyList<string> MusicCredits { get; init; } = Array.Empty<string>();
+
     /// <summary>Gets the kind of item — only <see cref="BaseItemKind.Movie"/> and <see cref="BaseItemKind.Series"/> are processed.</summary>
     public required BaseItemKind Kind { get; init; }
 

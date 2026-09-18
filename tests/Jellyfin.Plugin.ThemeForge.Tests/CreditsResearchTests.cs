@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using Jellyfin.Plugin.ThemeForge.Engines.Credits;
 using Xunit;
 
@@ -241,5 +242,131 @@ public class CreditsResearchTests
             """);
 
         Assert.Equal(new[] { "Ramin Djawadi" }, found.Composers);
+    }
+}
+
+/// <summary>
+/// Covers the cache itself: what it remembers, for how long, and under which ids.
+/// </summary>
+public class ComposerSnapshotTests
+{
+    private static readonly DateTime Now = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+    private static ComposerSnapshot WithBattlestar()
+    {
+        var snapshot = new ComposerSnapshot();
+        snapshot.Record(
+            new[] { "imdb:tt0407362", "tmdbtv:1972" },
+            new ResearchedCredits(new[] { "Bear McCreary" }, null, null),
+            "Wikidata",
+            Now);
+        return snapshot;
+    }
+
+    [Fact]
+    public void AnAnswerIsFoundUnderEveryIdTheWorkHad()
+    {
+        // The point of storing it twice: an item that gains a TMDB id next week, or loses its
+        // IMDb id to a metadata refresh, still finds the answer that was already paid for.
+        var snapshot = WithBattlestar();
+
+        Assert.NotNull(snapshot.Find(new[] { "imdb:tt0407362" }));
+        Assert.NotNull(snapshot.Find(new[] { "tmdbtv:1972" }));
+        Assert.Null(snapshot.Find(new[] { "tvdb:73545" }));
+    }
+
+    [Fact]
+    public void TheFirstKeyThatMatchesWins()
+    {
+        var snapshot = WithBattlestar();
+
+        Assert.Equal(new[] { "Bear McCreary" }, snapshot.Find(new[] { "tvdb:73545", "tmdbtv:1972" })!.Composers);
+    }
+
+    [Fact]
+    public void AKnownAnswerIsNotAskedAgain()
+    {
+        var snapshot = WithBattlestar();
+
+        Assert.False(snapshot.NeedsLookUp(new[] { "imdb:tt0407362" }, Now.AddDays(59)));
+        Assert.True(snapshot.NeedsLookUp(new[] { "imdb:tt0407362" }, Now.AddDays(61)));
+    }
+
+    [Fact]
+    public void ANobodyKnowsIsRememberedTooButForLess()
+    {
+        // Without remembering a miss, a quarter of any library hits the network on every scan.
+        // Remembering it for as long as a hit would be worse: the databases do grow.
+        var snapshot = new ComposerSnapshot();
+        snapshot.Record(new[] { "imdb:tt0000000" }, ResearchedCredits.None, "nobody", Now);
+
+        Assert.False(snapshot.NeedsLookUp(new[] { "imdb:tt0000000" }, Now.AddDays(13)));
+        Assert.True(snapshot.NeedsLookUp(new[] { "imdb:tt0000000" }, Now.AddDays(15)));
+    }
+
+    [Fact]
+    public void AWorkNeverAskedAboutNeedsAsking()
+    {
+        Assert.True(new ComposerSnapshot().NeedsLookUp(new[] { "imdb:tt0407362" }, Now));
+    }
+
+    [Fact]
+    public void RecordingAgainReplacesRatherThanAccumulates()
+    {
+        var snapshot = WithBattlestar();
+        snapshot.Record(
+            new[] { "imdb:tt0407362" },
+            new ResearchedCredits(new[] { "Richard Gibbs" }, null, null),
+            "MusicBrainz",
+            Now.AddDays(70));
+
+        Assert.Equal(new[] { "Richard Gibbs" }, snapshot.Find(new[] { "imdb:tt0407362" })!.Composers);
+        Assert.Equal(2, snapshot.Entries.Count);
+    }
+
+    [Fact]
+    public void ItSurvivesBeingWrittenAndReadBack()
+    {
+        var snapshot = WithBattlestar();
+        snapshot.UpdatedUtc = Now;
+
+        var read = JsonSerializer.Deserialize<ComposerSnapshot>(JsonSerializer.Serialize(snapshot))!;
+
+        Assert.Equal(new[] { "Bear McCreary" }, read.Find(new[] { "tmdbtv:1972" })!.Composers);
+        Assert.Equal(1, read.Known / 2);
+        Assert.Equal(Now, read.UpdatedUtc);
+    }
+
+    [Fact]
+    public void OnlyAnAnswerThatNamesSomebodyCountsAsKnown()
+    {
+        var snapshot = new ComposerSnapshot();
+        snapshot.Record(new[] { "imdb:tt0000000" }, ResearchedCredits.None, "nobody", Now);
+
+        Assert.Single(snapshot.Entries);
+        Assert.Equal(0, snapshot.Known);
+    }
+
+    // ---- The keys ----
+
+    [Fact]
+    public void AFilmAndAShowWithTheSameTmdbNumberAreDifferentWorks()
+    {
+        Assert.Equal(new[] { "tmdb:1972" }, CreditsKeys.For(null, "1972", null, isSeries: false));
+        Assert.Equal(new[] { "tmdbtv:1972" }, CreditsKeys.For(null, "1972", null, isSeries: true));
+    }
+
+    [Fact]
+    public void ImdbComesFirstBecauseBothSourcesAreKeyedOnIt()
+    {
+        Assert.Equal(
+            new[] { "imdb:tt0407362", "tmdbtv:1972", "tvdb:73545" },
+            CreditsKeys.For("tt0407362", "1972", "73545", isSeries: true));
+    }
+
+    [Fact]
+    public void AnItemWithNoIdsHasNoKeys()
+    {
+        Assert.Empty(CreditsKeys.For(null, "  ", string.Empty, isSeries: false));
     }
 }
