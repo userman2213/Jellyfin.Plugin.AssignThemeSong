@@ -12,7 +12,8 @@ Transformation plugin's own build for your Jellyfin version.)
 
 Point it at your library and it will, for each movie and series:
 
-1. Work out what the item actually is — title, alternate titles, year, TVDB/TMDB/IMDb ids.
+1. Work out what the item actually is — title, alternate titles, year, TVDB/TMDB/IMDb ids, and
+   who wrote its music.
 2. Build an ordered list of searches, most specific first.
 3. Search YouTube with **yt-dlp** and collect candidates.
 4. Score every candidate against eleven independent rules, each of which explains itself.
@@ -50,6 +51,45 @@ your current settings, without touching a single decision.
 
 Whether theme songs play at all stays where it belongs: your own Jellyfin setting under
 **Display → Play theme music**.
+
+## Who wrote the music
+
+The composer's name is the most specific thing a search can ask for. *Firefly Main Title — Greg
+Edmonson* cannot be about any other Firefly, and on a distributor's `- Topic` upload — the
+best-sourced recordings on YouTube — the composer's name is the artist credit.
+
+Jellyfin records a composer for very few items, and without one three things quietly stop working:
+the search ladder drops its composer rung, an upload that names the composer earns no bonus, and a
+title that is an ordinary word — *Lost*, *Alien* — has nothing to corroborate it and is held below
+the auto-assign score.
+
+So ThemeForge looks it up, **by the title's own database id and never by name**:
+
+| Source | Keyed on | Cost | Licence |
+|---|---|---|---|
+| [Wikidata](https://www.wikidata.org) | IMDb (P345), TMDB (P4947/P4983) | one query per 50 titles | CC0 |
+| [MusicBrainz](https://musicbrainz.org) | the IMDb URL of the film or show | one request per title, 1/second | CC0 |
+
+Wikidata answers about three quarters of a library in a handful of requests. MusicBrainz is asked
+only about what is left. Answers are kept for two months and misses for a fortnight, so a whole
+library costs a few requests once and nothing thereafter. **Your library's own credits always win**
+— the research only fills in what Jellyfin does not have.
+
+Searching either service *by title* is deliberately not done, and this is not caution for its own
+sake: MusicBrainz returns a J-pop single for "Alien", and the composer of the 1978 Battlestar
+Galactica for the 2004 one. A wrong composer is worse than no composer, because it would be
+searched for and believed.
+
+The scheduled task **Look up who wrote the music** runs daily at 02:00 UTC, an hour before the
+discovery run. **Diagnostics** shows how many of your titles somebody is known for; a title with no
+IMDb or TMDB id cannot be looked up at all, so adding a metadata provider is what helps there.
+
+Lyricists, conductors and arrangers Jellyfin already knows about are scored at half what the
+composer is worth, and are never searched for: a conductor records dozens of scores, and a query
+built from a lyricist's name returns the songs they wrote for everybody else.
+
+All of this can be switched off, together or in pieces, under **Who wrote the music** in the
+settings.
 
 ## Installing
 
@@ -100,9 +140,19 @@ in three places and behaves the same in all of them:
 - on the plugin page under **Library**, the **Change theme** button on any row;
 - under **Review queue**, **Search for a different one** on any item waiting for a decision.
 
-It searches as soon as it opens, using the same words an unattended run would have used, and shows
-you the box so you can change them and search again. Each result gives the title, the channel, the
-length, a link to watch it, and what ThemeForge makes of it out of 100 with a one-line reason.
+It searches as soon as it opens, and **it does what an unattended run does**: it asks the
+catalogues first and pins a ThemerrDB entry for this exact title at the top, then runs every
+phrasing of the item's search ladder rather than one query. The results of all the phrasings are
+pooled before it decides what is worth a closer look, which is something a run does not do — a run
+takes the best few of each phrasing separately, so a video that comes sixth on two of them is never
+examined. A line above the results says how many phrasings were tried and how many results came
+back.
+
+Type something in the box and it searches for exactly that instead. Nothing is pinned above what
+you asked for, including the catalogue entry you may be overriding precisely because it is wrong.
+
+Each result gives the title, the channel, the length, a link to watch it, and what ThemeForge makes
+of it out of 100 with a one-line reason.
 
 **Results the scoring rules reject are shown too**, greyed out with the reason they were rejected —
 those are often exactly the video you are looking for, and your judgement beats the rules'. Press
@@ -185,6 +235,7 @@ queue shows you the whole breakdown, so a score is always something you can argu
 | `Availability` | Rejects live, private and blocked videos outright. |
 | `Duplicate` | Penalises a video already used as another item's theme. |
 | `QuerySpecificity` | Prefers hits from a narrower search. |
+| `Composer` | Whether the candidate names the composer, or somebody else credited on the music. A bonus, never a penalty. |
 
 Every weight, keyword list and threshold is editable in the settings — no rebuild needed.
 
