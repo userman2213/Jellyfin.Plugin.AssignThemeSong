@@ -96,6 +96,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<IScheduledTask, DiscoverThemesTask>();
         serviceCollection.AddSingleton<IScheduledTask, UpdateYtDlpTask>();
         serviceCollection.AddSingleton<IScheduledTask, UpdateThemerrDbTask>();
+        serviceCollection.AddSingleton<IScheduledTask, UpdateComposerCacheTask>();
         serviceCollection.AddHostedService<NewItemWatcher>();
     }
 }

@@ -9,6 +9,7 @@ using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.ThemeForge.Configuration;
 using Jellyfin.Plugin.ThemeForge.Engines.Acquisition;
 using Jellyfin.Plugin.ThemeForge.Engines.Catalogue;
+using Jellyfin.Plugin.ThemeForge.Engines.Credits;
 using Jellyfin.Plugin.ThemeForge.Engines.Decision;
 using Jellyfin.Plugin.ThemeForge.Engines.Discovery;
 using Jellyfin.Plugin.ThemeForge.Engines.Identity;
@@ -102,6 +103,27 @@ public interface IThemeOrchestrator
         string sourceUrl,
         ThemeItemState state,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Finds out who wrote the music for every title in the library, and keeps the answers.
+    /// </summary>
+    /// <remarks>
+    /// Lives here because the question is asked about the library, which only this class
+    /// enumerates. The scheduled task is a wrapper around it.
+    /// </remarks>
+    /// <param name="progress">Progress reporter, 0 to 100.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>How many titles were looked at, and how many of them somebody is now known for.</returns>
+    Task<ComposerCoverage> SyncComposersAsync(IProgress<double>? progress, CancellationToken cancellationToken);
+}
+
+/// <summary>How much of the library ThemeForge knows the composer for.</summary>
+/// <param name="Titles">How many films and series were looked at.</param>
+/// <param name="Known">How many of them somebody is credited on the music of.</param>
+public readonly record struct ComposerCoverage(int Titles, int Known)
+{
+    /// <summary>Gets how many titles nobody could be found for.</summary>
+    public int Unknown => Titles - Known;
 }
 
 /// <summary>
@@ -120,6 +142,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
     private readonly ICandidateSource _candidateSource;
     private readonly IReadOnlyList<IThemeProvenanceSource> _provenanceSources;
     private readonly IThemerrDbCatalogue _themerrDb;
+    private readonly IComposerCatalogue _composers;
     private readonly IScoringEngine _scoringEngine;
     private readonly IDecisionPolicy _decisionPolicy;
     private readonly IAcquisitionEngine _acquisitionEngine;
@@ -165,6 +188,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
     /// <param name="candidateSource">Finds candidates.</param>
     /// <param name="provenanceSources">Catalogues that answer by the item's own database id.</param>
     /// <param name="themerrDb">The local ThemerrDB copy, refreshed at the start of a run if stale.</param>
+    /// <param name="composers">What research has established about who wrote each work's music.</param>
     /// <param name="scoringEngine">Ranks candidates.</param>
     /// <param name="decisionPolicy">Decides what to do with the best candidate.</param>
     /// <param name="acquisitionEngine">Downloads and normalises the chosen candidate.</param>
@@ -179,6 +203,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         ICandidateSource candidateSource,
         IEnumerable<IThemeProvenanceSource> provenanceSources,
         IThemerrDbCatalogue themerrDb,
+        IComposerCatalogue composers,
         IScoringEngine scoringEngine,
         IDecisionPolicy decisionPolicy,
         IAcquisitionEngine acquisitionEngine,
@@ -194,6 +219,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         // Ordered here, once, rather than depending on the order services were registered in.
         _provenanceSources = provenanceSources.OrderBy(source => source.Order).ToList();
         _themerrDb = themerrDb;
+        _composers = composers;
         _scoringEngine = scoringEngine;
         _decisionPolicy = decisionPolicy;
         _acquisitionEngine = acquisitionEngine;
@@ -236,6 +262,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
             // page can only show what was typed into it; this shows what the engine resolved.
             _policyResolver.LogEffectiveRules(configuration);
             await RefreshCatalogueIfStaleAsync(configuration, cancellationToken).ConfigureAwait(false);
+            await RefreshComposersIfStaleAsync(configuration, cancellationToken).ConfigureAwait(false);
 
             var items = GetLibraryItems(configuration);
             report.Considered = items.Count;
@@ -1024,6 +1051,103 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         {
             // A stale catalogue costs requests, not correctness: the run still works without it.
             _logger.LogWarning(ex, "ThemeForge: could not refresh the ThemerrDB catalogue before the run.");
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<ComposerCoverage> SyncComposersAsync(IProgress<double>? progress, CancellationToken cancellationToken)
+    {
+        var configuration = Plugin.Config.ShallowCopy();
+        var works = ComposerRequests(configuration);
+
+        if (works.Count > 0)
+        {
+            await _composers.SyncAsync(works, progress, cancellationToken).ConfigureAwait(false);
+        }
+
+        var snapshot = await _composers.GetAsync(cancellationToken).ConfigureAwait(false);
+        var known = works.Count(work => snapshot.Find(work.Keys)?.Found == true);
+
+        progress?.Report(100);
+        return new ComposerCoverage(works.Count, known);
+    }
+
+    /// <summary>Turns the library into the questions the credits sources can be asked.</summary>
+    /// <remarks>
+    /// Items with no provider ids are left out. Neither source can be asked about a title by name
+    /// -- MusicBrainz's title search returns the 1978 composer for the 2004 Battlestar Galactica --
+    /// so including them would only mean asking questions nothing can answer.
+    /// </remarks>
+    private IReadOnlyList<CreditsRequest> ComposerRequests(PluginConfiguration configuration)
+    {
+        var works = new List<CreditsRequest>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var item in GetLibraryItems(configuration))
+        {
+            var identity = _identityResolver.Resolve(item);
+            if (identity is null)
+            {
+                continue;
+            }
+
+            var keys = CreditsKeys.For(identity.ImdbId, identity.TmdbId, identity.TvdbId, identity.IsSeries);
+            if (keys.Count == 0 || !seen.Add(keys[0]))
+            {
+                continue;
+            }
+
+            works.Add(new CreditsRequest(
+                keys[0],
+                keys,
+                identity.ImdbId,
+                identity.TmdbId,
+                identity.IsSeries,
+                identity.Label));
+        }
+
+        return works;
+    }
+
+    /// <summary>
+    /// Fills the composer cache before a run when it has gone stale.
+    /// </summary>
+    /// <remarks>
+    /// The daily task is the normal path. This covers a server that was switched off when the task
+    /// was due, and a fresh install whose first run would otherwise search without the one name
+    /// that most sharply identifies a theme.
+    /// </remarks>
+    private async Task RefreshComposersIfStaleAsync(PluginConfiguration configuration, CancellationToken cancellationToken)
+    {
+        if (!configuration.ResearchComposers || !configuration.SyncComposers)
+        {
+            return;
+        }
+
+        try
+        {
+            var snapshot = await _composers.GetAsync(cancellationToken).ConfigureAwait(false);
+            var maxAge = TimeSpan.FromDays(Math.Max(1, configuration.ComposerCacheMaxAgeDays));
+
+            if (snapshot.IsUsable && snapshot.Age < maxAge)
+            {
+                return;
+            }
+
+            _logger.LogInformation(
+                "ThemeForge: the music credits cache is {State}; filling it before the run.",
+                snapshot.IsUsable ? $"{snapshot.Age.TotalDays:0.#} days old" : "empty");
+
+            await SyncComposersAsync(null, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // Not knowing the composer costs specificity, not correctness: the run still works.
+            _logger.LogWarning(ex, "ThemeForge: could not look up the music credits before the run.");
         }
     }
 

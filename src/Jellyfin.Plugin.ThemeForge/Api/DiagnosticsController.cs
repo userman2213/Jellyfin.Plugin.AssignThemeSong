@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.ThemeForge.Configuration;
 using Jellyfin.Plugin.ThemeForge.Engines.Catalogue;
+using Jellyfin.Plugin.ThemeForge.Engines.Credits;
 using Jellyfin.Plugin.ThemeForge.Engines.Identity;
 using Jellyfin.Plugin.ThemeForge.Engines.Index;
 using Jellyfin.Plugin.ThemeForge.Engines.Policy;
@@ -91,6 +92,26 @@ public sealed class DiagnosticsDto
 
     /// <summary>Gets or sets where that copy is kept.</summary>
     public string ThemerrPath { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets how many titles somebody is known to have written the music for.</summary>
+    /// <remarks>
+    /// The measurement that says whether researching composers earned its place. An item with no
+    /// composer is searched for with one fewer phrasing, scored without the bonus, and -- if its
+    /// title is an ordinary word -- held below the auto-assign band for want of corroboration.
+    /// </remarks>
+    public int TitlesWithComposer { get; set; }
+
+    /// <summary>Gets or sets how many titles nobody is recorded for.</summary>
+    public int TitlesWithoutComposer { get; set; }
+
+    /// <summary>Gets or sets where the music credits cache is kept.</summary>
+    public string ComposersPath { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets when the music credits cache was last filled, if ever.</summary>
+    public DateTime? ComposersUpdatedUtc { get; set; }
+
+    /// <summary>Gets or sets how many works the music credits cache holds an answer for.</summary>
+    public int ComposersKnown { get; set; }
 }
 
 /// <summary>
@@ -115,6 +136,7 @@ public class DiagnosticsController : ControllerBase
     private readonly IThemeIndex _index;
     private readonly ILibraryPolicyResolver _policyResolver;
     private readonly IThemerrDbCatalogue _themerrDb;
+    private readonly IComposerCatalogue _composers;
     private readonly ILibraryManager _libraryManager;
     private readonly IMediaIdentityResolver _identityResolver;
 
@@ -122,18 +144,21 @@ public class DiagnosticsController : ControllerBase
     /// <param name="index">The decision index, for recorded skip reasons.</param>
     /// <param name="policyResolver">Resolves libraries and their rules.</param>
     /// <param name="themerrDb">The local ThemerrDB copy.</param>
+    /// <param name="composers">The music credits cache.</param>
     /// <param name="libraryManager">The library, to count items and their ids.</param>
     /// <param name="identityResolver">Reads provider ids off items.</param>
     public DiagnosticsController(
         IThemeIndex index,
         ILibraryPolicyResolver policyResolver,
         IThemerrDbCatalogue themerrDb,
+        IComposerCatalogue composers,
         ILibraryManager libraryManager,
         IMediaIdentityResolver identityResolver)
     {
         _index = index;
         _policyResolver = policyResolver;
         _themerrDb = themerrDb;
+        _composers = composers;
         _libraryManager = libraryManager;
         _identityResolver = identityResolver;
     }
@@ -178,7 +203,21 @@ public class DiagnosticsController : ControllerBase
                 + "to discover it is not in the database. Run the \"Update the ThemerrDB catalogue\" scheduled task.");
         }
 
+        var composers = await _composers.GetAsync(cancellationToken).ConfigureAwait(false);
         var ids = CountProviderIds();
+
+        var titles = ids.WithComposer + ids.WithoutComposer;
+        if (inUse.ResearchComposers && titles > 0 && ids.WithoutComposer * 2 > titles)
+        {
+            problems.Add(
+                $"Nobody is known to have written the music for {ids.WithoutComposer} of {titles} titles. Each of those is "
+                + "searched for with one fewer phrasing, cannot earn the bonus for an upload that names the composer, and, if "
+                + "its title is an ordinary word, is held below the auto-assign score for want of anything to corroborate it. "
+                + (composers.IsUsable
+                    ? "Titles with no IMDb or TMDB id cannot be looked up at all, so adding a metadata provider is what helps here."
+                    : "Run the \"Look up who wrote the music\" scheduled task."));
+        }
+
         if (ids.SeriesWithoutTmdb > 0)
         {
             problems.Add(
@@ -205,6 +244,11 @@ public class DiagnosticsController : ControllerBase
             IndexPath = Plugin.Instance?.IndexPath ?? string.Empty,
             LogPath = ThemeForgeLogFile.Shared.CurrentPath ?? "(file logging is off)",
             ThemerrPath = ThemerrDbCatalogue.SnapshotPath,
+            TitlesWithComposer = ids.WithComposer,
+            TitlesWithoutComposer = ids.WithoutComposer,
+            ComposersPath = ComposerCatalogue.SnapshotPath,
+            ComposersUpdatedUtc = composers.IsUsable ? composers.UpdatedUtc : null,
+            ComposersKnown = composers.Known,
             Themerr = new CatalogueStatus
             {
                 Movies = themerr.MovieTmdbIds.Count,
@@ -224,7 +268,7 @@ public class DiagnosticsController : ControllerBase
     /// recorded the id the database is keyed on. Invisible from the settings page and from the
     /// run summary, which just says "nothing found".
     /// </remarks>
-    private (int Movies, int MoviesWithoutTmdb, int Series, int SeriesWithoutTmdb) CountProviderIds()
+    private (int Movies, int MoviesWithoutTmdb, int Series, int SeriesWithoutTmdb, int WithComposer, int WithoutComposer) CountProviderIds()
     {
         try
         {
@@ -235,7 +279,7 @@ public class DiagnosticsController : ControllerBase
                 IsVirtualItem = false,
             });
 
-            int movies = 0, moviesWithout = 0, series = 0, seriesWithout = 0;
+            int movies = 0, moviesWithout = 0, series = 0, seriesWithout = 0, composed = 0, uncomposed = 0;
 
             foreach (var item in items)
             {
@@ -256,14 +300,25 @@ public class DiagnosticsController : ControllerBase
                     movies++;
                     moviesWithout += missing ? 1 : 0;
                 }
+
+                // Resolving already consults the research cache, so this counts what the pipeline
+                // will actually see rather than what Jellyfin alone holds.
+                if (identity.Composers.Count > 0)
+                {
+                    composed++;
+                }
+                else
+                {
+                    uncomposed++;
+                }
             }
 
-            return (movies, moviesWithout, series, seriesWithout);
+            return (movies, moviesWithout, series, seriesWithout, composed, uncomposed);
         }
         catch (Exception)
         {
             // The library being unavailable is reported elsewhere; the counts are just zero here.
-            return (0, 0, 0, 0);
+            return (0, 0, 0, 0, 0, 0);
         }
     }
 

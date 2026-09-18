@@ -318,6 +318,53 @@
                         is acceptable on your server is your decision, not ours to make for you.
                     </div>
 
+                    <h3 class="checkboxListLabel">Who wrote the music</h3>
+                    <p class="fieldDescription" style="margin-bottom:1em;">
+                        The composer's name is the most specific thing a search can ask for:
+                        &ldquo;Firefly Main Title &mdash; Greg Edmonson&rdquo; cannot be about any other Firefly.
+                        Jellyfin records a composer for very few items, and without one the ladder loses its
+                        composer rung, an upload that names the composer earns no bonus, and a title that is an
+                        ordinary word &mdash; <em>Lost</em>, <em>Alien</em> &mdash; is held below the auto-assign
+                        score for want of anything to corroborate it.
+                    </p>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="ResearchComposers" />
+                        <span>Look the composer up when Jellyfin does not know it</span>
+                    </label>
+                    <div class="fieldDescription" style="margin:.25em 0 1em 0;">
+                        Asks Wikidata and MusicBrainz by the title's own IMDb or TMDB id, never by name.
+                        Both are public-domain databases, and answers are kept for two months, so a whole
+                        library costs a handful of requests once. Your library's own credits always win;
+                        this only fills in what is missing.
+                    </div>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="SyncComposers" />
+                        <span>Look them all up daily, before the discovery run</span>
+                    </label>
+                    <div class="fieldDescription" style="margin:.25em 0 1em 0;">
+                        Runs at 02:00 UTC, an hour before the discovery run. Turning it off does not disable the
+                        research; each run then looks up only what it happens to need, which spreads the same
+                        requests through the run instead of getting them over with.
+                    </div>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="UseMusicBrainzForComposers" />
+                        <span>Ask MusicBrainz about whatever Wikidata could not answer</span>
+                    </label>
+                    <div class="fieldDescription" style="margin:.25em 0 1em 0;">
+                        Wikidata answers about three quarters of a library in a handful of requests. MusicBrainz
+                        covers much of the rest &mdash; it is what finds the composers of Sherlock and Rick and
+                        Morty &mdash; but at one request per second, so it is the slow half of the job. Only its
+                        lookup by IMDb id is used: searching it by title returns the 1978 composer for the 2004
+                        Battlestar Galactica.
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="ComposerCacheMaxAgeDays" min="1" max="60" step="1" label="Look up before a run if nothing has been looked up for (days)" />
+                        <div class="fieldDescription">
+                            The safety net for a server that was switched off when the task was due, and for a
+                            fresh install whose first run would otherwise search without the name.
+                        </div>
+                    </div>
+
                     <h3 class="checkboxListLabel">Searching</h3>
                     <div class="inputContainer">
                         <input is="emby-input" type="number" id="SearchResultsPerQuery" min="1" max="50" step="1" label="Results per search" />
@@ -471,7 +518,8 @@
                 'EnableLoudnessNormalization', 'RaiseQuietThemes', 'TrimSilence', 'AlwaysConvertToMp3',
                 'StopLadderOnConfidentHit', 'TrustTopicChannels',
                 'EnableFileLogging', 'UseThemerrDb', 'UsePlexThemeArchive', 'RejectNonMusic',
-                'SyncThemerrDb'
+                'SyncThemerrDb',
+                'ResearchComposers', 'SyncComposers', 'UseMusicBrainzForComposers'
             ];
             var NUMBERS = [
                 'AutoAssignThreshold', 'ReviewThreshold', 'MinimumTitleSimilarity', 'AudioBitrate',
@@ -480,7 +528,7 @@
                 'MovieIdealMinSeconds', 'MovieIdealMaxSeconds', 'HardMinSeconds', 'HardMaxSeconds',
                 'MaxConcurrency', 'RequestDelayMs', 'MaxAttempts',
                 'MaxLogFileSizeMb', 'MaxLogFiles', 'FileLogLevel',
-                'MusicThreshold', 'SpeechThreshold', 'ThemerrDbMaxAgeDays'
+                'MusicThreshold', 'SpeechThreshold', 'ThemerrDbMaxAgeDays', 'ComposerCacheMaxAgeDays'
             ];
             var TEXTS = ['YtDlpPath', 'FfmpegPath'];
             var LISTS = [
@@ -1123,6 +1171,20 @@
                         'Index: ' + esc(d.IndexPath) + '<br />' +
                         'Log: ' + esc(d.LogPath) + '<br />' +
                         'Data: ' + esc(d.DataPath) +
+                        '</p>');
+
+                    var titles = (d.TitlesWithComposer || 0) + (d.TitlesWithoutComposer || 0);
+                    html += section('What is known about the library',
+                        '<p class="fieldDescription" style="line-height:1.9;">' +
+                        'Films: ' + (d.Movies || 0) + ', of which ' + (d.MoviesWithoutTmdbId || 0) + ' have no TMDB id<br />' +
+                        'Series: ' + (d.Series || 0) + ', of which ' + (d.SeriesWithoutTmdbId || 0) + ' have no TMDB id<br />' +
+                        'Composer known for: ' + (d.TitlesWithComposer || 0) + ' of ' + titles +
+                        (titles ? ' (' + Math.round(100 * (d.TitlesWithComposer || 0) / titles) + '%)' : '') + '<br />' +
+                        'Music credits cache: ' + esc(d.ComposersPath || '') +
+                        (d.ComposersUpdatedUtc
+                            ? ' &mdash; ' + (d.ComposersKnown || 0) + ' answers, filled ' +
+                              esc(new Date(d.ComposersUpdatedUtc).toLocaleString())
+                            : ' <span style="color:#e8a33d;">(never filled)</span>') +
                         '</p>');
 
                     html += section('Library rules in force', table(
