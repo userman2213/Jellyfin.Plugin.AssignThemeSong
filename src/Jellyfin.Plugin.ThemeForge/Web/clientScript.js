@@ -207,7 +207,13 @@
                   escapeHtml(found.CurrentTitle || found.CurrentUrl) + '</a></div>'
                 : '';
 
-            results.innerHTML = current + found.Results.map(function (row) {
+            // Says how many phrasings were tried and whether a catalogue answered, which is
+            // otherwise invisible and is what tells a thorough search from a narrow one.
+            var summary = found.Message
+                ? '<div class="themeforge-or" style="margin-top:0;">' + escapeHtml(found.Message) + '</div>'
+                : '';
+
+            results.innerHTML = summary + current + found.Results.map(function (row) {
                 var facts = [row.Channel, minutes(row.DurationSeconds)].filter(function (part) {
                     return part;
                 }).map(escapeHtml).join(' &middot; ');

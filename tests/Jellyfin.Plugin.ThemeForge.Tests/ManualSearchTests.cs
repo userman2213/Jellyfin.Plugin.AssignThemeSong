@@ -218,3 +218,108 @@ public class ManualAssignmentTests
         Assert.Single(entry.ScoreBreakdown);
     }
 }
+
+/// <summary>
+/// Covers pooling a manual search's phrasings before deciding what is worth inspecting.
+/// </summary>
+/// <remarks>
+/// This is the thing a run does not do. A run takes the best few of each rung separately, so a
+/// video that comes sixth on two different phrasings is never looked at although it would be near
+/// the top of the pooled set. The manual search pools first and inspects the best of the lot in
+/// one request.
+/// </remarks>
+public class ManualSearchPoolingTests
+{
+    private static Candidate FoundBy(string id, int rank, string template) => new()
+    {
+        Id = id,
+        Url = "https://www.youtube.com/watch?v=" + id,
+        Title = "Main Title",
+        FoundBy = new SearchQuery(template, rank, template),
+        IsHydrated = false,
+    };
+
+    [Fact]
+    public void EveryPhrasingsResultsArePutTogether()
+    {
+        var pooled = ThemeOrchestrator.Pool(new[]
+        {
+            new[] { FoundBy("aaaaaaaaaaa", 0, "{title} opening theme song") },
+            new[] { FoundBy("bbbbbbbbbbb", 1, "{title} {composer} theme") },
+        });
+
+        Assert.Equal(2, pooled.Count);
+    }
+
+    [Fact]
+    public void AVideoFoundTwiceIsShownOnce()
+    {
+        var pooled = ThemeOrchestrator.Pool(new[]
+        {
+            new[] { FoundBy("aaaaaaaaaaa", 0, "{title} opening theme song") },
+            new[] { FoundBy("aaaaaaaaaaa", 4, "{title} intro") },
+        });
+
+        Assert.Single(pooled);
+    }
+
+    [Fact]
+    public void ItKeepsTheMostSpecificPhrasingThatFoundIt()
+    {
+        // The specificity bonus is worth real points. A video that turns up under both the
+        // composer phrasing and the vaguest rung was found by the composer phrasing.
+        var pooled = ThemeOrchestrator.Pool(new[]
+        {
+            new[] { FoundBy("aaaaaaaaaaa", 5, "{title} soundtrack main theme") },
+            new[] { FoundBy("aaaaaaaaaaa", 1, "{title} {composer} theme") },
+            new[] { FoundBy("aaaaaaaaaaa", 3, "{title} theme song") },
+        });
+
+        Assert.Equal(1, Assert.Single(pooled).FoundBy.Rank);
+    }
+
+    [Fact]
+    public void APhrasingThatFoundNothingCostsNothing()
+    {
+        var pooled = ThemeOrchestrator.Pool(new[]
+        {
+            Array.Empty<Candidate>(),
+            new[] { FoundBy("aaaaaaaaaaa", 2, "{title} main title theme") },
+            Array.Empty<Candidate>(),
+        });
+
+        Assert.Single(pooled);
+    }
+
+    [Fact]
+    public void NothingFoundAtAllIsEmptyRatherThanAnError()
+    {
+        Assert.Empty(ThemeOrchestrator.Pool(Array.Empty<IReadOnlyList<Candidate>>()));
+    }
+
+    [Fact]
+    public void TheSameVideoTwiceInOneBatchDoesNotFaultTheSearch()
+    {
+        // yt-dlp has been seen to return one video twice in a batch. Merge used to build its
+        // lookup with ToDictionary, which throws on a duplicate key -- so the page showed an
+        // error instead of results, for a reason that had nothing to do with the search.
+        var twice = new[] { FoundBy("aaaaaaaaaaa", 0, "manual search"), FoundBy("aaaaaaaaaaa", 0, "manual search") };
+
+        var merged = ThemeOrchestrator.Merge(
+            twice.Select(candidate => new ScoreResult
+            {
+                Candidate = candidate,
+                Total = 40,
+                Breakdown = new[] { new Signal("TitleSimilarity", 1, 40, "looks right") },
+            }).ToList(),
+            twice.Select(candidate => new ScoreResult
+            {
+                Candidate = candidate,
+                Total = 80,
+                Breakdown = new[] { new Signal("TitleSimilarity", 1, 80, "looks right") },
+            }).ToList());
+
+        var only = Assert.Single(merged);
+        Assert.Equal(80, only.Total);
+    }
+}

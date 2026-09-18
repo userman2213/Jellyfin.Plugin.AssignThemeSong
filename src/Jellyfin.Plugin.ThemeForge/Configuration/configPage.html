@@ -1007,7 +1007,13 @@
                       esc(found.CurrentTitle || found.CurrentUrl) + '</a></div>'
                     : '';
 
-                results.innerHTML = current + found.Results.map(function (row) {
+                // What the search actually did is otherwise invisible, and it is the difference
+                // between "ThemeForge found nothing" and "ThemeForge asked one narrow question".
+                var summary = found.Message
+                    ? '<div style="color:#888;margin-bottom:.5em;">' + esc(found.Message) + '</div>'
+                    : '';
+
+                results.innerHTML = summary + current + found.Results.map(function (row) {
                     var facts = [row.Channel, mmss(row.DurationSeconds)].filter(function (part) {
                         return part;
                     }).map(esc).join(' &middot; ');

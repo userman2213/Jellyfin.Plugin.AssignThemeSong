@@ -152,6 +152,9 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
     private readonly IThemeForgeLogger<ThemeOrchestrator> _logger;
     private readonly RequestThrottle _throttle = new();
 
+    /// <summary>Paces searches somebody is waiting for, separately from the run's.</summary>
+    private readonly RequestThrottle _interactive = new();
+
     /// <summary>How many items are processed between index saves during a run.</summary>
     private const int IndexFlushInterval = 25;
 
@@ -174,7 +177,23 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
     /// rather than how many requests are made. The rest are shown as the listing described them
     /// and marked as not looked at closely.
     /// </remarks>
-    private const int ManualSearchInspected = 10;
+    private const int ManualSearchInspected = 12;
+
+    /// <summary>How long an interactive search waits between requests.</summary>
+    /// <remarks>
+    /// A run paces itself at a second and a half because it makes thousands of requests over
+    /// hours and being rate limited would end it. A person watching a spinner makes a few dozen
+    /// and is waiting for them, so the same pacing would turn a six-phrasing search into forty
+    /// seconds of nothing. Its own throttle keeps the two from sharing a queue.
+    /// </remarks>
+    private const int ManualSearchSpacingMs = 400;
+
+    /// <summary>How many of a manual search's phrasings are in flight at once.</summary>
+    /// <remarks>
+    /// Safe because each search is a separate process: the candidate source holds only readonly
+    /// fields and the process runner spawns one per call.
+    /// </remarks>
+    private const int ManualSearchConcurrency = 3;
 
     /// <summary>The longest query that will be sent to a search, in characters.</summary>
     private const int MaxQueryLength = 200;
@@ -524,18 +543,22 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         }
 
         var configuration = Plugin.Config;
+        var typed = ResolveQuery(query, () => null);
+        var byHand = typed.Length > 0;
 
-        // The fallback is the first rung of the ladder this item would be searched with
-        // unattended, so the box opens showing what ThemeForge would have done and the person
-        // edits from there.
-        var text = ResolveQuery(
-            query,
-            () => _queryPlanner.Plan(identity, configuration).FirstOrDefault()?.Text ?? identity.Title);
+        // Nothing typed means "do what a run would do", so it does: the catalogues first, then
+        // every phrasing of the ladder. Words typed mean the opposite -- somebody is overriding a
+        // decision -- so those words are searched for and nothing else is put in front of them.
+        var plan = byHand
+            ? new[] { new SearchQuery(typed, 0, "manual search") }
+            : _queryPlanner.Plan(identity, configuration);
 
-        if (text.Length == 0)
+        if (plan.Count == 0)
         {
             return ManualSearchResult.Failed("There is nothing to search for.");
         }
+
+        var text = byHand ? typed : plan[0].Text;
 
         await _index.LoadAsync(cancellationToken).ConfigureAwait(false);
         var entry = _index.Get(itemId);
@@ -547,41 +570,152 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
             FindExistingAssignment = videoId => _index.FindAssignmentOwner(videoId, identity.ItemId),
         };
 
-        // Rank 0 gives the full specificity bonus, and rightly: these are the words a person chose.
-        var search = new SearchQuery(text, 0, "manual search");
+        var listed = byHand ? null : await LookUpAsync(identity, configuration, cancellationToken).ConfigureAwait(false);
 
-        await _throttle.WaitAsync(TimeSpan.FromMilliseconds(configuration.RequestDelayMs), cancellationToken).ConfigureAwait(false);
-        var found = await _candidateSource.SearchAsync(search, ManualSearchResults, cancellationToken).ConfigureAwait(false);
+        var pooled = await SearchEveryPhrasingAsync(
+            plan,
+            byHand ? ManualSearchResults : configuration.SearchResultsPerQuery,
+            identity.Label,
+            cancellationToken).ConfigureAwait(false);
 
-        if (found.Count == 0)
+        // Seven phrasings can pool seventy videos, which is a wall rather than a list. Ranked
+        // first, then cut: the cut is about what fits on a page, not about what was considered.
+        IReadOnlyList<ScoreResult> results = pooled.Count == 0
+            ? Array.Empty<ScoreResult>()
+            : (await InspectAsync(pooled, context, cancellationToken).ConfigureAwait(false))
+                .Take(ManualSearchResults)
+                .ToList();
+
+        // Counted before the catalogue's answer is added, because the sentence is about what the
+        // search turned up rather than about how many rows are on the page.
+        var summary = Describe(plan.Count, pooled.Count, results.Count, listed, text, byHand);
+
+        // The catalogue's answer goes first and is not scored, exactly as in a run: it is keyed on
+        // this title's own database id, so there is nothing to score and nothing to get wrong.
+        if (listed is not null)
         {
-            return new ManualSearchResult(
-                true,
-                $"Nothing found for \u201c{text}\u201d.",
-                text,
-                entry?.ChosenId,
-                entry?.ChosenTitle,
-                entry?.ChosenUrl,
-                Array.Empty<ScoreResult>());
+            results = new[] { Certain(listed) }
+                .Concat(results.Where(result => !string.Equals(result.Candidate.Id, listed.Id, StringComparison.Ordinal)))
+                .ToList();
         }
 
-        var results = await InspectAsync(found, context, configuration, cancellationToken).ConfigureAwait(false);
-
         _logger.LogInformation(
-            "ThemeForge: searched for \"{Query}\" on behalf of \"{Item}\" — {Count} results, {Usable} of them usable.",
-            text,
+            "ThemeForge: searched {Phrasings} phrasing(s) for \"{Item}\" -- {Found} distinct results, {Usable} of them usable{Listed}.",
+            plan.Count,
             identity.Label,
-            results.Count,
-            results.Count(result => !result.IsVetoed));
+            pooled.Count,
+            results.Count(result => !result.IsVetoed),
+            listed is null ? string.Empty : $", plus the {listed.Provenance} entry");
 
         return new ManualSearchResult(
-            true,
-            string.Empty,
+            results.Count > 0,
+            summary,
             text,
             entry?.ChosenId,
             entry?.ChosenTitle,
             entry?.ChosenUrl,
             results);
+    }
+
+    /// <summary>
+    /// Runs every phrasing and pools what they find, keeping each video once.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Pooling before choosing what to inspect is the point, and it is something a run does not do.
+    /// A run takes the best few of each rung separately, so a video that comes sixth on two
+    /// different phrasings is never looked at although it would be near the top of the pooled set.
+    /// Here every phrasing's results are put together first and the best twelve of the lot are
+    /// fetched in one request.
+    /// </para>
+    /// <para>
+    /// A video found by two phrasings keeps the more specific one. The specificity bonus is worth
+    /// real points, and "found by the phrasing naming the composer" is the truer description of a
+    /// video that also happens to turn up under the vaguest rung.
+    /// </para>
+    /// </remarks>
+    private async Task<IReadOnlyList<Candidate>> SearchEveryPhrasingAsync(
+        IReadOnlyList<SearchQuery> plan,
+        int perQuery,
+        string label,
+        CancellationToken cancellationToken)
+    {
+        var spacing = TimeSpan.FromMilliseconds(ManualSearchSpacingMs);
+        using var concurrency = new SemaphoreSlim(ManualSearchConcurrency);
+
+        var searches = plan.Select(async query =>
+        {
+            await concurrency.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await _interactive.WaitAsync(spacing, cancellationToken).ConfigureAwait(false);
+                return await _candidateSource.SearchAsync(query, perQuery, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // One phrasing failing is not the search failing: the others still have answers.
+                _logger.LogWarning(ex, "ThemeForge: the search for \"{Query}\" failed while looking for \"{Item}\".", query.Text, label);
+                return Array.Empty<Candidate>();
+            }
+            finally
+            {
+                concurrency.Release();
+            }
+        });
+
+        return Pool(await Task.WhenAll(searches).ConfigureAwait(false));
+    }
+
+    /// <summary>
+    /// Puts several phrasings' results together, keeping each video once.
+    /// </summary>
+    /// <remarks>
+    /// A video found by two phrasings keeps the more specific one, which is the lower rank. The
+    /// specificity bonus is worth real points, and "found by the phrasing naming the composer" is
+    /// the truer description of a video that also happens to turn up under the vaguest rung.
+    /// </remarks>
+    /// <param name="batches">What each phrasing found.</param>
+    /// <returns>Every distinct video, each attributed to the most specific phrasing that found it.</returns>
+    internal static IReadOnlyList<Candidate> Pool(IEnumerable<IReadOnlyList<Candidate>> batches)
+    {
+        ArgumentNullException.ThrowIfNull(batches);
+
+        var pooled = new Dictionary<string, Candidate>(StringComparer.Ordinal);
+
+        foreach (var found in batches)
+        {
+            foreach (var candidate in found)
+            {
+                if (!pooled.TryGetValue(candidate.Id, out var seen) || candidate.FoundBy.Rank < seen.FoundBy.Rank)
+                {
+                    pooled[candidate.Id] = candidate;
+                }
+            }
+        }
+
+        return pooled.Values.ToList();
+    }
+
+    /// <summary>Says in one line what the search actually did, since none of it is otherwise visible.</summary>
+    private static string Describe(int phrasings, int pooled, int shown, Candidate? listed, string text, bool byHand)
+    {
+        if (shown == 0)
+        {
+            return listed is null
+                ? $"Nothing found for \u201c{text}\u201d."
+                : $"{listed.Provenance} has a theme for this title. Nothing else was found for \u201c{text}\u201d.";
+        }
+
+        var searched = byHand
+            ? $"Searched for \u201c{text}\u201d"
+            : string.Create(CultureInfo.InvariantCulture, $"Searched {phrasings} phrasing{(phrasings == 1 ? string.Empty : "s")}, starting with \u201c{text}\u201d");
+
+        var looked = Math.Min(pooled, ManualSearchInspected);
+        var found = string.Create(
+            CultureInfo.InvariantCulture,
+            $"{searched} \u2014 {pooled} result{(pooled == 1 ? string.Empty : "s")}, the best {shown} shown, the top {looked} looked at closely.");
+
+        return listed is null ? found : $"{listed.Provenance} has a theme for this title; it is first below. {found}";
     }
 
     /// <summary>
@@ -597,7 +731,6 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
     private async Task<IReadOnlyList<ScoreResult>> InspectAsync(
         IReadOnlyList<Candidate> found,
         ScoringContext context,
-        PluginConfiguration configuration,
         CancellationToken cancellationToken)
     {
         var ranked = _scoringEngine.Rank(found, context);
@@ -606,7 +739,8 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         // listing is often only the absence of the very metadata this fetch supplies.
         var shortlist = ranked.Take(ManualSearchInspected).Select(result => result.Candidate).ToList();
 
-        await _throttle.WaitAsync(TimeSpan.FromMilliseconds(configuration.RequestDelayMs), cancellationToken).ConfigureAwait(false);
+        // One request for the whole pooled shortlist, rather than one per phrasing as a run does.
+        await _interactive.WaitAsync(TimeSpan.FromMilliseconds(ManualSearchSpacingMs), cancellationToken).ConfigureAwait(false);
         var hydrated = await _candidateSource.HydrateAsync(shortlist, cancellationToken).ConfigureAwait(false);
 
         return Merge(ranked, _scoringEngine.Rank(hydrated, context));
@@ -615,9 +749,15 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
     /// <summary>
     /// Combines what the listing said with what the full metadata said, preferring the latter.
     /// </summary>
+    /// <remarks>
+    /// Tolerant of the same video appearing twice on either side. It used to build a dictionary
+    /// with <c>ToDictionary</c>, which throws on a duplicate key -- so a batch in which yt-dlp
+    /// returned one video twice faulted the whole search and the page showed an error instead of
+    /// results. The run's equivalent has always used <c>TryGetValue</c> and cannot.
+    /// </remarks>
     /// <param name="ranked">Every candidate, scored on the listing alone.</param>
     /// <param name="inspected">The subset whose metadata was fetched, scored again.</param>
-    /// <returns>Every candidate, best first; a veto scores zero and so falls to the bottom.</returns>
+    /// <returns>Every candidate once, best first; a veto scores zero and so falls to the bottom.</returns>
     internal static IReadOnlyList<ScoreResult> Merge(
         IReadOnlyList<ScoreResult> ranked,
         IReadOnlyList<ScoreResult> inspected)
@@ -625,10 +765,20 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         ArgumentNullException.ThrowIfNull(ranked);
         ArgumentNullException.ThrowIfNull(inspected);
 
-        var better = inspected.ToDictionary(result => result.Candidate.Id, StringComparer.Ordinal);
+        var better = new Dictionary<string, ScoreResult>(StringComparer.Ordinal);
+        foreach (var result in inspected)
+        {
+            if (!better.TryGetValue(result.Candidate.Id, out var seen) || result.Total > seen.Total)
+            {
+                better[result.Candidate.Id] = result;
+            }
+        }
+
+        var shown = new HashSet<string>(StringComparer.Ordinal);
 
         return ranked
             .Select(result => better.TryGetValue(result.Candidate.Id, out var full) ? full : result)
+            .Where(result => shown.Add(result.Candidate.Id))
             .OrderByDescending(result => result.Total)
             .ThenBy(result => result.Candidate.Title, StringComparer.Ordinal)
             .ToList();
@@ -1010,7 +1160,11 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
     }
 
     /// <inheritdoc />
-    public void Dispose() => _throttle.Dispose();
+    public void Dispose()
+    {
+        _throttle.Dispose();
+        _interactive.Dispose();
+    }
 
     /// <summary>
     /// Brings the local ThemerrDB copy up to date before a run if the scheduled task has not.
