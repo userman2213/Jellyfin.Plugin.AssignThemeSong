@@ -1,7 +1,40 @@
 <Project>
+
   <PropertyGroup>
-    <!-- Suppress package downgrade warnings since we must match Jellyfin's dependency versions -->
-    <MSBuildWarningAsErrors>$(MSBuildWarningAsErrors.Replace(';NU1605', ''))</MSBuildWarningAsErrors>
+    <TargetFrameworks>net9.0;net10.0</TargetFrameworks>
+    <!-- Pinned: under the .NET 10 SDK "latest" would mean C# 14 for both targets, and the code
+         was written and tested as C# 13. -->
+    <LangVersion>13</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+
+    <!-- Jellyfin pins its own versions of several transitive packages; a downgrade
+         warning here is expected and must not fail the build. -->
     <NoWarn>$(NoWarn);NU1605</NoWarn>
+
+    <ThemeForgeVersion>2.5.0.0</ThemeForgeVersion>
   </PropertyGroup>
+
+  <!--
+    One source tree, two Jellyfin lines. Jellyfin 10.11 runs on .NET 9 and Jellyfin 12 on .NET 10,
+    and the plugin SDK for each is published only for its own framework, so each inner build
+    picks its own SDK version and its own targetAbi. The 12 build carries a version one higher in
+    the last position: Jellyfin offers the highest version whose targetAbi the server satisfies,
+    and on a 12 server both builds qualify, so the two must never tie.
+  -->
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <JellyfinVersion>12.0.0</JellyfinVersion>
+    <ThemeForgeTargetAbi>12.0.0.0</ThemeForgeTargetAbi>
+    <ThemeForgePackageVersion>$([System.Text.RegularExpressions.Regex]::Replace('$(ThemeForgeVersion)', '\.\d+$', '.1'))</ThemeForgePackageVersion>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(TargetFramework)' != 'net10.0'">
+    <JellyfinVersion>10.11.0</JellyfinVersion>
+    <ThemeForgeTargetAbi>10.11.0.0</ThemeForgeTargetAbi>
+    <ThemeForgePackageVersion>$(ThemeForgeVersion)</ThemeForgePackageVersion>
+  </PropertyGroup>
+
 </Project>
