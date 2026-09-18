@@ -90,6 +90,53 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </remarks>
     public bool UsePlexThemeArchive { get; set; }
 
+    // ---- Music credits ----------------------------------------------------------
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the composer is looked up in public databases when
+    /// Jellyfin does not know it.
+    /// </summary>
+    /// <remarks>
+    /// Jellyfin records a composer for very few items, and without one three things quietly stop
+    /// working: the composer rung is dropped from the search ladder, the bonus for an upload that
+    /// names the composer never pays, and an ordinary title such as "Lost" has nothing to
+    /// corroborate it and is capped below the auto-assign band. The name is also the single most
+    /// specific thing a search can ask for. Looked up once per work and kept, so it costs a few
+    /// requests for a whole library and nothing thereafter.
+    /// </remarks>
+    public bool ResearchComposers { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether a daily task fills the composer cache for the
+    /// whole library.
+    /// </summary>
+    /// <remarks>
+    /// Turning it off does not disable the research; it means each run looks up only what it
+    /// happens to need, which spreads the same requests over the run instead of doing them up front.
+    /// </remarks>
+    public bool SyncComposers { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether MusicBrainz is asked about the works Wikidata could
+    /// not answer.
+    /// </summary>
+    /// <remarks>
+    /// Wikidata answers about three quarters of a library in a handful of requests. MusicBrainz
+    /// covers much of the rest, but it is one request per work at one per second, so it is the
+    /// slower half of the job and worth being able to switch off on its own. Only its lookup by
+    /// IMDb id is used: searching it by title returns the 1978 composer for a 2004 series.
+    /// </remarks>
+    public bool UseMusicBrainzForComposers { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets how old the composer cache may get before a run refreshes it itself.
+    /// </summary>
+    /// <remarks>
+    /// The scheduled task is the normal path. This is the safety net for a server that was off
+    /// when the task was due, and for a fresh install.
+    /// </remarks>
+    public int ComposerCacheMaxAgeDays { get; set; } = 7;
+
     // ---- Discovery -----------------------------------------------------------------
 
     /// <summary>Gets or sets how many results to pull per search query.</summary>

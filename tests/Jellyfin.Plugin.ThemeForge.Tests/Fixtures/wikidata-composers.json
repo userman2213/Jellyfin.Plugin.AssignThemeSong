@@ -1,0 +1,235 @@
+{
+  "head" : {
+    "vars" : [ "imdb", "tmdbFilm", "tmdbTv", "composerLabel", "performerLabel", "mbid" ]
+  },
+  "results" : {
+    "bindings" : [ {
+      "mbid" : {
+        "type" : "literal",
+        "value" : "e15b15c1-97e6-3f22-a21f-ec7c2498f604"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0078748"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Jerry Goldsmith"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Jerry Goldsmith"
+      }
+    }, {
+      "mbid" : {
+        "type" : "literal",
+        "value" : "e15b15c1-97e6-3f22-a21f-ec7c2498f604"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0078748"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Jerry Goldsmith"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Jerry Goldsmith"
+      },
+      "tmdbFilm" : {
+        "type" : "literal",
+        "value" : "348"
+      }
+    }, {
+      "mbid" : {
+        "type" : "literal",
+        "value" : "e15b15c1-97e6-3f22-a21f-ec7c2498f604"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0078748"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Jerry Goldsmith"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Jerry Goldsmith"
+      },
+      "tmdbFilm" : {
+        "type" : "literal",
+        "value" : "348"
+      }
+    }, {
+      "mbid" : {
+        "type" : "literal",
+        "value" : "e15b15c1-97e6-3f22-a21f-ec7c2498f604"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Jerry Goldsmith"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Jerry Goldsmith"
+      },
+      "tmdbFilm" : {
+        "type" : "literal",
+        "value" : "348"
+      }
+    }, {
+      "mbid" : {
+        "type" : "literal",
+        "value" : "22c73225-8a2e-4e92-a00e-68960dc1ff4a"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt1856101"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Benjamin Wallfisch"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Hans Zimmer"
+      }
+    }, {
+      "mbid" : {
+        "type" : "literal",
+        "value" : "22c73225-8a2e-4e92-a00e-68960dc1ff4a"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt1856101"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Benjamin Wallfisch"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Benjamin Wallfisch"
+      }
+    }, {
+      "mbid" : {
+        "type" : "literal",
+        "value" : "22c73225-8a2e-4e92-a00e-68960dc1ff4a"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt1856101"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Hans Zimmer"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Hans Zimmer"
+      }
+    }, {
+      "mbid" : {
+        "type" : "literal",
+        "value" : "22c73225-8a2e-4e92-a00e-68960dc1ff4a"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt1856101"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Hans Zimmer"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Benjamin Wallfisch"
+      }
+    }, {
+      "mbid" : {
+        "type" : "literal",
+        "value" : "8ebb38cc-5223-340c-a4a0-658075379d95"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0303461"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Greg Edmonson"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Greg Edmonson"
+      }
+    }, {
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0407362"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Bear McCreary"
+      }
+    }, {
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0407362"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Bear McCreary"
+      },
+      "tmdbTv" : {
+        "type" : "literal",
+        "value" : "1972"
+      }
+    }, {
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0407362"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Bear McCreary"
+      },
+      "tmdbTv" : {
+        "type" : "literal",
+        "value" : "1972"
+      }
+    }, {
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Bear McCreary"
+      },
+      "tmdbTv" : {
+        "type" : "literal",
+        "value" : "1972"
+      }
+    } ]
+  }
+}
