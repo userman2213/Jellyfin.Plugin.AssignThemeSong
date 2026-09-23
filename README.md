@@ -40,6 +40,10 @@ A Jellyfin plugin that allows you to download theme songs from YouTube or upload
 - 🖥️ **Headless Browser Fallback** - IMDb's bot check only clears in a real browser
   engine, so when a plain request is refused the page is rendered in headless Chrome.
   No extra dependency: the browser is launched as a process, like FFmpeg already is
+- ⬇️ **Self-Provisioning Browser** - If no browser is installed, the plugin downloads
+  Chrome for Testing into its own data folder. Nothing to install by hand
+- 🧪 **Built-in IMDb Test** - A button in the settings runs a real pull and reports each
+  step, so you can see whether your server can reach IMDb before relying on it
 - ⏳ **Backoff & Throttling** - Failed lookups are not retried daily, and requests are
   spaced out so a large library scan does not get the server rate limited
 
@@ -50,7 +54,9 @@ A Jellyfin plugin that allows you to download theme songs from YouTube or upload
 - **FFmpeg**: Must be installed on your Jellyfin server (usually bundled with Jellyfin)
 - **Internet Connection**: Required for YouTube downloads
 - **Chrome / Chromium** *(optional)*: Only for soundtrack lookups, when IMDb refuses
-  plain requests from your server. Everything else works without it
+  plain requests from your server. The plugin can download its own copy, so there is
+  usually nothing to install. Everything else works without it
+- **Disk space** *(optional)*: ~400 MB if the plugin downloads its own browser
 
 ## 🔧 Installation
 
@@ -140,15 +146,37 @@ FFmpeg, so there is no extra plugin dependency and no second copy of Chromium. T
 session is kept in the plugin's data folder, so the check only has to be cleared once:
 the first lookup takes roughly 15-20 seconds and later ones 5-10.
 
-If no browser is installed, lookups fall back to the plain request and the log says so.
-To install one on a Debian or Ubuntu server:
+#### Where the browser comes from
+
+The plugin looks for one in this order:
+
+1. The **Browser Path** you set in the settings
+2. A copy the plugin downloaded for itself, in its data folder
+3. Chrome, Chromium or Edge installed on the server
+
+If none is found and **Let the plugin download its own browser** is on, the plugin
+fetches Chrome for Testing for the server's platform (x64 and arm64 for Linux, macOS
+and Windows) into its data folder. That is a one-off download of roughly 150-200 MB,
+which expands to about 400 MB on disk. You can trigger it yourself from the settings
+with **Download browser**, and reclaim the space later with **Remove downloaded
+browser**.
+
+Installing one through the system instead works just as well:
 
 ```bash
 sudo apt install chromium          # or: chromium-browser
 ```
 
-For the official Jellyfin Docker image, either install Chromium into a derived image or
-point **Browser Path** at a browser mounted into the container.
+#### Testing it
+
+The settings page has a **Test IMDb pull** button. It runs a real lookup and shows each
+step — the direct request, whether a browser was needed, the render, and the parse —
+along with the tracks it read. Use it before relying on the soundtrack fallback.
+
+Worth knowing: IMDb's bot check is applied per IP address, and hosted or VPS servers get
+challenged much harder than home connections. On some servers the check will not clear
+even in a browser. The test button tells you which case you are in, and the rest of the
+plugin — ThemerrDB, manual assignment, uploads — is unaffected either way.
 
 ## 📁 File Structure
 
@@ -212,9 +240,12 @@ Access plugin settings in **Dashboard → Plugins → xThemeSong**:
 - **Retry a failed lookup after (days)**: Keeps the daily task from re-querying the same
   sources for items it could not match (default: 7; 0 retries every run)
 - **Use a headless browser for soundtrack listings**: Render the page in a real browser
-  when a plain request is refused (default: on). Needs Chrome, Chromium or Edge installed
+  when a plain request is refused (default: on)
+- **Let the plugin download its own browser**: Fetch Chrome for Testing when none is
+  installed (default: on). Roughly 150-200 MB, kept in the plugin's data folder
 - **Browser Path**: Path to the browser binary (leave empty to auto-detect)
-- **Browser timeout (seconds)**: How long to let a page render (default: 60)
+- **Browser timeout (seconds)**: How long to let a page render (default: 120). Clearing
+  the bot check on a cold profile can take over a minute; later renders take seconds
 - **Start the browser without its sandbox**: Chrome's sandbox cannot start inside most
   containers, so this defaults to on. Turn it off if Jellyfin runs outside a container
 - **Browser User-Agent**: Sent with every outbound request, including to the headless

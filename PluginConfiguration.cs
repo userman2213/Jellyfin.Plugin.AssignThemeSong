@@ -107,6 +107,13 @@ namespace Jellyfin.Plugin.xThemeSong
         public bool UseBrowserForSoundtrack { get; set; } = true;
 
         /// <summary>
+        /// Gets or sets a value indicating whether the plugin may download its own copy
+        /// of Chrome when none is installed. The download is roughly 150-200 MB and is
+        /// kept in the plugin's data folder.
+        /// </summary>
+        public bool AutoDownloadBrowser { get; set; } = true;
+
+        /// <summary>
         /// Gets or sets the path to a Chrome, Chromium or Edge binary.
         /// Leave empty to auto-detect.
         /// </summary>
@@ -114,8 +121,10 @@ namespace Jellyfin.Plugin.xThemeSong
 
         /// <summary>
         /// Gets or sets how long to let the browser render a page, in seconds.
+        /// Clearing the bot check on a cold profile has been measured at over a minute,
+        /// so this is generous; once the profile is warm a render takes a few seconds.
         /// </summary>
-        public int BrowserTimeoutSeconds { get; set; } = 60;
+        public int BrowserTimeoutSeconds { get; set; } = 120;
 
         /// <summary>
         /// Gets or sets a value indicating whether to start the browser with its own

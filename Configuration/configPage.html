@@ -160,7 +160,7 @@
                                 <input id="BrowserTimeoutSeconds" name="BrowserTimeoutSeconds" type="number" is="emby-input" min="10" max="300" step="5" />
                                 <div class="fieldDescription">
                                     How long to let a page render. The first lookup takes longest; later ones reuse the
-                                    stored session and are quicker (default: 60)
+                                    stored session and are quicker (default: 120)
                                 </div>
                             </div>
 
@@ -175,12 +175,54 @@
                                 </div>
                             </div>
 
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label class="emby-checkbox-label">
+                                    <input id="AutoDownloadBrowser" name="AutoDownloadBrowser" type="checkbox" is="emby-checkbox" />
+                                    <span>Let the plugin download its own browser</span>
+                                </label>
+                                <div class="fieldDescription checkboxFieldDescription">
+                                    When no browser is installed, download Chrome for Testing into the plugin's data
+                                    folder (a one-off download of roughly 150-200 MB).
+                                </div>
+                            </div>
+
                             <div class="inputContainer">
                                 <label class="inputLabel inputLabelUnfocused" for="UserAgent">Browser User-Agent</label>
                                 <input id="UserAgent" name="UserAgent" type="text" is="emby-input" placeholder="Leave empty for the built-in Chrome user agent" />
                                 <div class="fieldDescription">
                                     Sent with every outbound web request. Some sources refuse requests that do not look like a browser.
                                 </div>
+                            </div>
+
+                            <div class="verticalSection" style="margin-top: 1.5em; padding: 1em; background: #1a1a1a; border-radius: 8px;">
+                                <h4 style="margin: 0 0 0.5em 0; color: #00a4dc;">Test the IMDb soundtrack pull</h4>
+                                <div class="fieldDescription" style="margin-bottom: 1em;">
+                                    Runs a real lookup against IMDb and reports each step, so you can see whether this
+                                    server can reach it and whether the headless browser is needed. Save your settings
+                                    first. The first run may take a minute if a browser has to be downloaded.
+                                </div>
+
+                                <div class="inputContainer">
+                                    <label class="inputLabel inputLabelUnfocused" for="TestImdbId">IMDb ID to test</label>
+                                    <input id="TestImdbId" type="text" is="emby-input" placeholder="tt0137523" value="tt0137523" />
+                                </div>
+
+                                <div style="display: flex; gap: 0.5em; flex-wrap: wrap;">
+                                    <button type="button" id="btnTestImdb" class="raised button-submit emby-button" is="emby-button">
+                                        <span>Test IMDb pull</span>
+                                    </button>
+                                    <button type="button" id="btnCheckBrowser" class="raised emby-button" is="emby-button">
+                                        <span>Check browser</span>
+                                    </button>
+                                    <button type="button" id="btnInstallBrowser" class="raised emby-button" is="emby-button">
+                                        <span>Download browser</span>
+                                    </button>
+                                    <button type="button" id="btnRemoveBrowser" class="raised emby-button" is="emby-button">
+                                        <span>Remove downloaded browser</span>
+                                    </button>
+                                </div>
+
+                                <div id="imdbTestResults" style="display: none; margin-top: 1em;"></div>
                             </div>
 
                             <br />
@@ -443,8 +485,9 @@
                         document.querySelector('#MaxSoundtrackCandidates').value = config.MaxSoundtrackCandidates || 10;
                         document.querySelector('#LookupRetryDays').value = (config.LookupRetryDays !== undefined && config.LookupRetryDays !== null) ? config.LookupRetryDays : 7;
                         document.querySelector('#UseBrowserForSoundtrack').checked = config.UseBrowserForSoundtrack !== false;
+                        document.querySelector('#AutoDownloadBrowser').checked = config.AutoDownloadBrowser !== false;
                         document.querySelector('#BrowserPath').value = config.BrowserPath || '';
-                        document.querySelector('#BrowserTimeoutSeconds').value = config.BrowserTimeoutSeconds || 60;
+                        document.querySelector('#BrowserTimeoutSeconds').value = config.BrowserTimeoutSeconds || 120;
                         document.querySelector('#BrowserDisableSandbox').checked = config.BrowserDisableSandbox !== false;
                         document.querySelector('#UserAgent').value = config.UserAgent || '';
                         Dashboard.hideLoadingMsg();
@@ -468,8 +511,9 @@
                         var retryDays = parseInt(document.querySelector('#LookupRetryDays').value);
                         config.LookupRetryDays = isNaN(retryDays) ? 7 : retryDays;
                         config.UseBrowserForSoundtrack = document.querySelector('#UseBrowserForSoundtrack').checked;
+                        config.AutoDownloadBrowser = document.querySelector('#AutoDownloadBrowser').checked;
                         config.BrowserPath = document.querySelector('#BrowserPath').value.trim() || null;
-                        config.BrowserTimeoutSeconds = parseInt(document.querySelector('#BrowserTimeoutSeconds').value) || 60;
+                        config.BrowserTimeoutSeconds = parseInt(document.querySelector('#BrowserTimeoutSeconds').value) || 120;
                         config.BrowserDisableSandbox = document.querySelector('#BrowserDisableSandbox').checked;
                         config.UserAgent = document.querySelector('#UserAgent').value.trim() || null;
 
@@ -585,6 +629,146 @@
                     div.textContent = text;
                     return div.innerHTML;
                 }
+
+                // ---- IMDb / headless browser diagnostics ----
+
+                function diagBox(html, colour) {
+                    var box = document.getElementById('imdbTestResults');
+                    box.style.display = 'block';
+                    box.innerHTML = '<div style="padding: 1em; background: #111; border-radius: 6px; ' +
+                        'border-left: 4px solid ' + colour + ';">' + html + '</div>';
+                }
+
+                function diagBusy(message) {
+                    diagBox('<p style="margin: 0; color: #ccc;">' + escapeHtml(message) + '</p>', '#00a4dc');
+                }
+
+                function diagApi(path, method) {
+                    return fetch(ApiClient.getUrl('xThemeSong/diagnostics/' + path), {
+                        method: method,
+                        headers: { 'X-Emby-Token': ApiClient.accessToken() }
+                    }).then(function(response) {
+                        if (!response.ok) {
+                            throw new Error('Request failed with status ' + response.status);
+                        }
+                        return response.json();
+                    });
+                }
+
+                function withBusyButton(button, busyText, work) {
+                    var original = button.querySelector('span') ? button.querySelector('span').textContent : button.textContent;
+                    var label = button.querySelector('span') || button;
+                    label.textContent = busyText;
+                    button.disabled = true;
+                    return work().catch(function(error) {
+                        diagBox('<p style="margin: 0; color: #f44336;">' + escapeHtml(error.message) + '</p>', '#f44336');
+                    }).then(function() {
+                        label.textContent = original;
+                        button.disabled = false;
+                    });
+                }
+
+                function renderBrowserStatus(status) {
+                    var rows = '<h4 style="margin: 0 0 0.5em 0;">Browser</h4><ul style="margin: 0; padding-left: 1.2em; color: #ccc;">';
+                    rows += '<li>Available: <strong>' + (status.available ? 'yes' : 'no') + '</strong></li>';
+                    rows += '<li>Source: ' + escapeHtml(status.source || 'none') + '</li>';
+                    if (status.version) rows += '<li>Version: ' + escapeHtml(status.version) + '</li>';
+                    if (status.path) rows += '<li>Path: <code>' + escapeHtml(status.path) + '</code></li>';
+                    rows += '<li>Platform: ' + escapeHtml(status.platform || 'unsupported') + '</li>';
+                    rows += '<li>Automatic download: ' + (status.autoDownloadEnabled ? 'on' : 'off') + '</li>';
+                    rows += '</ul>';
+                    if (!status.available) {
+                        rows += '<p style="margin: 0.8em 0 0 0; color: #ff9800;">No browser yet. ' +
+                                'Use <strong>Download browser</strong>, or install Chrome or Chromium on the server.</p>';
+                    }
+                    diagBox(rows, status.available ? '#4caf50' : '#ff9800');
+                }
+
+                function renderImdbTest(result) {
+                    var colour = result.success ? '#4caf50' : '#f44336';
+                    var html = '<h4 style="margin: 0 0 0.5em 0; color: ' + colour + ';">' +
+                               (result.success ? 'IMDb pull works' : 'IMDb pull did not succeed') + '</h4>';
+                    html += '<p style="margin: 0 0 0.8em 0; color: #ccc;">' + escapeHtml(result.summary) + '</p>';
+
+                    html += '<table style="width: 100%; border-collapse: collapse; margin-bottom: 0.8em;">';
+                    html += '<thead><tr style="color: #888; text-align: left;">' +
+                            '<th style="padding: 4px 8px;">Step</th><th style="padding: 4px 8px;">Result</th>' +
+                            '<th style="padding: 4px 8px; text-align: right;">Time</th></tr></thead><tbody>';
+                    (result.steps || []).forEach(function(step) {
+                        html += '<tr style="border-top: 1px solid #222;">';
+                        html += '<td style="padding: 4px 8px; color: ' + (step.ok ? '#4caf50' : '#f44336') + ';">' +
+                                (step.ok ? '\u2713' : '\u2717') + ' ' + escapeHtml(step.name) + '</td>';
+                        html += '<td style="padding: 4px 8px; color: #ccc;">' + escapeHtml(step.detail) + '</td>';
+                        html += '<td style="padding: 4px 8px; text-align: right; color: #888;">' +
+                                (step.elapsedMs / 1000).toFixed(1) + 's</td>';
+                        html += '</tr>';
+                    });
+                    html += '</tbody></table>';
+
+                    if (result.browserPath) {
+                        html += '<p style="margin: 0 0 0.8em 0; color: #888;">Browser (' +
+                                escapeHtml(result.browserSource || '') + '): <code>' +
+                                escapeHtml(result.browserPath) + '</code>' +
+                                (result.browserVersion ? ' &mdash; ' + escapeHtml(result.browserVersion) : '') + '</p>';
+                    }
+
+                    if (result.tracks && result.tracks.length) {
+                        html += '<h4 style="margin: 0 0 0.4em 0;">Tracks pulled (' + result.tracks.length + ')</h4>';
+                        html += '<ul style="margin: 0; padding-left: 1.2em; color: #ccc;">';
+                        result.tracks.slice(0, 10).forEach(function(track) {
+                            html += '<li>' + escapeHtml(track.Title || '') +
+                                    (track.Performer ? ' <span style="color:#888;">&mdash; ' +
+                                     escapeHtml(track.Performer) + '</span>' : '') + '</li>';
+                        });
+                        html += '</ul>';
+                    }
+
+                    html += '<p style="margin: 0.8em 0 0 0; color: #888;">Total ' +
+                            (result.elapsedMs / 1000).toFixed(1) + 's</p>';
+                    diagBox(html, colour);
+                }
+
+                document.querySelector('#btnTestImdb').addEventListener('click', function() {
+                    var button = this;
+                    var imdbId = (document.querySelector('#TestImdbId').value || '').trim();
+                    diagBusy('Running the lookup. If a browser has to be downloaded first this can take a few minutes...');
+                    withBusyButton(button, 'Testing...', function() {
+                        return diagApi('imdb-test' + (imdbId ? '?imdbId=' + encodeURIComponent(imdbId) : ''), 'POST')
+                            .then(renderImdbTest);
+                    });
+                });
+
+                document.querySelector('#btnCheckBrowser').addEventListener('click', function() {
+                    var button = this;
+                    withBusyButton(button, 'Checking...', function() {
+                        return diagApi('browser', 'GET').then(renderBrowserStatus);
+                    });
+                });
+
+                document.querySelector('#btnInstallBrowser').addEventListener('click', function() {
+                    var button = this;
+                    diagBusy('Downloading Chrome (roughly 150-200 MB). This runs on the server and may take a few minutes...');
+                    withBusyButton(button, 'Downloading...', function() {
+                        return diagApi('browser/install', 'POST').then(function(result) {
+                            diagBox('<p style="margin: 0; color: ' + (result.success ? '#4caf50' : '#f44336') + ';">' +
+                                escapeHtml(result.message || '') + '</p>' +
+                                (result.path ? '<p style="margin: 0.5em 0 0 0; color: #888;"><code>' +
+                                 escapeHtml(result.path) + '</code></p>' : '') +
+                                (result.downloadedMb ? '<p style="margin: 0.5em 0 0 0; color: #888;">Downloaded ' +
+                                 result.downloadedMb + ' MB</p>' : ''),
+                                result.success ? '#4caf50' : '#f44336');
+                        });
+                    });
+                });
+
+                document.querySelector('#btnRemoveBrowser').addEventListener('click', function() {
+                    var button = this;
+                    withBusyButton(button, 'Removing...', function() {
+                        return diagApi('browser', 'DELETE').then(function(result) {
+                            diagBox('<p style="margin: 0; color: #ccc;">' + escapeHtml(result.message || '') + '</p>', '#00a4dc');
+                        });
+                    });
+                });
 
                 // Runs the automatic lookup for one item: ThemerrDB, then the soundtrack listing.
                 window.xThemeSongLookup = function(itemId, button) {

@@ -15,6 +15,7 @@ namespace Jellyfin.Plugin.xThemeSong
         public void RegisterServices(IServiceCollection serviceCollection, IServerApplicationHost applicationHost)
         {
             serviceCollection.AddSingleton<BrowserHttpClient>();
+            serviceCollection.AddSingleton<ChromiumProvisioner>();
             serviceCollection.AddSingleton<BrowserPageFetcher>();
             serviceCollection.AddSingleton<LookupRetryCache>();
             serviceCollection.AddSingleton<ThemerrDbService>();

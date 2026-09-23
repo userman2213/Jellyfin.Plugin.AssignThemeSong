@@ -43,6 +43,7 @@ namespace Jellyfin.Plugin.xThemeSong.Services
         private static readonly TimeSpan ProfileReleaseDelay = TimeSpan.FromSeconds(2);
 
         private readonly ILogger<BrowserPageFetcher> _logger;
+        private readonly ChromiumProvisioner _provisioner;
 
         /// <summary>
         /// Chrome refuses to run two instances against one profile directory, and the
@@ -53,9 +54,10 @@ namespace Jellyfin.Plugin.xThemeSong.Services
         private string? _resolvedBrowserPath;
         private bool _browserSearchFailed;
 
-        public BrowserPageFetcher(ILogger<BrowserPageFetcher> logger)
+        public BrowserPageFetcher(ILogger<BrowserPageFetcher> logger, ChromiumProvisioner provisioner)
         {
             _logger = logger;
+            _provisioner = provisioner;
         }
 
         /// <summary>
@@ -64,10 +66,10 @@ namespace Jellyfin.Plugin.xThemeSong.Services
         public bool IsAvailable => ResolveBrowserPath() != null;
 
         /// <summary>
-        /// Locates a Chrome or Chromium binary, preferring the configured path.
-        /// Mirrors how the plugin locates FFmpeg.
+        /// Locates a browser, in order: the configured path, the copy the plugin
+        /// downloaded for itself, then a system installation.
         /// </summary>
-        private string? ResolveBrowserPath()
+        public string? ResolveBrowserPath()
         {
             var configuredPath = Plugin.Instance?.Configuration?.BrowserPath;
             if (!string.IsNullOrWhiteSpace(configuredPath))
@@ -80,6 +82,14 @@ namespace Jellyfin.Plugin.xThemeSong.Services
                 _logger.LogWarning(
                     "Configured browser path does not exist: {Path}. Falling back to auto-detection.",
                     configuredPath);
+            }
+
+            // The plugin's own install is preferred over a system one: it is a known
+            // full Chrome build, where a distribution package may be a cut-down variant.
+            var managed = _provisioner.FindInstalledBrowser();
+            if (managed != null)
+            {
+                return managed;
             }
 
             if (_resolvedBrowserPath != null)
@@ -103,11 +113,59 @@ namespace Jellyfin.Plugin.xThemeSong.Services
             }
 
             _browserSearchFailed = true;
-            _logger.LogInformation(
-                "No Chrome or Chromium installation found. Soundtrack lookups will use plain HTTP "
-                + "requests, which IMDb may refuse. Install Chromium, or set a browser path in the "
-                + "plugin settings, to make them reliable.");
             return null;
+        }
+
+        /// <summary>
+        /// Says where the browser in use came from, for the settings page.
+        /// </summary>
+        public string DescribeBrowserSource()
+        {
+            var configuredPath = Plugin.Instance?.Configuration?.BrowserPath;
+            if (!string.IsNullOrWhiteSpace(configuredPath) && File.Exists(configuredPath))
+            {
+                return "configured path";
+            }
+
+            if (_provisioner.FindInstalledBrowser() != null)
+            {
+                return "downloaded by the plugin";
+            }
+
+            return ResolveBrowserPath() != null ? "installed on the server" : "none";
+        }
+
+        /// <summary>
+        /// Gets a browser, downloading one first when none is present and the plugin is
+        /// allowed to. Returns null when none could be provided.
+        /// </summary>
+        public async Task<string?> EnsureBrowserAsync(CancellationToken cancellationToken)
+        {
+            var existing = ResolveBrowserPath();
+            if (existing != null)
+            {
+                return existing;
+            }
+
+            if (!(Plugin.Instance?.Configuration?.AutoDownloadBrowser ?? true))
+            {
+                _logger.LogWarning(
+                    "No browser is available and automatic download is switched off. Install Chrome "
+                    + "or Chromium, set a browser path, or enable the download in the plugin settings.");
+                return null;
+            }
+
+            var result = await _provisioner.EnsureInstalledAsync(cancellationToken).ConfigureAwait(false);
+
+            if (!result.Success)
+            {
+                _logger.LogWarning("Could not provide a browser: {Error}", result.Error);
+                return null;
+            }
+
+            // A fresh install invalidates the "nothing found" short circuit.
+            _browserSearchFailed = false;
+            return result.ExecutablePath;
         }
 
         /// <summary>
@@ -168,7 +226,7 @@ namespace Jellyfin.Plugin.xThemeSong.Services
             Func<string, bool>? looksComplete,
             CancellationToken cancellationToken)
         {
-            var browserPath = ResolveBrowserPath();
+            var browserPath = await EnsureBrowserAsync(cancellationToken).ConfigureAwait(false);
             if (browserPath == null)
             {
                 return null;
@@ -378,6 +436,47 @@ namespace Jellyfin.Plugin.xThemeSong.Services
             catch (Exception ex)
             {
                 _logger.LogDebug(ex, "Could not stop the browser process");
+            }
+        }
+
+        /// <summary>
+        /// Reads the browser's version string, for the settings page.
+        /// </summary>
+        public async Task<string?> GetBrowserVersionAsync(CancellationToken cancellationToken)
+        {
+            var browserPath = ResolveBrowserPath();
+            if (browserPath == null)
+            {
+                return null;
+            }
+
+            try
+            {
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = browserPath,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+                startInfo.ArgumentList.Add("--version");
+
+                using var process = new Process { StartInfo = startInfo };
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                timeout.CancelAfter(TimeSpan.FromSeconds(20));
+
+                process.Start();
+                var output = await process.StandardOutput.ReadToEndAsync(timeout.Token).ConfigureAwait(false);
+                await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
+
+                var version = output.Trim();
+                return string.IsNullOrEmpty(version) ? null : version;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Could not read the browser version");
+                return null;
             }
         }
 

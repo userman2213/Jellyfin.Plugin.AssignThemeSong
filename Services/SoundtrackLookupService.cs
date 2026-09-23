@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Text.Json;
@@ -199,6 +200,153 @@ namespace Jellyfin.Plugin.xThemeSong.Services
 
             _logger.LogInformation("Found {Count} soundtrack entries for {ImdbId}", tracks.Count, imdbId);
             return tracks;
+        }
+
+        /// <summary>
+        /// Runs a soundtrack pull step by step and reports what each step did, so the
+        /// settings page can show an administrator whether their server can reach IMDb
+        /// and, when it cannot, which stage failed.
+        /// </summary>
+        /// <param name="imdbId">The IMDb ID to test with.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        public async Task<SoundtrackDiagnostic> RunDiagnosticAsync(
+            string imdbId,
+            CancellationToken cancellationToken)
+        {
+            var diagnostic = new SoundtrackDiagnostic { ImdbId = imdbId };
+            var total = Stopwatch.StartNew();
+
+            var titleUrl = $"{ImdbBaseUrl}/title/{imdbId}/";
+            var soundtrackUrl = $"{titleUrl}soundtrack/";
+
+            // Step 1: the plain HTTP request, which is all a permissive network needs.
+            var step = Stopwatch.StartNew();
+            var direct = await _httpClient
+                .GetPageAsync(soundtrackUrl, expectJson: false, referer: titleUrl, cancellationToken)
+                .ConfigureAwait(false);
+            step.Stop();
+
+            string? html = direct.Body;
+            diagnostic.Steps.Add(new DiagnosticStep
+            {
+                Name = "Direct HTTP request",
+                Ok = !string.IsNullOrEmpty(direct.Body),
+                ElapsedMs = step.ElapsedMilliseconds,
+                Detail = !string.IsNullOrEmpty(direct.Body)
+                    ? $"IMDb returned the page ({direct.Body!.Length:N0} bytes)"
+                    : direct.Blocked
+                        ? "IMDb refused the request or answered with a bot check"
+                        : "IMDb returned nothing usable"
+            });
+
+            // Step 2: the browser, only needed when the direct request was refused.
+            if (string.IsNullOrEmpty(html) && direct.Blocked)
+            {
+                step = Stopwatch.StartNew();
+                var browserPath = await _browser.EnsureBrowserAsync(cancellationToken).ConfigureAwait(false);
+                step.Stop();
+
+                diagnostic.BrowserPath = browserPath;
+                diagnostic.BrowserSource = _browser.DescribeBrowserSource();
+
+                diagnostic.Steps.Add(new DiagnosticStep
+                {
+                    Name = "Browser available",
+                    Ok = browserPath != null,
+                    ElapsedMs = step.ElapsedMilliseconds,
+                    Detail = browserPath != null
+                        ? $"Using the browser {diagnostic.BrowserSource} at {browserPath}"
+                        : "No browser could be found or downloaded"
+                });
+
+                if (browserPath != null)
+                {
+                    diagnostic.BrowserVersion = await _browser
+                        .GetBrowserVersionAsync(cancellationToken).ConfigureAwait(false);
+
+                    step = Stopwatch.StartNew();
+                    html = await _browser
+                        .GetRenderedHtmlAsync(
+                            soundtrackUrl,
+                            BrowserHttpClient.GetUserAgent(),
+                            HasSoundtrackMarkup,
+                            cancellationToken)
+                        .ConfigureAwait(false);
+                    step.Stop();
+
+                    diagnostic.Steps.Add(new DiagnosticStep
+                    {
+                        Name = "Browser render",
+                        Ok = !string.IsNullOrEmpty(html),
+                        ElapsedMs = step.ElapsedMilliseconds,
+                        Detail = !string.IsNullOrEmpty(html)
+                            ? $"Rendered the page ({html!.Length:N0} bytes)"
+                            : "The browser ran but IMDb's bot check did not clear"
+                    });
+                }
+            }
+
+            // Step 3: parsing.
+            if (!string.IsNullOrEmpty(html))
+            {
+                step = Stopwatch.StartNew();
+                diagnostic.Tracks = ParseTracks(html!);
+                step.Stop();
+
+                diagnostic.Steps.Add(new DiagnosticStep
+                {
+                    Name = "Parse soundtrack",
+                    Ok = diagnostic.Tracks.Count > 0,
+                    ElapsedMs = step.ElapsedMilliseconds,
+                    Detail = diagnostic.Tracks.Count > 0
+                        ? $"Read {diagnostic.Tracks.Count} track(s)"
+                        : "The page loaded but listed no tracks"
+                });
+            }
+
+            total.Stop();
+            diagnostic.ElapsedMs = total.ElapsedMilliseconds;
+            diagnostic.Success = diagnostic.Tracks.Count > 0;
+            diagnostic.BrowserSource ??= _browser.DescribeBrowserSource();
+            diagnostic.Summary = BuildSummary(diagnostic);
+
+            return diagnostic;
+        }
+
+        /// <summary>
+        /// Turns the steps into one line an administrator can act on.
+        /// </summary>
+        private static string BuildSummary(SoundtrackDiagnostic diagnostic)
+        {
+            if (diagnostic.Success)
+            {
+                var viaBrowser = diagnostic.Steps.Exists(s => s.Name == "Browser render" && s.Ok);
+                return viaBrowser
+                    ? $"Working. Pulled {diagnostic.Tracks.Count} tracks from IMDb using the headless browser."
+                    : $"Working. Pulled {diagnostic.Tracks.Count} tracks from IMDb with a direct request, "
+                      + "so no browser was needed.";
+            }
+
+            var browserStep = diagnostic.Steps.Find(s => s.Name == "Browser available");
+            if (browserStep != null && !browserStep.Ok)
+            {
+                return "IMDb refused a direct request and no browser is available. Install one with "
+                     + "the button above, or set a browser path in the settings.";
+            }
+
+            if (diagnostic.Steps.Exists(s => s.Name == "Browser render" && !s.Ok))
+            {
+                return "IMDb refused a direct request and its bot check did not clear in the browser "
+                     + "either. This usually means IMDb is challenging this server's IP address; it is "
+                     + "common on hosted or VPS servers and rare on a home connection.";
+            }
+
+            if (diagnostic.Tracks.Count == 0 && diagnostic.Steps.Exists(s => s.Name == "Parse soundtrack"))
+            {
+                return "IMDb served the page but it lists no soundtrack entries for this title.";
+            }
+
+            return "The lookup did not complete. See the steps above.";
         }
 
         /// <summary>
