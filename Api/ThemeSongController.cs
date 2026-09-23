@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Security.Claims;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Data;
 using Jellyfin.Data.Enums;
@@ -28,17 +29,23 @@ namespace Jellyfin.Plugin.xThemeSong.Api
         private readonly ILogger<ThemeSongController> _logger;
         private readonly ILibraryManager _libraryManager;
         private readonly ThemeDownloadService _themeDownloadService;
+        private readonly ThemeResolverService _themeResolverService;
+        private readonly LookupRetryCache _retryCache;
         private readonly IUserManager _userManager;
 
         public ThemeSongController(
             ILogger<ThemeSongController> logger,
             ILibraryManager libraryManager,
             ThemeDownloadService themeDownloadService,
+            ThemeResolverService themeResolverService,
+            LookupRetryCache retryCache,
             IUserManager userManager)
         {
             _logger = logger;
             _libraryManager = libraryManager;
             _themeDownloadService = themeDownloadService;
+            _themeResolverService = themeResolverService;
+            _retryCache = retryCache;
             _userManager = userManager;
         }
 
@@ -530,9 +537,11 @@ namespace Jellyfin.Plugin.xThemeSong.Api
                     };
                 }
 
-                // Update YouTube URL
+                // Update YouTube URL. A hand-entered URL is no longer whatever the
+                // automatic lookup found, so the recorded source is cleared with it.
                 metadata.YouTubeUrl = request.YouTubeUrl;
                 metadata.DateModified = DateTime.UtcNow;
+                metadata.Source = null;
 
                 // Extract video ID from URL
                 if (!string.IsNullOrEmpty(request.YouTubeUrl))
@@ -556,6 +565,105 @@ namespace Jellyfin.Plugin.xThemeSong.Api
                 _logger.LogError(ex, "Error saving YouTube URL for {ItemName}", item.Name);
                 return StatusCode(500, $"Error: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// Looks up a theme song for an item: ThemerrDB first, then the soundtrack
+        /// listing for the title. Always runs a fresh lookup, ignoring the retry
+        /// back-off the scheduled task uses.
+        /// </summary>
+        /// <param name="itemId">The media item to look up.</param>
+        /// <param name="download">
+        /// When true, download the theme that was found. When false, only record it
+        /// in theme.json so it can be reviewed before downloading.
+        /// </param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        [HttpPost("{itemId}/lookup")]
+        public async Task<ActionResult<ThemeLookupResult>> LookupThemeSong(
+            [FromRoute] string itemId,
+            [FromQuery] bool download,
+            CancellationToken cancellationToken)
+        {
+            var item = _libraryManager.GetItemById(itemId);
+            if (item == null)
+            {
+                return NotFound($"Item {itemId} not found");
+            }
+
+            if (!HasThemeManagementPermission(item))
+            {
+                return Forbid();
+            }
+
+            var itemDirectory = GetThemeDirectory(item);
+            if (string.IsNullOrEmpty(itemDirectory))
+            {
+                return BadRequest("Could not determine item directory");
+            }
+
+            var config = GetConfiguration();
+
+            try
+            {
+                var lookup = await _themeResolverService.ResolveAsync(item, config, cancellationToken);
+
+                if (!lookup.HasTheme)
+                {
+                    _logger.LogInformation("Lookup found no theme song for {ItemName}", item.Name);
+                    return Ok(lookup);
+                }
+
+                // A manual lookup that succeeded clears any earlier back-off.
+                _retryCache.Clear(item.Id);
+
+                if (download)
+                {
+                    await _themeDownloadService.DownloadFromYouTube(
+                        lookup.YouTubeId!,
+                        itemDirectory,
+                        config.AudioBitrate,
+                        cancellationToken,
+                        lookup);
+                }
+                else
+                {
+                    SaveLookupMetadata(lookup, Path.Combine(itemDirectory, "theme.json"));
+                }
+
+                return Ok(lookup);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Theme lookup failed for {ItemName}", item.Name);
+                return StatusCode(500, $"Error: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Writes a lookup result to theme.json without downloading any audio.
+        /// </summary>
+        private void SaveLookupMetadata(ThemeLookupResult lookup, string themeJsonPath)
+        {
+            var now = DateTime.UtcNow;
+            var metadata = new ThemeMetadata
+            {
+                YouTubeId = lookup.YouTubeId,
+                YouTubeUrl = lookup.YouTubeUrl,
+                Title = lookup.Title,
+                DateAdded = now,
+                DateModified = now,
+                IsUserUploaded = false,
+                Source = lookup.Source.ToString(),
+                ImdbId = lookup.ImdbId,
+                Soundtrack = lookup.Soundtrack.Count > 0 ? lookup.Soundtrack : null
+            };
+
+            var json = JsonSerializer.Serialize(metadata, new JsonSerializerOptions { WriteIndented = true });
+            System.IO.File.WriteAllText(themeJsonPath, json);
         }
 
         /// <summary>

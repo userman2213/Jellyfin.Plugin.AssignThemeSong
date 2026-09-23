@@ -26,15 +26,21 @@ namespace Jellyfin.Plugin.xThemeSong
         private readonly ILogger<ThemeSongTask> _logger;
         private readonly ILibraryManager _libraryManager;
         private readonly ThemeDownloadService _downloadService;
+        private readonly ThemeResolverService _resolverService;
+        private readonly LookupRetryCache _retryCache;
 
         public ThemeSongTask(
             ILogger<ThemeSongTask> logger,
             ILibraryManager libraryManager,
-            ThemeDownloadService downloadService)
+            ThemeDownloadService downloadService,
+            ThemeResolverService resolverService,
+            LookupRetryCache retryCache)
         {
             _logger = logger;
             _libraryManager = libraryManager;
             _downloadService = downloadService;
+            _resolverService = resolverService;
+            _retryCache = retryCache;
         }
 
         /// <summary>
@@ -151,9 +157,10 @@ namespace Jellyfin.Plugin.xThemeSong
 
             _logger.LogInformation($"Attempting to assign theme song for {item.Name}.");
 
+            // No theme.json means nothing has been assigned yet, so look one up.
             if (!File.Exists(themeJsonPath))
             {
-                _logger.LogInformation($"No theme.json found for {item.Name}, skipping.");
+                await LookupAndAssignTheme(item, itemDirectory, themeJsonPath, config, cancellationToken);
                 return;
             }
 
@@ -176,7 +183,22 @@ namespace Jellyfin.Plugin.xThemeSong
 
                 if (string.IsNullOrEmpty(themeMetadata.YouTubeId))
                 {
-                    _logger.LogWarning("No YouTube ID found for {ItemName} in theme.json, skipping.", item.Name);
+                    _logger.LogInformation(
+                        "theme.json for {ItemName} has no YouTube ID, looking one up.", item.Name);
+                    await LookupAndAssignTheme(item, itemDirectory, themeJsonPath, config, cancellationToken);
+                    return;
+                }
+
+                // A theme recorded by the automatic lookup is only downloaded when the
+                // user has asked for that. Without this the "record but do not download"
+                // setting would just postpone the download to the next run.
+                if (!config.AutoDownloadFoundThemes && IsAutomaticSource(themeMetadata.Source))
+                {
+                    _logger.LogInformation(
+                        "Theme song for {ItemName} was found automatically ({Source}) and automatic "
+                        + "downloading is off; leaving it for review.",
+                        item.Name,
+                        themeMetadata.Source);
                     return;
                 }
 
@@ -208,6 +230,150 @@ namespace Jellyfin.Plugin.xThemeSong
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error processing theme song for {ItemName}", item.Name);
+            }
+        }
+
+        /// <summary>
+        /// Tells an automatically found theme apart from one the user entered by hand,
+        /// which has no source recorded.
+        /// </summary>
+        private static bool IsAutomaticSource(string? source)
+        {
+            return Enum.TryParse<ThemeLookupSource>(source, out var parsed)
+                && parsed != ThemeLookupSource.None;
+        }
+
+        /// <summary>
+        /// Runs the automatic lookup chain for an item and records what it found.
+        /// ThemerrDB is tried first; a soundtrack listing is the fallback.
+        /// </summary>
+        private async Task LookupAndAssignTheme(
+            BaseItem item,
+            string itemDirectory,
+            string themeJsonPath,
+            PluginConfiguration config,
+            CancellationToken cancellationToken)
+        {
+            if (!config.EnableThemerrDb && !config.EnableSoundtrackFallback)
+            {
+                _logger.LogDebug("Automatic theme lookup is disabled, skipping {ItemName}.", item.Name);
+                return;
+            }
+
+            if (_retryCache.ShouldSkip(item.Id, config.LookupRetryDays))
+            {
+                _logger.LogDebug(
+                    "A recent lookup for {ItemName} found nothing, not retrying yet.", item.Name);
+                return;
+            }
+
+            ThemeLookupResult lookup;
+            try
+            {
+                lookup = await _resolverService.ResolveAsync(item, config, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Theme lookup failed for {ItemName}", item.Name);
+                _retryCache.RecordFailure(item.Id);
+                return;
+            }
+
+            if (!lookup.HasTheme)
+            {
+                _logger.LogInformation("No theme song found for {ItemName}.", item.Name);
+                _retryCache.RecordFailure(item.Id);
+
+                // Keep a soundtrack listing even without a match, so the listing does
+                // not have to be fetched again when the user picks a theme by hand.
+                if (lookup.Soundtrack.Count > 0)
+                {
+                    await SaveLookupMetadata(lookup, themeJsonPath, cancellationToken);
+                }
+
+                return;
+            }
+
+            _retryCache.Clear(item.Id);
+
+            if (!config.AutoDownloadFoundThemes)
+            {
+                _logger.LogInformation(
+                    "Recording theme song {Url} for {ItemName} without downloading it.",
+                    lookup.YouTubeUrl,
+                    item.Name);
+                await SaveLookupMetadata(lookup, themeJsonPath, cancellationToken);
+                return;
+            }
+
+            try
+            {
+                // The download writes theme.json itself, including the provenance.
+                await _downloadService.DownloadFromYouTube(
+                    lookup.YouTubeId!,
+                    itemDirectory,
+                    config.AudioBitrate,
+                    cancellationToken,
+                    lookup);
+
+                _logger.LogInformation(
+                    "Assigned theme song for {ItemName} from {Source}.", item.Name, lookup.Source);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Failed to download the theme song found for {ItemName} ({Url})",
+                    item.Name,
+                    lookup.YouTubeUrl);
+
+                // Record what was found so a later run can retry without looking it up again.
+                await SaveLookupMetadata(lookup, themeJsonPath, cancellationToken);
+            }
+        }
+
+        /// <summary>
+        /// Writes a lookup result to theme.json without downloading any audio.
+        /// </summary>
+        private async Task SaveLookupMetadata(
+            ThemeLookupResult lookup,
+            string themeJsonPath,
+            CancellationToken cancellationToken)
+        {
+            var now = DateTime.UtcNow;
+            var metadata = new ThemeMetadata
+            {
+                YouTubeId = lookup.YouTubeId,
+                YouTubeUrl = lookup.YouTubeUrl,
+                Title = lookup.Title,
+                DateAdded = now,
+                DateModified = now,
+                IsUserUploaded = false,
+                Source = lookup.Source.ToString(),
+                ImdbId = lookup.ImdbId,
+                Soundtrack = lookup.Soundtrack.Count > 0 ? lookup.Soundtrack : null
+            };
+
+            try
+            {
+                var json = JsonSerializer.Serialize(metadata, new JsonSerializerOptions { WriteIndented = true });
+                await File.WriteAllTextAsync(themeJsonPath, json, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Could not write theme.json at {Path}", themeJsonPath);
             }
         }
 

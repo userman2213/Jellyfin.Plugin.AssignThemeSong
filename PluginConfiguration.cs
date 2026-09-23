@@ -57,5 +57,51 @@ namespace Jellyfin.Plugin.xThemeSong
         /// Only used when PermissionMode is set to a custom mode (future feature).
         /// </summary>
         public List<Guid> AllowedUserIds { get; set; } = new List<Guid>();
+
+        /// <summary>
+        /// Gets or sets a value indicating whether ThemerrDB is queried for theme songs.
+        /// ThemerrDB is the first source in the automatic lookup chain.
+        /// </summary>
+        public bool EnableThemerrDb { get; set; } = true;
+
+        /// <summary>
+        /// Gets or sets a value indicating whether the soundtrack lookup runs when
+        /// ThemerrDB has no theme for an item. Track names found this way are searched
+        /// on YouTube to produce theme song candidates.
+        /// </summary>
+        public bool EnableSoundtrackFallback { get; set; } = true;
+
+        /// <summary>
+        /// Gets or sets the OMDb API key (https://www.omdbapi.com/apikey.aspx).
+        /// Used to resolve an IMDb ID for items whose Jellyfin metadata does not
+        /// already carry one. Optional: items that already have an IMDb ID from
+        /// their metadata provider are looked up without it.
+        /// </summary>
+        public string? OmdbApiKey { get; set; }
+
+        /// <summary>
+        /// Gets or sets the maximum number of soundtrack tracks to keep per item.
+        /// </summary>
+        public int MaxSoundtrackCandidates { get; set; } = 10;
+
+        /// <summary>
+        /// Gets or sets a value indicating whether a theme found by the automatic
+        /// lookup is downloaded straight away. When false the lookup only records
+        /// what it found in theme.json and leaves the download to a later run.
+        /// </summary>
+        public bool AutoDownloadFoundThemes { get; set; } = true;
+
+        /// <summary>
+        /// Gets or sets how many days to wait before looking an item up again after a
+        /// lookup found nothing. Keeps the daily task from re-querying the same sources
+        /// for every unmatched item on every run. Set to 0 to always retry.
+        /// </summary>
+        public int LookupRetryDays { get; set; } = 7;
+
+        /// <summary>
+        /// Gets or sets the User-Agent sent with outbound web requests.
+        /// Leave empty to use the built-in desktop Chrome user agent.
+        /// </summary>
+        public string? UserAgent { get; set; }
     }
 }

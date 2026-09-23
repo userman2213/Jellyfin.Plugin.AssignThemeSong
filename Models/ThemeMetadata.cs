@@ -1,6 +1,7 @@
 #nullable enable
 
 using System;
+using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
 namespace Jellyfin.Plugin.xThemeSong.Models
@@ -30,5 +31,25 @@ namespace Jellyfin.Plugin.xThemeSong.Models
 
         [JsonPropertyName("OriginalFileName")]
         public string? OriginalFileName { get; set; }
+
+        /// <summary>
+        /// Gets or sets where an automatically found theme came from
+        /// (ThemerrDB or a soundtrack listing). Null for manual entries.
+        /// </summary>
+        [JsonPropertyName("Source")]
+        public string? Source { get; set; }
+
+        /// <summary>
+        /// Gets or sets the IMDb ID the automatic lookup ran against.
+        /// </summary>
+        [JsonPropertyName("ImdbId")]
+        public string? ImdbId { get; set; }
+
+        /// <summary>
+        /// Gets or sets the soundtrack track names found for this item. Kept so the
+        /// listing does not have to be fetched again to offer alternative themes.
+        /// </summary>
+        [JsonPropertyName("Soundtrack")]
+        public List<SoundtrackTrack>? Soundtrack { get; set; }
     }
 }

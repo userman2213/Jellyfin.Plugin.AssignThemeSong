@@ -1,3 +1,5 @@
+#nullable enable
+
 using System;
 using System.IO;
 using System.Threading;
@@ -82,7 +84,18 @@ namespace Jellyfin.Plugin.xThemeSong.Services
             return ffmpegName;
         }
 
-        public async Task<ThemeMetadata> DownloadFromYouTube(string input, string outputDirectory, int bitrate, CancellationToken cancellationToken)
+        /// <summary>
+        /// Downloads a YouTube video's audio as the item's theme song.
+        /// </summary>
+        /// <param name="input">A YouTube URL or bare video ID.</param>
+        /// <param name="outputDirectory">Directory to write theme.mp3 and theme.json to.</param>
+        /// <param name="bitrate">Target MP3 bitrate in kbps.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <param name="lookup">
+        /// The automatic lookup that produced this URL, if any. Its provenance is
+        /// recorded in theme.json so a later run can tell where the theme came from.
+        /// </param>
+        public async Task<ThemeMetadata> DownloadFromYouTube(string input, string outputDirectory, int bitrate, CancellationToken cancellationToken, ThemeLookupResult? lookup = null)
         {
             try
             {
@@ -164,7 +177,10 @@ namespace Jellyfin.Plugin.xThemeSong.Services
                         Uploader = video.Author.ChannelTitle,
                         DateAdded = DateTime.UtcNow,
                         DateModified = DateTime.UtcNow,
-                        IsUserUploaded = false
+                        IsUserUploaded = false,
+                        Source = lookup?.Source.ToString(),
+                        ImdbId = lookup?.ImdbId,
+                        Soundtrack = lookup?.Soundtrack.Count > 0 ? lookup.Soundtrack : null
                     };
 
                     // Save metadata

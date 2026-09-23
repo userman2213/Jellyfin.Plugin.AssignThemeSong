@@ -67,6 +67,82 @@
                                 </div>
                             </div>
 
+                        </div>
+
+                        <div class="verticalSection verticalSection-extrabottompadding">
+                            <div class="sectionTitleContainer flex align-items-center">
+                                <h3 class="sectionTitle">Automatic Theme Lookup</h3>
+                            </div>
+                            <div class="fieldDescription" style="margin-bottom: 1em;">
+                                When an item has no theme song, the scheduled task looks one up:
+                                ThemerrDB first, then the item's soundtrack listing, whose track
+                                names are searched on YouTube.
+                            </div>
+
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label class="emby-checkbox-label">
+                                    <input id="EnableThemerrDb" name="EnableThemerrDb" type="checkbox" is="emby-checkbox" />
+                                    <span>Use ThemerrDB</span>
+                                </label>
+                                <div class="fieldDescription checkboxFieldDescription">
+                                    Look theme songs up in the community-curated ThemerrDB. Matched by TMDB ID, or IMDb ID for movies.
+                                </div>
+                            </div>
+
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label class="emby-checkbox-label">
+                                    <input id="EnableSoundtrackFallback" name="EnableSoundtrackFallback" type="checkbox" is="emby-checkbox" />
+                                    <span>Fall back to the soundtrack listing</span>
+                                </label>
+                                <div class="fieldDescription checkboxFieldDescription">
+                                    When ThemerrDB has no entry, pull the title's soundtrack track names and search YouTube for the first usable one.
+                                </div>
+                            </div>
+
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label class="emby-checkbox-label">
+                                    <input id="AutoDownloadFoundThemes" name="AutoDownloadFoundThemes" type="checkbox" is="emby-checkbox" />
+                                    <span>Download themes that are found</span>
+                                </label>
+                                <div class="fieldDescription checkboxFieldDescription">
+                                    Turn this off to only record what was found in theme.json, so you can review it before downloading.
+                                </div>
+                            </div>
+
+                            <div class="inputContainer">
+                                <label class="inputLabel inputLabelUnfocused" for="OmdbApiKey">OMDb API Key</label>
+                                <input id="OmdbApiKey" name="OmdbApiKey" type="text" is="emby-input" placeholder="Optional" />
+                                <div class="fieldDescription">
+                                    Used to find an IMDb ID for items whose metadata does not already have one.
+                                    Items that already carry an IMDb ID do not need this.
+                                    Free key: <a is="emby-linkbutton" class="button-link" href="https://www.omdbapi.com/apikey.aspx" target="_blank" rel="noopener">omdbapi.com/apikey.aspx</a>
+                                </div>
+                            </div>
+
+                            <div class="inputContainer">
+                                <label class="inputLabel inputLabelUnfocused" for="MaxSoundtrackCandidates">Maximum soundtrack entries</label>
+                                <input id="MaxSoundtrackCandidates" name="MaxSoundtrackCandidates" type="number" is="emby-input" min="1" max="50" step="1" />
+                                <div class="fieldDescription">
+                                    How many tracks to keep from a soundtrack listing, searched in order (default: 10)
+                                </div>
+                            </div>
+
+                            <div class="inputContainer">
+                                <label class="inputLabel inputLabelUnfocused" for="LookupRetryDays">Retry a failed lookup after (days)</label>
+                                <input id="LookupRetryDays" name="LookupRetryDays" type="number" is="emby-input" min="0" max="365" step="1" />
+                                <div class="fieldDescription">
+                                    Stops the daily task from re-querying the same sources for items it could not match. 0 retries every run (not recommended).
+                                </div>
+                            </div>
+
+                            <div class="inputContainer">
+                                <label class="inputLabel inputLabelUnfocused" for="UserAgent">Browser User-Agent</label>
+                                <input id="UserAgent" name="UserAgent" type="text" is="emby-input" placeholder="Leave empty for the built-in Chrome user agent" />
+                                <div class="fieldDescription">
+                                    Sent with every outbound web request. Some sources refuse requests that do not look like a browser.
+                                </div>
+                            </div>
+
                             <br />
                             <div>
                                 <button is="emby-button" type="submit" class="raised button-submit block emby-button">
@@ -320,6 +396,13 @@
                         document.querySelector('#AudioBitrate').value = config.AudioBitrate || 192;
                         document.querySelector('#FFmpegPath').value = config.FFmpegPath || '';
                         document.querySelector('#PermissionMode').value = (config.PermissionMode !== undefined && config.PermissionMode !== null) ? config.PermissionMode : 1;
+                        document.querySelector('#EnableThemerrDb').checked = config.EnableThemerrDb !== false;
+                        document.querySelector('#EnableSoundtrackFallback').checked = config.EnableSoundtrackFallback !== false;
+                        document.querySelector('#AutoDownloadFoundThemes').checked = config.AutoDownloadFoundThemes !== false;
+                        document.querySelector('#OmdbApiKey').value = config.OmdbApiKey || '';
+                        document.querySelector('#MaxSoundtrackCandidates').value = config.MaxSoundtrackCandidates || 10;
+                        document.querySelector('#LookupRetryDays').value = (config.LookupRetryDays !== undefined && config.LookupRetryDays !== null) ? config.LookupRetryDays : 7;
+                        document.querySelector('#UserAgent').value = config.UserAgent || '';
                         Dashboard.hideLoadingMsg();
                     });
                 });
@@ -333,6 +416,14 @@
                         config.AudioBitrate = parseInt(document.querySelector('#AudioBitrate').value) || 192;
                         config.FFmpegPath = document.querySelector('#FFmpegPath').value.trim() || null;
                         config.PermissionMode = parseInt(document.querySelector('#PermissionMode').value);
+                        config.EnableThemerrDb = document.querySelector('#EnableThemerrDb').checked;
+                        config.EnableSoundtrackFallback = document.querySelector('#EnableSoundtrackFallback').checked;
+                        config.AutoDownloadFoundThemes = document.querySelector('#AutoDownloadFoundThemes').checked;
+                        config.OmdbApiKey = document.querySelector('#OmdbApiKey').value.trim() || null;
+                        config.MaxSoundtrackCandidates = parseInt(document.querySelector('#MaxSoundtrackCandidates').value) || 10;
+                        var retryDays = parseInt(document.querySelector('#LookupRetryDays').value);
+                        config.LookupRetryDays = isNaN(retryDays) ? 7 : retryDays;
+                        config.UserAgent = document.querySelector('#UserAgent').value.trim() || null;
 
                         ApiClient.updatePluginConfiguration(pluginId, config).then(function(result) {
                             Dashboard.processPluginConfigurationUpdateResult(result);
@@ -401,7 +492,7 @@
                         html += '<div class="xthemesong-library-group" data-library-id="' + library.libraryId + '">';
                         html += '<h4 class="xthemesong-library-header">' + escapeHtml(library.libraryName) + ' (' + library.items.length + ')</h4>';
                         html += '<table class="xthemesong-media-table">';
-                        html += '<thead><tr><th width="27%">Title</th><th width="33%">Status</th><th width="30%">YouTube URL</th><th width="10%" style="text-align: right;">Action</th></tr></thead>';
+                        html += '<thead><tr><th width="25%">Title</th><th width="28%">Status</th><th width="28%">YouTube URL</th><th width="19%" style="text-align: right;">Action</th></tr></thead>';
                         html += '<tbody>';
                         
                         library.items.forEach(function(item) {
@@ -414,7 +505,9 @@
                             html += '<td>' + escapeHtml(item.title) + '<span class="' + typeClass + '">' + item.type + '</span></td>';
                             html += '<td>' + statusBadgePlayer + '</td>';
                             html += '<td><input type="text" class="xthemesong-url-field" data-item-id="' + item.itemId + '" value="' + escapeHtml(item.youtubeUrl || '') + '" placeholder="https://youtube.com/watch?v=..." /></td>';
-                            html += '<td style="text-align: right;"><button type="button" class="xthemesong-btn" onclick="window.xThemeSongOpenAssign(\'' + item.itemId + '\')">Assign</button></td>';
+                            html += '<td style="text-align: right;">' +
+                                '<button type="button" class="xthemesong-btn" onclick="window.xThemeSongLookup(\'' + item.itemId + '\', this)">Look up</button> ' +
+                                '<button type="button" class="xthemesong-btn" onclick="window.xThemeSongOpenAssign(\'' + item.itemId + '\')">Assign</button></td>';
                             html += '</tr>';
                         });
                         
@@ -444,6 +537,49 @@
                     div.textContent = text;
                     return div.innerHTML;
                 }
+
+                // Runs the automatic lookup for one item: ThemerrDB, then the soundtrack listing.
+                window.xThemeSongLookup = function(itemId, button) {
+                    var originalText = button.textContent;
+                    button.textContent = 'Looking up...';
+                    button.disabled = true;
+
+                    var url = ApiClient.getUrl('xThemeSong/' + itemId + '/lookup') + '?download=true';
+
+                    fetch(url, {
+                        method: 'POST',
+                        headers: { 'X-Emby-Token': ApiClient.accessToken() }
+                    }).then(function(response) {
+                        if (!response.ok) {
+                            throw new Error('Lookup failed with status ' + response.status);
+                        }
+                        return response.json();
+                    }).then(function(result) {
+                        button.textContent = originalText;
+                        button.disabled = false;
+
+                        if (result.youTubeUrl) {
+                            var field = document.querySelector('.xthemesong-url-field[data-item-id="' + itemId + '"]');
+                            if (field) {
+                                field.value = result.youTubeUrl;
+                            }
+
+                            var sourceLabel = result.source === 'ThemerrDb' ? 'ThemerrDB' : 'the soundtrack listing';
+                            Dashboard.alert('Found a theme song via ' + sourceLabel + ': ' + (result.title || result.youTubeUrl));
+                            loadLibraryOverview();
+                        } else if (result.soundtrack && result.soundtrack.length) {
+                            // Track objects keep PascalCase keys: they are the theme.json shape.
+                            var names = result.soundtrack.map(function(track) { return track.Title; }).join(', ');
+                            Dashboard.alert('No theme song matched, but these soundtrack entries were found: ' + names);
+                        } else {
+                            Dashboard.alert('No theme song found for this item.');
+                        }
+                    }).catch(function(error) {
+                        button.textContent = originalText;
+                        button.disabled = false;
+                        Dashboard.alert('Lookup failed: ' + error.message);
+                    });
+                };
 
                 window.xThemeSongOpenAssign = function(itemId) {
                     if (window.xThemeSongDialog && window.xThemeSongDialog.show) {

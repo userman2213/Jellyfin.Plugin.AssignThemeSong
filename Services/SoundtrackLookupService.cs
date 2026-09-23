@@ -1,0 +1,383 @@
+#nullable enable
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Net;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
+using Jellyfin.Plugin.xThemeSong.Models;
+using Microsoft.Extensions.Logging;
+
+namespace Jellyfin.Plugin.xThemeSong.Services
+{
+    /// <summary>
+    /// Pulls soundtrack track names for a title.
+    ///
+    /// OMDb (https://www.omdbapi.com) resolves a title to an IMDb ID when the item's
+    /// Jellyfin metadata does not already carry one; the track names themselves come
+    /// from the IMDb soundtrack listing for that ID, which OMDb does not expose.
+    ///
+    /// IMDb answers 403 Forbidden to requests without browser-like headers, so every
+    /// request here goes through <see cref="BrowserHttpClient"/>.
+    /// </summary>
+    public class SoundtrackLookupService
+    {
+        private const string OmdbBaseUrl = "https://www.omdbapi.com/";
+        private const string ImdbBaseUrl = "https://www.imdb.com";
+
+        private static readonly Regex NextDataRegex = new Regex(
+            "<script[^>]+id=\"__NEXT_DATA__\"[^>]*>(.*?)</script>",
+            RegexOptions.Singleline | RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        private static readonly Regex LegacySoundtrackRegex = new Regex(
+            "<div[^>]*class=\"[^\"]*soundTrack[^\"]*\"[^>]*>(.*?)</div>\\s*(?=<div[^>]*class=\"[^\"]*soundTrack|<\\/div>)",
+            RegexOptions.Singleline | RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        // In the legacy markup the track name sits in its own leading <div>, with the
+        // credit lines following it as <br>-separated text.
+        private static readonly Regex LegacyTitleRegex = new Regex(
+            "^\\s*<div[^>]*>(.*?)</div>",
+            RegexOptions.Singleline | RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        private static readonly Regex TagRegex = new Regex("<[^>]+>", RegexOptions.Compiled);
+
+        private static readonly Regex PerformerRegex = new Regex(
+            @"Performed\s+by\s+(.+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        private static readonly Regex WriterRegex = new Regex(
+            @"(?:Written|Composed|Music)\s+by\s+(.+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        private readonly ILogger<SoundtrackLookupService> _logger;
+        private readonly BrowserHttpClient _httpClient;
+
+        public SoundtrackLookupService(ILogger<SoundtrackLookupService> logger, BrowserHttpClient httpClient)
+        {
+            _logger = logger;
+            _httpClient = httpClient;
+        }
+
+        /// <summary>
+        /// Resolves an IMDb ID for a title through the OMDb API.
+        /// Returns null when no API key is configured or OMDb has no match.
+        /// </summary>
+        /// <param name="title">Title to search for.</param>
+        /// <param name="year">Production year, used to disambiguate remakes.</param>
+        /// <param name="isSeries">True for a TV show, false for a movie.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        public async Task<string?> ResolveImdbIdAsync(
+            string title,
+            int? year,
+            bool isSeries,
+            CancellationToken cancellationToken)
+        {
+            var apiKey = Plugin.Instance?.Configuration?.OmdbApiKey;
+            if (string.IsNullOrWhiteSpace(apiKey))
+            {
+                _logger.LogDebug(
+                    "No OMDb API key configured, cannot resolve an IMDb ID for {Title}", title);
+                return null;
+            }
+
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                return null;
+            }
+
+            var requestUrl = OmdbBaseUrl
+                + "?apikey=" + Uri.EscapeDataString(apiKey!)
+                + "&t=" + Uri.EscapeDataString(title)
+                + "&type=" + (isSeries ? "series" : "movie");
+
+            if (year.HasValue && year.Value > 0)
+            {
+                requestUrl += "&y=" + year.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            }
+
+            var body = await _httpClient
+                .GetStringOrNullAsync(requestUrl, expectJson: true, referer: null, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (string.IsNullOrEmpty(body))
+            {
+                // OMDb answers 401 for a rejected key, which is the most common cause
+                // of an empty body here; the request itself is a plain GET.
+                _logger.LogWarning(
+                    "OMDb returned no usable response for {Title}. If this repeats, check that the "
+                    + "configured OMDb API key is valid and activated.",
+                    title);
+                return null;
+            }
+
+            try
+            {
+                using var document = JsonDocument.Parse(body);
+                var root = document.RootElement;
+
+                // OMDb reports failure in the body with HTTP 200, not a status code.
+                if (root.TryGetProperty("Response", out var response)
+                    && string.Equals(response.GetString(), "False", StringComparison.OrdinalIgnoreCase))
+                {
+                    var error = root.TryGetProperty("Error", out var errorElement)
+                        ? errorElement.GetString()
+                        : "unknown error";
+                    _logger.LogInformation("OMDb had no match for {Title}: {Error}", title, error);
+                    return null;
+                }
+
+                if (root.TryGetProperty("imdbID", out var imdbId))
+                {
+                    var value = imdbId.GetString();
+                    if (!string.IsNullOrWhiteSpace(value))
+                    {
+                        _logger.LogInformation("OMDb resolved {Title} to IMDb ID {ImdbId}", title, value);
+                        return value;
+                    }
+                }
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogWarning(ex, "Could not parse OMDb response for {Title}", title);
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Fetches the soundtrack listing for an IMDb ID.
+        /// </summary>
+        /// <param name="imdbId">IMDb ID, e.g. tt0137523.</param>
+        /// <param name="maxTracks">Upper bound on returned tracks.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>The tracks found, newest listing format first; empty when none.</returns>
+        public async Task<List<SoundtrackTrack>> GetSoundtrackAsync(
+            string imdbId,
+            int maxTracks,
+            CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(imdbId))
+            {
+                return new List<SoundtrackTrack>();
+            }
+
+            var titleUrl = $"{ImdbBaseUrl}/title/{imdbId}/";
+            var soundtrackUrl = $"{titleUrl}soundtrack/";
+
+            _logger.LogDebug("Fetching soundtrack listing for {ImdbId}", imdbId);
+
+            var html = await _httpClient
+                .GetStringOrNullAsync(soundtrackUrl, expectJson: false, referer: titleUrl, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (string.IsNullOrEmpty(html))
+            {
+                _logger.LogInformation("No soundtrack listing available for {ImdbId}", imdbId);
+                return new List<SoundtrackTrack>();
+            }
+
+            var tracks = ParseEmbeddedJson(html!);
+
+            if (tracks.Count == 0)
+            {
+                tracks = ParseLegacyHtml(html!);
+            }
+
+            if (tracks.Count == 0)
+            {
+                _logger.LogInformation("Soundtrack page for {ImdbId} listed no tracks", imdbId);
+                return tracks;
+            }
+
+            if (maxTracks > 0 && tracks.Count > maxTracks)
+            {
+                tracks = tracks.Take(maxTracks).ToList();
+            }
+
+            _logger.LogInformation("Found {Count} soundtrack entries for {ImdbId}", tracks.Count, imdbId);
+            return tracks;
+        }
+
+        /// <summary>
+        /// Reads tracks out of the __NEXT_DATA__ blob the current IMDb pages embed.
+        /// The blob is walked rather than indexed by a fixed path, so a reshuffle of
+        /// the surrounding structure does not break the parse.
+        /// </summary>
+        private List<SoundtrackTrack> ParseEmbeddedJson(string html)
+        {
+            var tracks = new List<SoundtrackTrack>();
+
+            var match = NextDataRegex.Match(html);
+            if (!match.Success)
+            {
+                return tracks;
+            }
+
+            try
+            {
+                using var document = JsonDocument.Parse(match.Groups[1].Value);
+                CollectTracks(document.RootElement, tracks);
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogDebug(ex, "Could not parse the embedded JSON on the soundtrack page");
+            }
+
+            return tracks;
+        }
+
+        /// <summary>
+        /// Walks a JSON tree collecting every soundtrack row. A row is an object with
+        /// a "rowTitle" (the track name) alongside a "listContent" array holding the
+        /// credit lines.
+        /// </summary>
+        private static void CollectTracks(JsonElement element, List<SoundtrackTrack> tracks)
+        {
+            switch (element.ValueKind)
+            {
+                case JsonValueKind.Object:
+                    if (element.TryGetProperty("rowTitle", out var rowTitle)
+                        && rowTitle.ValueKind == JsonValueKind.String
+                        && element.TryGetProperty("listContent", out var listContent)
+                        && listContent.ValueKind == JsonValueKind.Array)
+                    {
+                        var title = CleanText(rowTitle.GetString());
+                        if (!string.IsNullOrWhiteSpace(title))
+                        {
+                            var track = new SoundtrackTrack { Title = title };
+
+                            foreach (var line in listContent.EnumerateArray())
+                            {
+                                if (line.ValueKind != JsonValueKind.Object
+                                    || !line.TryGetProperty("html", out var lineHtml)
+                                    || lineHtml.ValueKind != JsonValueKind.String)
+                                {
+                                    continue;
+                                }
+
+                                ApplyCreditLine(track, CleanText(lineHtml.GetString()));
+                            }
+
+                            tracks.Add(track);
+                        }
+                    }
+
+                    foreach (var property in element.EnumerateObject())
+                    {
+                        CollectTracks(property.Value, tracks);
+                    }
+
+                    break;
+
+                case JsonValueKind.Array:
+                    foreach (var item in element.EnumerateArray())
+                    {
+                        CollectTracks(item, tracks);
+                    }
+
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// Reads tracks from the older server-rendered soundtrack markup, still served
+        /// to some clients and regions.
+        /// </summary>
+        private static List<SoundtrackTrack> ParseLegacyHtml(string html)
+        {
+            var tracks = new List<SoundtrackTrack>();
+
+            foreach (Match block in LegacySoundtrackRegex.Matches(html))
+            {
+                var content = block.Groups[1].Value;
+                string title;
+
+                var titleMatch = LegacyTitleRegex.Match(content);
+                if (titleMatch.Success)
+                {
+                    title = CleanText(titleMatch.Groups[1].Value);
+                    content = content.Substring(titleMatch.Length);
+                }
+                else
+                {
+                    title = string.Empty;
+                }
+
+                // The remaining credit lines are separated by <br>.
+                var lines = Regex.Split(content, "<br\\s*/?>", RegexOptions.IgnoreCase)
+                    .Select(CleanText)
+                    .Where(line => !string.IsNullOrWhiteSpace(line))
+                    .ToList();
+
+                if (string.IsNullOrWhiteSpace(title))
+                {
+                    // No title div: fall back to the first line being the track name.
+                    if (lines.Count == 0)
+                    {
+                        continue;
+                    }
+
+                    title = lines[0];
+                    lines = lines.Skip(1).ToList();
+                }
+
+                var track = new SoundtrackTrack { Title = title };
+                foreach (var line in lines)
+                {
+                    ApplyCreditLine(track, line);
+                }
+
+                tracks.Add(track);
+            }
+
+            return tracks;
+        }
+
+        /// <summary>
+        /// Files a credit line such as "Performed by Pixies" onto the track.
+        /// </summary>
+        private static void ApplyCreditLine(SoundtrackTrack track, string line)
+        {
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                return;
+            }
+
+            var performer = PerformerRegex.Match(line);
+            if (performer.Success)
+            {
+                if (string.IsNullOrEmpty(track.Performer))
+                {
+                    track.Performer = CleanText(performer.Groups[1].Value);
+                }
+
+                return;
+            }
+
+            var writer = WriterRegex.Match(line);
+            if (writer.Success && string.IsNullOrEmpty(track.Writer))
+            {
+                track.Writer = CleanText(writer.Groups[1].Value);
+            }
+        }
+
+        /// <summary>
+        /// Strips markup and entities and collapses whitespace.
+        /// </summary>
+        private static string CleanText(string? value)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return string.Empty;
+            }
+
+            var text = TagRegex.Replace(value, " ");
+            text = WebUtility.HtmlDecode(text);
+            text = Regex.Replace(text, @"\s+", " ").Trim();
+
+            // Listings frequently wrap the track name in quotes.
+            return text.Trim('"', '“', '”').Trim();
+        }
+    }
+}

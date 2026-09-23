@@ -30,6 +30,16 @@ A Jellyfin plugin that allows you to download theme songs from YouTube or upload
 - 📝 **Bulk YouTube URL Assignment** - Set URLs for multiple items in settings
 - ⚙️ **Custom FFmpeg Path** - Configure FFmpeg location or use auto-detect
 
+### Automatic Theme Lookup (v1.3.0+)
+- 🔎 **ThemerrDB Lookup** - Finds curated theme songs by TMDB or IMDb ID, no key needed
+- 🎼 **Soundtrack Fallback** - When ThemerrDB has no entry, pulls the title's soundtrack
+  track names and searches YouTube for the first usable one
+- 🔑 **OMDb Integration** - Resolves an IMDb ID for items whose metadata lacks one
+- 🌐 **Browser-Like Requests** - Every outbound request carries a full desktop browser
+  header set, since some sources reject anything that does not look like a browser
+- ⏳ **Backoff & Throttling** - Failed lookups are not retried daily, and requests are
+  spaced out so a large library scan does not get the server rate limited
+
 ## 📋 Requirements
 
 - **Jellyfin Server**: Version 10.11.0 or later
@@ -92,6 +102,23 @@ The plugin includes a scheduled task that processes theme songs:
 3. Click **▶ Play** to run immediately, or
 4. Configure the schedule (default: daily at 3 AM)
 
+For each movie or series without a theme song, the task works through these steps:
+
+1. **ThemerrDB** — matched by TMDB ID, or by IMDb ID for movies. Community-curated
+   theme songs, so this is the best result when it has an entry.
+2. **Soundtrack listing** — when ThemerrDB has nothing, the soundtrack listing for the
+   title is fetched and its track names searched on YouTube. The first result of
+   plausible theme song length (under 15 minutes) wins.
+3. **Nothing found** — the item is left alone and not looked up again for a while, so
+   the task does not re-query the same sources for it on every run.
+
+The listing is keyed by IMDb ID. Most items already carry one from their metadata
+provider; for those that do not, configure an OMDb API key and the plugin will resolve
+one from the title and year.
+
+A single item can be looked up on demand from the **Media Library** tab with the
+**Look up** button, which ignores the retry backoff.
+
 ## 📁 File Structure
 
 For each media item with a theme song, the plugin creates:
@@ -114,8 +141,21 @@ For each media item with a theme song, the plugin creates:
   "DateAdded": "2025-01-04T12:00:00Z",
   "DateModified": "2025-01-04T12:00:00Z",
   "IsUserUploaded": false,
-  "OriginalFileName": null
+  "OriginalFileName": null,
+  "Source": "ThemerrDb",
+  "ImdbId": "tt0137523",
+  "Soundtrack": null
 }
+```
+
+`Source` records where an automatically found theme came from (`ThemerrDb` or
+`Soundtrack`); it is absent for themes you set yourself. `Soundtrack` holds the track
+names found for the item, so the listing does not have to be fetched again:
+
+```json
+"Soundtrack": [
+  { "Title": "Where Is My Mind?", "Performer": "Pixies", "Writer": "Black Francis" }
+]
 ```
 
 ## ⚙️ Configuration
@@ -127,6 +167,21 @@ Access plugin settings in **Dashboard → Plugins → xThemeSong**:
 - **Audio Bitrate**: Audio quality for downloaded theme songs (default: 192 kbps)
 - **FFmpeg Path**: Custom path to FFmpeg executable (leave empty for auto-detect)
 - **Permission Mode**: Control who can manage theme songs (Admins Only / Library Managers / Everyone)
+
+### Automatic Theme Lookup (Admin)
+- **Use ThemerrDB**: Look theme songs up in the community-curated ThemerrDB (default: on)
+- **Fall back to the soundtrack listing**: Search YouTube for soundtrack track names when
+  ThemerrDB has no entry (default: on)
+- **Download themes that are found**: Turn off to only record results in `theme.json` for
+  review before anything is downloaded (default: on)
+- **OMDb API Key**: Optional. Resolves an IMDb ID for items whose metadata lacks one.
+  Get a free key at [omdbapi.com/apikey.aspx](https://www.omdbapi.com/apikey.aspx)
+- **Maximum soundtrack entries**: How many tracks to keep from a listing, searched in
+  order (default: 10)
+- **Retry a failed lookup after (days)**: Keeps the daily task from re-querying the same
+  sources for items it could not match (default: 7; 0 retries every run)
+- **Browser User-Agent**: Sent with every outbound request. Leave empty for the built-in
+  desktop Chrome user agent; change it if a source starts refusing requests
 
 ### Backup & Migration (Admin)
 - **Export to JSON**: Download all theme assignments for backup
