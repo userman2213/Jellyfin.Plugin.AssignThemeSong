@@ -8,5 +8,5 @@
   "owner": "Kirtan Patel",
   "category": "General",
   "imageUrl": "icon.png",
-  "changelog": "v1.3.0: Automatic theme lookup - ThemerrDB first, then the title's soundtrack listing searched on YouTube. OMDb resolves missing IMDb IDs. All outbound requests now send full browser headers, with request throttling and backoff on failed lookups."
+  "changelog": "v1.3.0: Automatic theme lookup - ThemerrDB first, then the IMDb soundtrack listing searched on YouTube. OMDb resolves missing IMDb IDs. All outbound requests send full browser headers, with a headless-browser fallback for IMDb's bot check, request throttling and backoff on failed lookups."
 }

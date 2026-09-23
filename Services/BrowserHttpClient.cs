@@ -13,6 +13,21 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.xThemeSong.Services
 {
     /// <summary>
+    /// The outcome of a web fetch: the body when one was read, plus whether the request
+    /// was turned away by a bot filter rather than simply having nothing to return.
+    /// </summary>
+    /// <param name="Body">The response body, or null when nothing was read.</param>
+    /// <param name="Blocked">True when a bot filter refused or challenged the request.</param>
+    public readonly record struct WebFetchResult(string? Body, bool Blocked)
+    {
+        /// <summary>Nothing to return, and not a block.</summary>
+        public static WebFetchResult Empty => new WebFetchResult(null, false);
+
+        /// <summary>The request was refused or challenged by a bot filter.</summary>
+        public static WebFetchResult Refused => new WebFetchResult(null, true);
+    }
+
+    /// <summary>
     /// Shared HTTP client that presents itself as a normal desktop browser.
     ///
     /// Several of the sources this plugin talks to (IMDb in particular) reject
@@ -74,8 +89,9 @@ namespace Jellyfin.Plugin.xThemeSong.Services
 
         /// <summary>
         /// Gets the user agent to send, preferring the one configured in plugin settings.
+        /// Shared with the headless browser so both present the same identity.
         /// </summary>
-        private static string GetUserAgent()
+        public static string GetUserAgent()
         {
             var configured = Plugin.Instance?.Configuration?.UserAgent;
             return string.IsNullOrWhiteSpace(configured) ? DefaultUserAgent : configured!;
@@ -130,10 +146,26 @@ namespace Jellyfin.Plugin.xThemeSong.Services
 
         /// <summary>
         /// Fetches a URL with browser headers and returns the body, or null when the
-        /// response was not a success. 404 is treated as an ordinary "not found" and
-        /// logged quietly, since the lookup chain probes several sources in turn.
+        /// response was not a success.
         /// </summary>
         public async Task<string?> GetStringOrNullAsync(
+            string url,
+            bool expectJson,
+            string? referer,
+            CancellationToken cancellationToken)
+        {
+            var result = await GetPageAsync(url, expectJson, referer, cancellationToken)
+                .ConfigureAwait(false);
+            return result.Body;
+        }
+
+        /// <summary>
+        /// Fetches a URL with browser headers, reporting separately whether the request
+        /// was refused by a bot filter, which a caller can answer by rendering the page
+        /// in a real browser instead. 404 is treated as an ordinary "not found" and
+        /// logged quietly, since the lookup chain probes several sources in turn.
+        /// </summary>
+        public async Task<WebFetchResult> GetPageAsync(
             string url,
             bool expectJson,
             string? referer,
@@ -149,31 +181,38 @@ namespace Jellyfin.Plugin.xThemeSong.Services
                 if (response.StatusCode == HttpStatusCode.NotFound)
                 {
                     _logger.LogDebug("No entry at {Url} (404)", Redact(url));
-                    return null;
+                    return WebFetchResult.Empty;
                 }
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    _logger.LogWarning(
+                    // 403 and 429 are how a bot filter turns a request away.
+                    var blocked = response.StatusCode == HttpStatusCode.Forbidden
+                        || response.StatusCode == HttpStatusCode.TooManyRequests;
+
+                    _logger.Log(
+                        blocked ? LogLevel.Debug : LogLevel.Warning,
                         "Request to {Url} failed with {StatusCode} ({Reason})",
                         Redact(url),
                         (int)response.StatusCode,
                         response.ReasonPhrase);
-                    return null;
+
+                    return blocked ? WebFetchResult.Refused : WebFetchResult.Empty;
                 }
 
                 var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 
                 if (LooksLikeBotChallenge(body))
                 {
-                    _logger.LogWarning(
-                        "Request to {Url} returned a bot-protection challenge instead of content. " +
-                        "The site is blocking this server's IP address; results from it will be unavailable.",
+                    // A challenge arrives with a 2xx status, so the status code alone
+                    // would have let this through as content.
+                    _logger.LogDebug(
+                        "Request to {Url} returned a bot-protection challenge instead of content",
                         Redact(url));
-                    return null;
+                    return WebFetchResult.Refused;
                 }
 
-                return body;
+                return new WebFetchResult(body, false);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -182,12 +221,12 @@ namespace Jellyfin.Plugin.xThemeSong.Services
             catch (TaskCanceledException)
             {
                 _logger.LogWarning("Request to {Url} timed out", Redact(url));
-                return null;
+                return WebFetchResult.Empty;
             }
             catch (HttpRequestException ex)
             {
                 _logger.LogWarning(ex, "Request to {Url} failed", Redact(url));
-                return null;
+                return WebFetchResult.Empty;
             }
         }
 

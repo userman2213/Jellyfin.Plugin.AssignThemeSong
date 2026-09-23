@@ -99,6 +99,32 @@ namespace Jellyfin.Plugin.xThemeSong
         public int LookupRetryDays { get; set; } = 7;
 
         /// <summary>
+        /// Gets or sets a value indicating whether soundtrack listings may be fetched
+        /// with a headless browser. IMDb refuses plain HTTP requests from many servers,
+        /// and its challenge only clears in a real browser engine. Falls back to a plain
+        /// HTTP request when no browser is installed.
+        /// </summary>
+        public bool UseBrowserForSoundtrack { get; set; } = true;
+
+        /// <summary>
+        /// Gets or sets the path to a Chrome, Chromium or Edge binary.
+        /// Leave empty to auto-detect.
+        /// </summary>
+        public string? BrowserPath { get; set; }
+
+        /// <summary>
+        /// Gets or sets how long to let the browser render a page, in seconds.
+        /// </summary>
+        public int BrowserTimeoutSeconds { get; set; } = 60;
+
+        /// <summary>
+        /// Gets or sets a value indicating whether to start the browser with its own
+        /// sandbox disabled. Chrome's sandbox cannot start inside most container images,
+        /// which is how Jellyfin is usually deployed, so this defaults to true.
+        /// </summary>
+        public bool BrowserDisableSandbox { get; set; } = true;
+
+        /// <summary>
         /// Gets or sets the User-Agent sent with outbound web requests.
         /// Leave empty to use the built-in desktop Chrome user agent.
         /// </summary>

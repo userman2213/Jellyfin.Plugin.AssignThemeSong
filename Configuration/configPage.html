@@ -135,6 +135,46 @@
                                 </div>
                             </div>
 
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label class="emby-checkbox-label">
+                                    <input id="UseBrowserForSoundtrack" name="UseBrowserForSoundtrack" type="checkbox" is="emby-checkbox" />
+                                    <span>Use a headless browser for soundtrack listings</span>
+                                </label>
+                                <div class="fieldDescription checkboxFieldDescription">
+                                    IMDb refuses plain requests from many servers, and its check only clears in a real
+                                    browser engine. A plain request is tried first; the browser is used only when that
+                                    is refused. Needs Chrome, Chromium or Edge installed on the server.
+                                </div>
+                            </div>
+
+                            <div class="inputContainer">
+                                <label class="inputLabel inputLabelUnfocused" for="BrowserPath">Browser Path</label>
+                                <input id="BrowserPath" name="BrowserPath" type="text" is="emby-input" placeholder="Leave empty for auto-detect" />
+                                <div class="fieldDescription">
+                                    Path to a Chrome, Chromium or Edge binary. Leave empty to auto-detect.
+                                </div>
+                            </div>
+
+                            <div class="inputContainer">
+                                <label class="inputLabel inputLabelUnfocused" for="BrowserTimeoutSeconds">Browser timeout (seconds)</label>
+                                <input id="BrowserTimeoutSeconds" name="BrowserTimeoutSeconds" type="number" is="emby-input" min="10" max="300" step="5" />
+                                <div class="fieldDescription">
+                                    How long to let a page render. The first lookup takes longest; later ones reuse the
+                                    stored session and are quicker (default: 60)
+                                </div>
+                            </div>
+
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label class="emby-checkbox-label">
+                                    <input id="BrowserDisableSandbox" name="BrowserDisableSandbox" type="checkbox" is="emby-checkbox" />
+                                    <span>Start the browser without its sandbox</span>
+                                </label>
+                                <div class="fieldDescription checkboxFieldDescription">
+                                    Chrome's sandbox cannot start inside most containers, which is how Jellyfin is
+                                    usually run. Leave this on unless your server runs Jellyfin outside a container.
+                                </div>
+                            </div>
+
                             <div class="inputContainer">
                                 <label class="inputLabel inputLabelUnfocused" for="UserAgent">Browser User-Agent</label>
                                 <input id="UserAgent" name="UserAgent" type="text" is="emby-input" placeholder="Leave empty for the built-in Chrome user agent" />
@@ -402,6 +442,10 @@
                         document.querySelector('#OmdbApiKey').value = config.OmdbApiKey || '';
                         document.querySelector('#MaxSoundtrackCandidates').value = config.MaxSoundtrackCandidates || 10;
                         document.querySelector('#LookupRetryDays').value = (config.LookupRetryDays !== undefined && config.LookupRetryDays !== null) ? config.LookupRetryDays : 7;
+                        document.querySelector('#UseBrowserForSoundtrack').checked = config.UseBrowserForSoundtrack !== false;
+                        document.querySelector('#BrowserPath').value = config.BrowserPath || '';
+                        document.querySelector('#BrowserTimeoutSeconds').value = config.BrowserTimeoutSeconds || 60;
+                        document.querySelector('#BrowserDisableSandbox').checked = config.BrowserDisableSandbox !== false;
                         document.querySelector('#UserAgent').value = config.UserAgent || '';
                         Dashboard.hideLoadingMsg();
                     });
@@ -423,6 +467,10 @@
                         config.MaxSoundtrackCandidates = parseInt(document.querySelector('#MaxSoundtrackCandidates').value) || 10;
                         var retryDays = parseInt(document.querySelector('#LookupRetryDays').value);
                         config.LookupRetryDays = isNaN(retryDays) ? 7 : retryDays;
+                        config.UseBrowserForSoundtrack = document.querySelector('#UseBrowserForSoundtrack').checked;
+                        config.BrowserPath = document.querySelector('#BrowserPath').value.trim() || null;
+                        config.BrowserTimeoutSeconds = parseInt(document.querySelector('#BrowserTimeoutSeconds').value) || 60;
+                        config.BrowserDisableSandbox = document.querySelector('#BrowserDisableSandbox').checked;
                         config.UserAgent = document.querySelector('#UserAgent').value.trim() || null;
 
                         ApiClient.updatePluginConfiguration(pluginId, config).then(function(result) {

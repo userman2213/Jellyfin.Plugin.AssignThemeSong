@@ -37,6 +37,9 @@ A Jellyfin plugin that allows you to download theme songs from YouTube or upload
 - 🔑 **OMDb Integration** - Resolves an IMDb ID for items whose metadata lacks one
 - 🌐 **Browser-Like Requests** - Every outbound request carries a full desktop browser
   header set, since some sources reject anything that does not look like a browser
+- 🖥️ **Headless Browser Fallback** - IMDb's bot check only clears in a real browser
+  engine, so when a plain request is refused the page is rendered in headless Chrome.
+  No extra dependency: the browser is launched as a process, like FFmpeg already is
 - ⏳ **Backoff & Throttling** - Failed lookups are not retried daily, and requests are
   spaced out so a large library scan does not get the server rate limited
 
@@ -46,6 +49,8 @@ A Jellyfin plugin that allows you to download theme songs from YouTube or upload
 - **File Transformation Plugin**: **REQUIRED** for Web UI features to work. Install from [here](https://github.com/IAmParadox27/jellyfin-plugin-file-transformation)
 - **FFmpeg**: Must be installed on your Jellyfin server (usually bundled with Jellyfin)
 - **Internet Connection**: Required for YouTube downloads
+- **Chrome / Chromium** *(optional)*: Only for soundtrack lookups, when IMDb refuses
+  plain requests from your server. Everything else works without it
 
 ## 🔧 Installation
 
@@ -106,9 +111,9 @@ For each movie or series without a theme song, the task works through these step
 
 1. **ThemerrDB** — matched by TMDB ID, or by IMDb ID for movies. Community-curated
    theme songs, so this is the best result when it has an entry.
-2. **Soundtrack listing** — when ThemerrDB has nothing, the soundtrack listing for the
-   title is fetched and its track names searched on YouTube. The first result of
-   plausible theme song length (under 15 minutes) wins.
+2. **Soundtrack listing** — when ThemerrDB has nothing, the IMDb soundtrack listing
+   (`/title/{imdbId}/soundtrack/`) is fetched and its track names searched on YouTube.
+   The first result of plausible theme song length (under 15 minutes) wins.
 3. **Nothing found** — the item is left alone and not looked up again for a while, so
    the task does not re-query the same sources for it on every run.
 
@@ -118,6 +123,32 @@ one from the title and year.
 
 A single item can be looked up on demand from the **Media Library** tab with the
 **Look up** button, which ignores the retry backoff.
+
+### How the soundtrack listing is fetched
+
+IMDb refuses requests that do not look like a browser, and answers many servers with a
+JavaScript bot check that carries a normal `200`-family status code. The plugin handles
+this in two steps:
+
+1. A plain HTTP request with a full desktop browser header set. On many home servers
+   this is all that is needed, and it takes about a second.
+2. If that request is refused, the page is rendered in **headless Chrome**, which runs
+   the bot check the way a browser would and then loads the real page.
+
+The browser is launched as a child process, the same way the plugin already launches
+FFmpeg, so there is no extra plugin dependency and no second copy of Chromium. The
+session is kept in the plugin's data folder, so the check only has to be cleared once:
+the first lookup takes roughly 15-20 seconds and later ones 5-10.
+
+If no browser is installed, lookups fall back to the plain request and the log says so.
+To install one on a Debian or Ubuntu server:
+
+```bash
+sudo apt install chromium          # or: chromium-browser
+```
+
+For the official Jellyfin Docker image, either install Chromium into a derived image or
+point **Browser Path** at a browser mounted into the container.
 
 ## 📁 File Structure
 
@@ -180,8 +211,15 @@ Access plugin settings in **Dashboard → Plugins → xThemeSong**:
   order (default: 10)
 - **Retry a failed lookup after (days)**: Keeps the daily task from re-querying the same
   sources for items it could not match (default: 7; 0 retries every run)
-- **Browser User-Agent**: Sent with every outbound request. Leave empty for the built-in
-  desktop Chrome user agent; change it if a source starts refusing requests
+- **Use a headless browser for soundtrack listings**: Render the page in a real browser
+  when a plain request is refused (default: on). Needs Chrome, Chromium or Edge installed
+- **Browser Path**: Path to the browser binary (leave empty to auto-detect)
+- **Browser timeout (seconds)**: How long to let a page render (default: 60)
+- **Start the browser without its sandbox**: Chrome's sandbox cannot start inside most
+  containers, so this defaults to on. Turn it off if Jellyfin runs outside a container
+- **Browser User-Agent**: Sent with every outbound request, including to the headless
+  browser — Chrome's own headless user agent says "HeadlessChrome", which IMDb rejects
+  outright. Leave empty for the built-in desktop Chrome user agent
 
 ### Backup & Migration (Admin)
 - **Export to JSON**: Download all theme assignments for backup

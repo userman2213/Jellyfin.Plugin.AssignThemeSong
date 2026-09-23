@@ -44,6 +44,11 @@ namespace Jellyfin.Plugin.xThemeSong.Services
 
         private static readonly Regex TagRegex = new Regex("<[^>]+>", RegexOptions.Compiled);
 
+        // Real listings credit one person for both roles, e.g. "Written and Performed by".
+        private static readonly Regex WriterAndPerformerRegex = new Regex(
+            @"(?:Written|Composed|Music)\s+and\s+Performed\s+by\s+(.+)",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
         private static readonly Regex PerformerRegex = new Regex(
             @"Performed\s+by\s+(.+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
@@ -52,11 +57,16 @@ namespace Jellyfin.Plugin.xThemeSong.Services
 
         private readonly ILogger<SoundtrackLookupService> _logger;
         private readonly BrowserHttpClient _httpClient;
+        private readonly BrowserPageFetcher _browser;
 
-        public SoundtrackLookupService(ILogger<SoundtrackLookupService> logger, BrowserHttpClient httpClient)
+        public SoundtrackLookupService(
+            ILogger<SoundtrackLookupService> logger,
+            BrowserHttpClient httpClient,
+            BrowserPageFetcher browser)
         {
             _logger = logger;
             _httpClient = httpClient;
+            _browser = browser;
         }
 
         /// <summary>
@@ -165,10 +175,7 @@ namespace Jellyfin.Plugin.xThemeSong.Services
             var titleUrl = $"{ImdbBaseUrl}/title/{imdbId}/";
             var soundtrackUrl = $"{titleUrl}soundtrack/";
 
-            _logger.LogDebug("Fetching soundtrack listing for {ImdbId}", imdbId);
-
-            var html = await _httpClient
-                .GetStringOrNullAsync(soundtrackUrl, expectJson: false, referer: titleUrl, cancellationToken)
+            var html = await FetchSoundtrackPageAsync(soundtrackUrl, titleUrl, cancellationToken)
                 .ConfigureAwait(false);
 
             if (string.IsNullOrEmpty(html))
@@ -177,12 +184,7 @@ namespace Jellyfin.Plugin.xThemeSong.Services
                 return new List<SoundtrackTrack>();
             }
 
-            var tracks = ParseEmbeddedJson(html!);
-
-            if (tracks.Count == 0)
-            {
-                tracks = ParseLegacyHtml(html!);
-            }
+            var tracks = ParseTracks(html!);
 
             if (tracks.Count == 0)
             {
@@ -196,6 +198,99 @@ namespace Jellyfin.Plugin.xThemeSong.Services
             }
 
             _logger.LogInformation("Found {Count} soundtrack entries for {ImdbId}", tracks.Count, imdbId);
+            return tracks;
+        }
+
+        /// <summary>
+        /// Fetches the soundtrack page, trying a plain HTTP request first because it is
+        /// an order of magnitude faster, and rendering the page in a headless browser
+        /// when the request is turned away by the bot filter.
+        /// </summary>
+        private async Task<string?> FetchSoundtrackPageAsync(
+            string soundtrackUrl,
+            string titleUrl,
+            CancellationToken cancellationToken)
+        {
+            _logger.LogDebug("Fetching soundtrack listing from {Url}", soundtrackUrl);
+
+            var result = await _httpClient
+                .GetPageAsync(soundtrackUrl, expectJson: false, referer: titleUrl, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (!string.IsNullOrEmpty(result.Body))
+            {
+                return result.Body;
+            }
+
+            if (!result.Blocked)
+            {
+                return null;
+            }
+
+            var useBrowser = Plugin.Instance?.Configuration?.UseBrowserForSoundtrack ?? true;
+            if (!useBrowser)
+            {
+                _logger.LogWarning(
+                    "IMDb refused a plain request for {Url} and the browser fallback is switched off. "
+                    + "Enable it in the plugin settings to read soundtrack listings from this server.",
+                    soundtrackUrl);
+                return null;
+            }
+
+            if (!_browser.IsAvailable)
+            {
+                _logger.LogWarning(
+                    "IMDb refused a plain request for {Url} and no browser is installed to fall back "
+                    + "on. Install Chrome or Chromium, or set a browser path in the plugin settings.",
+                    soundtrackUrl);
+                return null;
+            }
+
+            _logger.LogInformation(
+                "IMDb refused a plain request for {Url}; rendering it in a browser instead",
+                soundtrackUrl);
+
+            // The browser exits successfully even when all it rendered was the
+            // challenge, so completeness is judged from the document itself.
+            var rendered = await _browser
+                .GetRenderedHtmlAsync(
+                    soundtrackUrl,
+                    BrowserHttpClient.GetUserAgent(),
+                    HasSoundtrackMarkup,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            if (string.IsNullOrEmpty(rendered))
+            {
+                _logger.LogWarning(
+                    "The browser could not get past IMDb's bot protection for {Url}", soundtrackUrl);
+                return null;
+            }
+
+            return rendered;
+        }
+
+        /// <summary>
+        /// Tells a rendered soundtrack page apart from a bot challenge standing in for it.
+        /// </summary>
+        private static bool HasSoundtrackMarkup(string html)
+        {
+            return html.Contains("__NEXT_DATA__", StringComparison.Ordinal)
+                || html.Contains("soundTrack", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Reads tracks from a soundtrack page in whichever markup it arrived in.
+        /// </summary>
+        private List<SoundtrackTrack> ParseTracks(string html)
+        {
+            var tracks = ParseEmbeddedJson(html);
+
+            if (tracks.Count == 0)
+            {
+                tracks = ParseLegacyHtml(html);
+            }
+
             return tracks;
         }
 
@@ -344,21 +439,26 @@ namespace Jellyfin.Plugin.xThemeSong.Services
                 return;
             }
 
+            var both = WriterAndPerformerRegex.Match(line);
+            if (both.Success)
+            {
+                var name = CleanText(both.Groups[1].Value);
+                track.Performer ??= name;
+                track.Writer ??= name;
+                return;
+            }
+
             var performer = PerformerRegex.Match(line);
             if (performer.Success)
             {
-                if (string.IsNullOrEmpty(track.Performer))
-                {
-                    track.Performer = CleanText(performer.Groups[1].Value);
-                }
-
+                track.Performer ??= CleanText(performer.Groups[1].Value);
                 return;
             }
 
             var writer = WriterRegex.Match(line);
-            if (writer.Success && string.IsNullOrEmpty(track.Writer))
+            if (writer.Success)
             {
-                track.Writer = CleanText(writer.Groups[1].Value);
+                track.Writer ??= CleanText(writer.Groups[1].Value);
             }
         }
 
