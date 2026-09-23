@@ -117,10 +117,11 @@ public interface IThemeOrchestrator
     Task<ComposerCoverage> SyncComposersAsync(IProgress<double>? progress, CancellationToken cancellationToken);
 }
 
-/// <summary>How much of the library ThemeForge knows the composer for.</summary>
+/// <summary>How much of the library ThemeForge knows the music of.</summary>
 /// <param name="Titles">How many films and series were looked at.</param>
 /// <param name="Known">How many of them somebody is credited on the music of.</param>
-public readonly record struct ComposerCoverage(int Titles, int Known)
+/// <param name="Themes">How many of them have a theme song known by name.</param>
+public readonly record struct ComposerCoverage(int Titles, int Known, int Themes = 0)
 {
     /// <summary>Gets how many titles nobody could be found for.</summary>
     public int Unknown => Titles - Known;
@@ -1221,9 +1222,10 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
 
         var snapshot = await _composers.GetAsync(cancellationToken).ConfigureAwait(false);
         var known = works.Count(work => snapshot.Find(work.Keys)?.Found == true);
+        var themes = works.Count(work => !string.IsNullOrWhiteSpace(snapshot.Find(work.Keys)?.ThemeTitle));
 
         progress?.Report(100);
-        return new ComposerCoverage(works.Count, known);
+        return new ComposerCoverage(works.Count, known, themes);
     }
 
     /// <summary>Turns the library into the questions the credits sources can be asked.</summary>

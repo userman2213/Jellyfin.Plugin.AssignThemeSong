@@ -329,13 +329,16 @@
                     </p>
                     <label class="emby-checkbox-label">
                         <input is="emby-checkbox" type="checkbox" id="ResearchComposers" />
-                        <span>Look the composer up when Jellyfin does not know it</span>
+                        <span>Look up who wrote the music, and what the theme is called</span>
                     </label>
                     <div class="fieldDescription" style="margin:.25em 0 1em 0;">
                         Asks Wikidata and MusicBrainz by the title's own IMDb or TMDB id, never by name.
                         Both are public-domain databases, and answers are kept for two months, so a whole
-                        library costs a handful of requests once. Your library's own credits always win;
-                        this only fills in what is missing.
+                        library costs a handful of requests once. Your library's own credits are never
+                        replaced; this only fills in what is missing. When the theme is a song, its title
+                        and performer are searched for first &mdash; &ldquo;The Sopranos Woke Up This
+                        Morning Alabama 3&rdquo; &mdash; and an upload titled by song and artist is
+                        recognised as the show's theme instead of being rejected for not naming the show.
                     </div>
                     <label class="emby-checkbox-label">
                         <input is="emby-checkbox" type="checkbox" id="SyncComposers" />
@@ -356,6 +359,19 @@
                         Morty &mdash; but at one request per second, so it is the slow half of the job. Only its
                         lookup by IMDb id is used: searching it by title returns the 1978 composer for the 2004
                         Battlestar Galactica.
+                    </div>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="UseWikipediaForThemes" />
+                        <span>Read a show's Wikipedia article for its theme when Wikidata does not say</span>
+                    </label>
+                    <div class="fieldDescription" style="margin:.25em 0 1em 0;">
+                        Wikidata records the theme of only the most famous shows. The article's infobox
+                        records it for far more &mdash; The Sopranos, Firefly, House, Mad Men &mdash; and
+                        often names who wrote the theme, which is not always who scored the show: Dexter's
+                        theme is Rolfe Kent's, its score Daniel Licht's. Series only, five articles to a
+                        request, reached through the Wikidata record rather than searched for by name.
+                        Wikipedia does limit how fast it is asked; anything it turns away is asked about on
+                        the next run.
                     </div>
                     <div class="inputContainer">
                         <input is="emby-input" type="number" id="ComposerCacheMaxAgeDays" min="1" max="60" step="1" label="Look up before a run if nothing has been looked up for (days)" />
@@ -519,7 +535,7 @@
                 'StopLadderOnConfidentHit', 'TrustTopicChannels',
                 'EnableFileLogging', 'UseThemerrDb', 'UsePlexThemeArchive', 'RejectNonMusic',
                 'SyncThemerrDb',
-                'ResearchComposers', 'SyncComposers', 'UseMusicBrainzForComposers'
+                'ResearchComposers', 'SyncComposers', 'UseMusicBrainzForComposers', 'UseWikipediaForThemes'
             ];
             var NUMBERS = [
                 'AutoAssignThreshold', 'ReviewThreshold', 'MinimumTitleSimilarity', 'AudioBitrate',
@@ -1186,6 +1202,8 @@
                         'Series: ' + (d.Series || 0) + ', of which ' + (d.SeriesWithoutTmdbId || 0) + ' have no TMDB id<br />' +
                         'Composer known for: ' + (d.TitlesWithComposer || 0) + ' of ' + titles +
                         (titles ? ' (' + Math.round(100 * (d.TitlesWithComposer || 0) / titles) + '%)' : '') + '<br />' +
+                        'Theme song known for: ' + (d.SeriesWithThemeSong || 0) + ' of ' + (d.Series || 0) + ' series' +
+                        ((d.MoviesWithThemeSong || 0) ? ', and ' + d.MoviesWithThemeSong + ' films' : '') + '<br />' +
                         'Music credits cache: ' + esc(d.ComposersPath || '') +
                         (d.ComposersUpdatedUtc
                             ? ' &mdash; ' + (d.ComposersKnown || 0) + ' answers, filled ' +

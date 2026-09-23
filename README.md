@@ -12,8 +12,8 @@ Transformation plugin's own build for your Jellyfin version.)
 
 Point it at your library and it will, for each movie and series:
 
-1. Work out what the item actually is — title, alternate titles, year, TVDB/TMDB/IMDb ids, and
-   who wrote its music.
+1. Work out what the item actually is — title, alternate titles, year, TVDB/TMDB/IMDb ids, who
+   wrote its music, and what its theme is called.
 2. Build an ordered list of searches, most specific first.
 3. Search YouTube with **yt-dlp** and collect candidates.
 4. Score every candidate against eleven independent rules, each of which explains itself.
@@ -52,37 +52,52 @@ your current settings, without touching a single decision.
 Whether theme songs play at all stays where it belongs: your own Jellyfin setting under
 **Display → Play theme music**.
 
-## Who wrote the music
+## Who wrote the music, and what the theme is called
 
-The composer's name is the most specific thing a search can ask for. *Firefly Main Title — Greg
-Edmonson* cannot be about any other Firefly, and on a distributor's `- Topic` upload — the
-best-sourced recordings on YouTube — the composer's name is the artist credit.
+The most specific thing a search can ask for is the theme's own name. For a show whose theme is a
+song, *The Sopranos Woke Up This Morning Alabama 3* finds what *The Sopranos theme song* only
+sometimes does. Short of that, the composer's name: *Firefly Main Title — Greg Edmonson* cannot be
+about any other Firefly, and on a distributor's `- Topic` upload — the best-sourced recordings on
+YouTube — the composer's name is the artist credit.
 
-Jellyfin records a composer for very few items, and without one three things quietly stop working:
-the search ladder drops its composer rung, an upload that names the composer earns no bonus, and a
-title that is an ordinary word — *Lost*, *Alien* — has nothing to corroborate it and is held below
-the auto-assign score.
+Jellyfin records neither the theme's name nor, for most items, the composer. Without the composer
+three things quietly stop working: the search ladder drops its composer rung, an upload that names
+the composer earns no bonus, and a title that is an ordinary word — *Lost*, *Alien* — has nothing to
+corroborate it and is held below the auto-assign score.
 
-So ThemeForge looks it up, **by the title's own database id and never by name**:
+So ThemeForge looks both up, **by the title's own database id and never by name**:
 
-| Source | Keyed on | Cost | Licence |
-|---|---|---|---|
-| [Wikidata](https://www.wikidata.org) | IMDb (P345), TMDB (P4947/P4983) | one query per 50 titles | CC0 |
-| [MusicBrainz](https://musicbrainz.org) | the IMDb URL of the film or show | one request per title, 1/second | CC0 |
+| Source | Keyed on | What it gives | Cost | Licence |
+|---|---|---|---|---|
+| [Wikidata](https://www.wikidata.org) | IMDb (P345), TMDB (P4947/P4983) | composer; theme music (P942) for famous shows | one query per 50 titles | CC0 |
+| [MusicBrainz](https://musicbrainz.org) | the IMDb URL of the film or show | composer, for what Wikidata missed | one request per title, 1/second | CC0 |
+| [Wikipedia](https://en.wikipedia.org) | the article Wikidata links to | a show's opening theme and who wrote it | one request per 5 shows | facts only |
 
-Wikidata answers about three quarters of a library in a handful of requests. MusicBrainz is asked
-only about what is left. Answers are kept for two months and misses for a fortnight, so a whole
-library costs a few requests once and nothing thereafter. **Your library's own credits always win**
-— the research only fills in what Jellyfin does not have.
+Wikidata answers most of a library in a handful of requests; the other two are asked only about
+what it could not answer. Wikipedia's infobox names the theme for far more shows than Wikidata
+does — The Sopranos, Firefly, House, Mad Men, True Detective, Scrubs — and often who wrote it, which
+is not always who scored the show: Dexter's theme is Rolfe Kent's, its score Daniel Licht's. Only
+the song's title and the names are kept.
 
-Searching either service *by title* is deliberately not done, and this is not caution for its own
-sake: MusicBrainz returns a J-pop single for "Alien", and the composer of the 1978 Battlestar
-Galactica for the 2004 one. A wrong composer is worse than no composer, because it would be
-searched for and believed.
+Answers are kept for two months and misses for a fortnight, so a whole library costs a few requests
+once and nothing thereafter. A service that is down or asks ThemeForge to slow down is not a miss:
+whatever it could not be asked is asked again on the next run. **Your library's own credits are
+never replaced** — the research only fills in what Jellyfin does not have.
+
+When a theme's song is known, it is the first thing searched for, and an upload titled by song and
+artist alone is recognised as the show's theme instead of being rejected for not naming the show. It
+has to name the performer as well as the song: Scrubs' theme is "Superman", and so are a hundred
+other songs.
+
+Searching any of these services *by title* is deliberately not done, and this is not caution for
+its own sake: MusicBrainz returns a J-pop single for "Alien", and the composer of the 1978
+Battlestar Galactica for the 2004 one. A wrong composer is worse than no composer, because it would
+be searched for and believed.
 
 The scheduled task **Look up who wrote the music** runs daily at 02:00 UTC, an hour before the
-discovery run. **Diagnostics** shows how many of your titles somebody is known for; a title with no
-IMDb or TMDB id cannot be looked up at all, so adding a metadata provider is what helps there.
+discovery run. **Diagnostics** shows how many of your titles somebody is known for, and how many
+series have a theme song known by name; a title with no IMDb or TMDB id cannot be looked up at all,
+so adding a metadata provider is what helps there.
 
 Lyricists, conductors and arrangers Jellyfin already knows about are scored at half what the
 composer is worth, and are never searched for: a conductor records dozens of scores, and a query
@@ -90,6 +105,21 @@ built from a lyricist's name returns the songs they wrote for everybody else.
 
 All of this can be switched off, together or in pieces, under **Who wrote the music** in the
 settings.
+
+### Why not IMDb?
+
+IMDb lists the music used in every title, and it is the obvious place to look. ThemeForge does not
+read it, for three reasons, all checked:
+
+- IMDb answers requests from a server with an Amazon bot challenge — `HTTP 202`, an empty page and
+  `x-amzn-waf-action: challenge` — and its data API with `403`. Getting past that means disguising
+  the plugin as a browser, which ThemeForge will not do, and IMDb's terms forbid automated reading.
+- IMDb's own downloadable datasets have no soundtrack data at all.
+- For films, the list is the licensed songs used in the film rather than its theme, and searching
+  for those finds other people's music.
+
+Wikidata and Wikipedia answer the question that matters — what the theme is called — without any of
+that.
 
 ## Installing
 
@@ -235,7 +265,7 @@ queue shows you the whole breakdown, so a score is always something you can argu
 | `Availability` | Rejects live, private and blocked videos outright. |
 | `Duplicate` | Penalises a video already used as another item's theme. |
 | `QuerySpecificity` | Prefers hits from a narrower search. |
-| `Composer` | Whether the candidate names the composer, or somebody else credited on the music. A bonus, never a penalty. |
+| `Composer` | Whether the candidate names the theme song and its performer, the composer, or somebody else credited on the music. A bonus, never a penalty. |
 
 Every weight, keyword list and threshold is editable in the settings — no rebuild needed.
 

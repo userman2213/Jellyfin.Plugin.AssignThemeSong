@@ -207,6 +207,58 @@ public class CreditsLiveTests
     }
 
     [NetworkFact]
+    public async Task WikidataStillNamesAThemeAndTheArticleAndLeavesSeasonsOut()
+    {
+        // Friends has its theme on Wikidata. The X-Files shares its IMDb id with its tenth season,
+        // whose article must not be the one returned.
+        var query = Engines.Credits.WikidataCreditsSource.BuildQuery(new[]
+        {
+            new Engines.Credits.CreditsRequest("imdb:tt0108778", new[] { "imdb:tt0108778" }, "tt0108778", null, true, "Friends"),
+            new Engines.Credits.CreditsRequest("imdb:tt0106179", new[] { "imdb:tt0106179" }, "tt0106179", null, true, "The X-Files"),
+        });
+
+        using var client = Client();
+        using var request = new HttpRequestMessage(HttpMethod.Post, Engines.Credits.WikidataCreditsSource.Endpoint)
+        {
+            Content = new FormUrlEncodedContent(new[] { new KeyValuePair<string, string>("query", query!) }),
+        };
+        request.Headers.TryAddWithoutValidation("Accept", "application/sparql-results+json");
+
+        using var response = await client.SendAsync(request, CancellationToken.None);
+        Assert.True(response.IsSuccessStatusCode, $"Wikidata answered {(int)response.StatusCode}");
+
+        var found = Engines.Credits.WikidataCreditsSource.Parse(await response.Content.ReadAsStringAsync(CancellationToken.None));
+
+        Assert.Equal("I'll Be There for You", found["imdb:tt0108778"].Theme?.Title);
+        Assert.Equal("The X-Files", found["imdb:tt0106179"].WikipediaTitle);
+    }
+
+    [NetworkFact]
+    public async Task WikipediaStillRecordsTheSopranosThemeInItsInfobox()
+    {
+        // The request the source makes, and the parser it feeds. If the infobox field is renamed or
+        // the response changes shape, this is where it shows. Wikipedia rate limits, so a 429 here
+        // says more about the network than about the code; the source waits one out and stops.
+        using var client = Client();
+        client.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "application/json");
+
+        var url = Engines.Credits.WikipediaThemeSource.Endpoint
+            + "?action=query&prop=revisions&rvprop=content&rvslots=main&format=json&formatversion=2&redirects=1&maxlag=5&titles="
+            + Uri.EscapeDataString("The Sopranos");
+
+        using var response = await client.GetAsync(url, CancellationToken.None);
+        Assert.True(response.IsSuccessStatusCode, $"Wikipedia answered {(int)response.StatusCode}");
+
+        var articles = Engines.Credits.WikipediaThemeSource.ParseArticles(
+            await response.Content.ReadAsStringAsync(CancellationToken.None),
+            new[] { "The Sopranos" });
+
+        Assert.Equal(
+            new Engines.Credits.ThemeSong("Woke Up This Morning", "Alabama 3"),
+            Engines.Credits.WikipediaInfobox.Theme(articles["The Sopranos"]));
+    }
+
+    [NetworkFact]
     public async Task MusicBrainzStillAnswersInBothOfTheShapesTheParserReads()
     {
         // Both lookups in one test, a second apart. MusicBrainz allows one request per second and

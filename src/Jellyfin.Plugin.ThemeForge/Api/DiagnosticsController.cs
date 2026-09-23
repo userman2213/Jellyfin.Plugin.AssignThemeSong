@@ -104,6 +104,12 @@ public sealed class DiagnosticsDto
     /// <summary>Gets or sets how many titles nobody is recorded for.</summary>
     public int TitlesWithoutComposer { get; set; }
 
+    /// <summary>Gets or sets how many series have a known theme song, searched for by name.</summary>
+    public int SeriesWithThemeSong { get; set; }
+
+    /// <summary>Gets or sets how many films have a known theme song.</summary>
+    public int MoviesWithThemeSong { get; set; }
+
     /// <summary>Gets or sets where the music credits cache is kept.</summary>
     public string ComposersPath { get; set; } = string.Empty;
 
@@ -246,6 +252,8 @@ public class DiagnosticsController : ControllerBase
             ThemerrPath = ThemerrDbCatalogue.SnapshotPath,
             TitlesWithComposer = ids.WithComposer,
             TitlesWithoutComposer = ids.WithoutComposer,
+            SeriesWithThemeSong = ids.SeriesWithTheme,
+            MoviesWithThemeSong = ids.MoviesWithTheme,
             ComposersPath = ComposerCatalogue.SnapshotPath,
             ComposersUpdatedUtc = composers.IsUsable ? composers.UpdatedUtc : null,
             ComposersKnown = composers.Known,
@@ -268,7 +276,7 @@ public class DiagnosticsController : ControllerBase
     /// recorded the id the database is keyed on. Invisible from the settings page and from the
     /// run summary, which just says "nothing found".
     /// </remarks>
-    private (int Movies, int MoviesWithoutTmdb, int Series, int SeriesWithoutTmdb, int WithComposer, int WithoutComposer) CountProviderIds()
+    private (int Movies, int MoviesWithoutTmdb, int Series, int SeriesWithoutTmdb, int WithComposer, int WithoutComposer, int SeriesWithTheme, int MoviesWithTheme) CountProviderIds()
     {
         try
         {
@@ -280,6 +288,7 @@ public class DiagnosticsController : ControllerBase
             });
 
             int movies = 0, moviesWithout = 0, series = 0, seriesWithout = 0, composed = 0, uncomposed = 0;
+            int seriesThemed = 0, moviesThemed = 0;
 
             foreach (var item in items)
             {
@@ -290,15 +299,18 @@ public class DiagnosticsController : ControllerBase
                 }
 
                 var missing = string.IsNullOrWhiteSpace(identity.TmdbId);
+                var themed = identity.Theme is not null ? 1 : 0;
                 if (identity.IsSeries)
                 {
                     series++;
                     seriesWithout += missing ? 1 : 0;
+                    seriesThemed += themed;
                 }
                 else
                 {
                     movies++;
                     moviesWithout += missing ? 1 : 0;
+                    moviesThemed += themed;
                 }
 
                 // Resolving already consults the research cache, so this counts what the pipeline
@@ -313,12 +325,12 @@ public class DiagnosticsController : ControllerBase
                 }
             }
 
-            return (movies, moviesWithout, series, seriesWithout, composed, uncomposed);
+            return (movies, moviesWithout, series, seriesWithout, composed, uncomposed, seriesThemed, moviesThemed);
         }
         catch (Exception)
         {
             // The library being unavailable is reported elsewhere; the counts are just zero here.
-            return (0, 0, 0, 0, 0, 0);
+            return (0, 0, 0, 0, 0, 0, 0, 0);
         }
     }
 

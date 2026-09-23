@@ -47,10 +47,10 @@ public sealed class UpdateComposerCacheTask : IScheduledTask
 
     /// <inheritdoc />
     public string Description =>
-        "Asks Wikidata and MusicBrainz for the composer of every film and series in the library, by its own "
-        + "database id, and keeps the answers. The composer's name is the most specific thing a search can ask "
-        + "for, and Jellyfin itself records one for very few items. Answers are kept for two months, so this is "
-        + "cheap after the first run.";
+        "Asks Wikidata, MusicBrainz and Wikipedia who wrote the music of every film and series in the library, "
+        + "and what its theme is called, by its own database id, and keeps the answers. A theme's own title and "
+        + "performer are the most specific thing a search can ask for, and Jellyfin records neither. Answers are "
+        + "kept for two months, so this is cheap after the first run.";
 
     /// <inheritdoc />
     public string Category => "ThemeForge";
@@ -83,9 +83,10 @@ public sealed class UpdateComposerCacheTask : IScheduledTask
         progress.Report(100);
 
         _logger.LogInformation(
-            "ThemeForge: somebody is credited with the music of {Known} of {Titles} titles; {Unknown} are not recorded anywhere.",
+            "ThemeForge: somebody is credited with the music of {Known} of {Titles} titles, and the theme song is known by name for {Themes}; {Unknown} have no composer recorded anywhere.",
             coverage.Known,
             coverage.Titles,
+            coverage.Themes,
             coverage.Unknown);
     }
 
