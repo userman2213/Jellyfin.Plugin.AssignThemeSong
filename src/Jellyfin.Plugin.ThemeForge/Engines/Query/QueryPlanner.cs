@@ -33,11 +33,22 @@ public interface IQueryPlanner
 /// record, and skipped entirely when there is none: collapsing the placeholder would only repeat
 /// a generic search the ladder already runs.
 /// </para>
+/// <para>
+/// A template may also name the theme itself with <c>{theme}</c>: its title, and its performer
+/// when one is known. For a show whose theme is a song, "The Sopranos Woke Up This Morning
+/// Alabama 3" finds what "The Sopranos theme song" only sometimes does. It is skipped when the
+/// theme is not known, and searched under the primary title only, since a song is called the same
+/// thing in every market. The title is left out when the song already contains it -- "Skyfall
+/// Adele", not "Skyfall Skyfall Adele".
+/// </para>
 /// </remarks>
 public sealed class QueryPlanner : IQueryPlanner
 {
     /// <summary>The placeholder a composer template carries.</summary>
     public const string ComposerPlaceholder = "{composer}";
+
+    /// <summary>The placeholder a theme template carries.</summary>
+    public const string ThemePlaceholder = "{theme}";
 
     /// <summary>More composers than this on one work is a compilation, and each costs a search.</summary>
     private const int MaxComposersSearched = 2;
@@ -73,11 +84,19 @@ public sealed class QueryPlanner : IQueryPlanner
                 continue;
             }
 
+            var namesTheme = template.Contains(ThemePlaceholder, StringComparison.OrdinalIgnoreCase);
+            if (namesTheme && identity.Theme is null)
+            {
+                continue;
+            }
+
+            var theme = identity.Theme?.SearchText ?? string.Empty;
+
             foreach (var composer in namesComposer ? composers : new List<string> { string.Empty })
             {
-                foreach (var title in titles)
+                foreach (var title in namesTheme ? titles.Take(1) : titles)
                 {
-                    var text = Expand(template, title, identity.Year, composer);
+                    var text = Expand(template, title, identity.Year, composer, theme);
                     if (text.Length == 0 || !seen.Add(text))
                     {
                         continue;
@@ -95,11 +114,19 @@ public sealed class QueryPlanner : IQueryPlanner
     /// Substitutes the placeholders in a template. When a title has no year, the <c>{year}</c>
     /// placeholder collapses rather than leaving a literal token in the search text.
     /// </summary>
-    private static string Expand(string template, string title, int? year, string composer)
+    private static string Expand(string template, string title, int? year, string composer, string theme)
     {
+        // A song that already carries the title does not need it twice. Whole words, so a film
+        // called "Her" keeps its title next to a song with "other" in it.
+        if (theme.Length > 0 && TitleAnchor.Names(title, theme))
+        {
+            title = string.Empty;
+        }
+
         var text = template
             .Replace("{title}", title, StringComparison.OrdinalIgnoreCase)
             .Replace(ComposerPlaceholder, composer, StringComparison.OrdinalIgnoreCase)
+            .Replace(ThemePlaceholder, theme, StringComparison.OrdinalIgnoreCase)
             .Replace(
                 "{year}",
                 year?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,

@@ -64,6 +64,7 @@ public sealed class MediaIdentityResolver : IMediaIdentityResolver
             Year = item.ProductionYear,
             Composers = _people.Composers(item),
             MusicCredits = _people.MusicCredits(item),
+            Theme = _people.Theme(item),
             Kind = kind.Value,
             TvdbId = NullIfEmpty(item.GetProviderId(MetadataProvider.Tvdb)),
             TmdbId = NullIfEmpty(item.GetProviderId(MetadataProvider.Tmdb)),

@@ -15,8 +15,13 @@ namespace Jellyfin.Plugin.ThemeForge.Configuration;
 public static class ShippedTemplates
 {
     /// <summary>The series ladder, most specific first.</summary>
+    /// <remarks>
+    /// The theme's own title and performer come first, when known: nothing is more specific. The
+    /// rung is skipped for a show whose theme is not known, which leaves the ladder as it was.
+    /// </remarks>
     public static readonly string[] Series =
     {
+        "{title} {theme}",
         "{title} opening theme song",
         "{title} {composer} theme",
         "{title} main title theme",
@@ -29,6 +34,7 @@ public static class ShippedTemplates
     /// <summary>The film ladder, most specific first.</summary>
     public static readonly string[] Movies =
     {
+        "{title} {theme}",
         "{title} {year} main theme soundtrack",
         "{title} {composer} main theme",
         "{title} main title theme",
@@ -40,6 +46,17 @@ public static class ShippedTemplates
     /// <summary>Every series ladder a previous release shipped.</summary>
     private static readonly string[][] PreviousSeries =
     {
+        // 2.5
+        new[]
+        {
+            "{title} opening theme song",
+            "{title} {composer} theme",
+            "{title} main title theme",
+            "{title} theme song",
+            "{title} original soundtrack main title",
+            "{title} intro",
+            "{title} soundtrack main theme",
+        },
         new[]
         {
             "{title} opening theme song",
@@ -53,6 +70,16 @@ public static class ShippedTemplates
     /// <summary>Every film ladder a previous release shipped.</summary>
     private static readonly string[][] PreviousMovies =
     {
+        // 2.5
+        new[]
+        {
+            "{title} {year} main theme soundtrack",
+            "{title} {composer} main theme",
+            "{title} main title theme",
+            "{title} original soundtrack",
+            "{title} theme song",
+            "{title} soundtrack suite",
+        },
         new[]
         {
             "{title} {year} main theme soundtrack",

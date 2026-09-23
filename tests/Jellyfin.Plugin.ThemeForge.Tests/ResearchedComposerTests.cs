@@ -76,6 +76,8 @@ public class ResearchedComposerTests
         public IReadOnlyList<string> Composers(BaseItem item) => _composers;
 
         public IReadOnlyList<string> MusicCredits(BaseItem item) => _crew;
+
+        public ThemeSong? Theme(BaseItem item) => null;
     }
 
     private static Series Battlestar()

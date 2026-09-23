@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.ThemeForge.Configuration;
+using Jellyfin.Plugin.ThemeForge.Engines.Credits;
 using Jellyfin.Plugin.ThemeForge.Engines.Discovery;
 using Jellyfin.Plugin.ThemeForge.Engines.Identity;
 using Jellyfin.Plugin.ThemeForge.Engines.Query;
@@ -19,7 +20,8 @@ internal static class TestData
         int? year = 2005,
         IReadOnlyList<string>? alternates = null,
         IReadOnlyList<string>? composers = null,
-        IReadOnlyList<string>? musicCredits = null) => new()
+        IReadOnlyList<string>? musicCredits = null,
+        ThemeSong? theme = null) => new()
     {
         ItemId = Guid.NewGuid(),
         Title = title,
@@ -28,6 +30,7 @@ internal static class TestData
         Year = year,
         Composers = composers ?? Array.Empty<string>(),
         MusicCredits = musicCredits ?? Array.Empty<string>(),
+        Theme = theme,
         Kind = BaseItemKind.Series,
     };
 
@@ -35,7 +38,8 @@ internal static class TestData
         string title,
         int? year = 2005,
         IReadOnlyList<string>? composers = null,
-        IReadOnlyList<string>? musicCredits = null) => new()
+        IReadOnlyList<string>? musicCredits = null,
+        ThemeSong? theme = null) => new()
     {
         ItemId = Guid.NewGuid(),
         Title = title,
@@ -43,6 +47,7 @@ internal static class TestData
         Year = year,
         Composers = composers ?? Array.Empty<string>(),
         MusicCredits = musicCredits ?? Array.Empty<string>(),
+        Theme = theme,
         Kind = BaseItemKind.Movie,
     };
 

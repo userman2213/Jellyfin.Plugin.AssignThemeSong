@@ -47,6 +47,17 @@ public sealed class MediaIdentity
     /// </remarks>
     public IReadOnlyList<string> MusicCredits { get; init; } = Array.Empty<string>();
 
+    /// <summary>
+    /// Gets what the item's theme is called, and who performs it, when that is known.
+    /// </summary>
+    /// <remarks>
+    /// The most specific search there is for a show whose theme is a song: "The Sopranos Woke Up
+    /// This Morning Alabama 3" finds what "The Sopranos theme song" only sometimes does. It is also
+    /// what lets an upload titled by song and artist alone -- which never names the show -- be
+    /// recognised as this show's theme rather than rejected for not naming it.
+    /// </remarks>
+    public Credits.ThemeSong? Theme { get; init; }
+
     /// <summary>Gets the kind of item — only <see cref="BaseItemKind.Movie"/> and <see cref="BaseItemKind.Series"/> are processed.</summary>
     public required BaseItemKind Kind { get; init; }
 

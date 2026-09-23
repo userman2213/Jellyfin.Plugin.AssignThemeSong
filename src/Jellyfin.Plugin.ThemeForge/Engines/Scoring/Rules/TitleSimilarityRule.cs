@@ -32,8 +32,13 @@ namespace Jellyfin.Plugin.ThemeForge.Engines.Scoring.Rules;
 /// that has nothing to do with the show — "Marshmello - FRIENDS" is a song — so when the anchor
 /// says a title is too ordinary to stand alone, something else has to agree before the candidate
 /// can score highly enough to be assigned unattended: a claim to be a theme, the item's own year,
-/// its composer's name, or the album it belongs to. It is capped rather than disqualified: it may
-/// well be right, and a human glancing at the review queue can tell in a second.
+/// its composer's name, its theme song, or the album it belongs to. It is capped rather than
+/// disqualified: it may well be right, and a human glancing at the review queue can tell in a second.
+/// </para>
+/// <para>
+/// When the item's theme song is known, naming it -- title and performer both -- is a third anchor,
+/// after the title and the album. The song's own uploads are titled by song and artist and never
+/// name the show.
 /// </para>
 /// </remarks>
 public sealed class TitleSimilarityRule : IScoringRule
@@ -58,6 +63,10 @@ public sealed class TitleSimilarityRule : IScoringRule
 
     /// <summary>What a match on the album alone is worth, relative to one on the title.</summary>
     private const double AlbumFormPenalty = 0.9;
+
+    /// <summary>What naming the theme song, and not the show, is worth.</summary>
+    /// <remarks>The same as a match on the album: strong, but one step removed from the title.</remarks>
+    private const double ThemeSongScore = 0.9;
 
     /// <inheritdoc />
     public string Name => "TitleSimilarity";
@@ -91,6 +100,17 @@ public sealed class TitleSimilarityRule : IScoringRule
                 matchedOn = albumMatchedOn;
                 viaAlbum = true;
             }
+        }
+
+        if (best.Rejected && ComposerRule.NamedThemeSong(context.Identity.Theme, candidate) is { } song)
+        {
+            // An upload titled by song and artist -- "Alabama 3 - Woke Up This Morning" -- never
+            // names the show, and was rejected for it. When the song and its performer are this
+            // show's theme, it is about this show; the performer requirement is what keeps
+            // "Five for Fighting - Superman" from passing as the Scrubs theme.
+            return new RuleVerdict(
+                ThemeSongScore,
+                string.Format(CultureInfo.InvariantCulture, "names this title's theme song, {0}", song));
         }
 
         if (best.Rejected)
@@ -140,7 +160,8 @@ public sealed class TitleSimilarityRule : IScoringRule
         viaAlbum
         || anchor.YearConfirmed
         || TitleAnchor.ClaimsToBeATheme(candidate.Title)
-        || ComposerRule.NamedComposer(context.Identity.Composers, candidate) is not null;
+        || ComposerRule.NamedComposer(context.Identity.Composers, candidate) is not null
+        || ComposerRule.NamedThemeSong(context.Identity.Theme, candidate) is not null;
 
     private static (AnchorResult Result, string MatchedOn) Best(IReadOnlyList<string> titles, string? text, int? year)
     {

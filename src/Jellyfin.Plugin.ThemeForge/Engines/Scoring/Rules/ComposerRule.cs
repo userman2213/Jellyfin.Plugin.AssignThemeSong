@@ -2,6 +2,7 @@ using System;
 using System.Globalization;
 using System.Linq;
 using Jellyfin.Plugin.ThemeForge.Configuration;
+using Jellyfin.Plugin.ThemeForge.Engines.Credits;
 using Jellyfin.Plugin.ThemeForge.Engines.Discovery;
 using Jellyfin.Plugin.ThemeForge.Engines.Identity;
 
@@ -60,10 +61,18 @@ public sealed class ComposerRule : IScoringRule
 
         var composers = context.Identity.Composers ?? Array.Empty<string>();
         var crew = context.Identity.MusicCredits ?? Array.Empty<string>();
+        var theme = context.Identity.Theme;
 
-        if (composers.Count == 0 && crew.Count == 0)
+        if (composers.Count == 0 && crew.Count == 0 && theme is null)
         {
             return RuleVerdict.Abstain("nobody is recorded as having written this item's music");
+        }
+
+        // The theme's own title and performer are the most specific thing an upload can name --
+        // more than the composer, who wrote other things too.
+        if (NamedThemeSong(theme, candidate) is { } song)
+        {
+            return new RuleVerdict(1.0, string.Format(CultureInfo.InvariantCulture, "names the theme song, {0}", song));
         }
 
         if (composers.Count > 0 && NamedComposer(composers, candidate) is { } composer)
@@ -81,7 +90,41 @@ public sealed class ComposerRule : IScoringRule
         }
 
         return RuleVerdict.Abstain(
-            composers.Count > 0 ? "the composer is not named" : "nobody credited on the music is named");
+            composers.Count > 0 ? "the composer is not named"
+            : theme is not null ? "the theme song is not named"
+            : "nobody credited on the music is named");
+    }
+
+    /// <summary>
+    /// Finds whether the candidate names the item's theme song: its title and its performer, both.
+    /// </summary>
+    /// <remarks>
+    /// Both, because song titles are ordinary. Scrubs' theme is "Superman", and so are a hundred
+    /// other songs; "Superman" by Lazlo Bane is Scrubs' theme and nothing else. A theme with no
+    /// known performer is therefore never matched this way. The title is looked for in the upload's
+    /// title and its track credit, the performer in its title, channel and artist credit, as whole
+    /// words.
+    /// </remarks>
+    /// <param name="theme">The item's theme, when known.</param>
+    /// <param name="candidate">The candidate.</param>
+    /// <returns>The theme, when named; otherwise <see langword="null"/>.</returns>
+    public static ThemeSong? NamedThemeSong(ThemeSong? theme, Candidate candidate)
+    {
+        ArgumentNullException.ThrowIfNull(candidate);
+
+        if (theme is null || string.IsNullOrWhiteSpace(theme.Performer))
+        {
+            return null;
+        }
+
+        var titled = new[] { candidate.Title, candidate.Track }.Any(place => TitleAnchor.Names(theme.Title, place));
+        if (!titled)
+        {
+            return null;
+        }
+
+        var credited = new[] { candidate.Title, candidate.Channel, candidate.Artist }.Any(place => TitleAnchor.Names(theme.Performer, place));
+        return credited ? theme : null;
     }
 
     /// <summary>

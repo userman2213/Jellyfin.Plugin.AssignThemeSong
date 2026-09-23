@@ -34,6 +34,15 @@ public interface IPeopleLookup
     /// <param name="item">The library item.</param>
     /// <returns>Distinct names, or an empty list.</returns>
     IReadOnlyList<string> MusicCredits(BaseItem item);
+
+    /// <summary>Gets what the item's theme is called, and who performs it.</summary>
+    /// <remarks>
+    /// Not a person, strictly, but asked in the same place and answered from the same research:
+    /// the most specific thing a search can ask for is the theme's own title and performer.
+    /// </remarks>
+    /// <param name="item">The library item.</param>
+    /// <returns>The theme, or null when nothing is known.</returns>
+    ThemeSong? Theme(BaseItem item);
 }
 
 /// <summary>Reads composers out of Jellyfin's people table.</summary>
@@ -69,6 +78,10 @@ public sealed class JellyfinPeopleLookup : IPeopleLookup
     /// <inheritdoc />
     public IReadOnlyList<string> MusicCredits(BaseItem item) =>
         Credited(item, kind => Array.IndexOf(MusicRoles, kind) >= 0);
+
+    /// <inheritdoc />
+    /// <remarks>Jellyfin has nowhere to record a theme song's title, so it never knows one.</remarks>
+    public ThemeSong? Theme(BaseItem item) => null;
 
     private IReadOnlyList<string> Credited(BaseItem item, Func<PersonKind, bool> wanted)
     {
@@ -125,21 +138,41 @@ public sealed class ResearchedPeopleLookup : IPeopleLookup
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Whoever wrote the theme goes first, because a theme is being searched for. Jellyfin's own
+    /// composers follow and are never replaced; the researched ones stand in only when Jellyfin
+    /// has none. The theme's composer is added even when Jellyfin has credits, because it answers
+    /// a question Jellyfin never records: Dexter's composer is Daniel Licht, its theme Rolfe Kent's.
+    /// </remarks>
     public IReadOnlyList<string> Composers(BaseItem item)
     {
         ArgumentNullException.ThrowIfNull(item);
 
         var credited = _inner.Composers(item);
-        if (credited.Count > 0 || !Plugin.Config.ResearchComposers)
+        if (!Plugin.Config.ResearchComposers)
         {
             return credited;
         }
 
-        return _catalogue.Known(KeysFor(item)).Names;
+        var known = _catalogue.Known(KeysFor(item));
+        var composers = credited.Count > 0 ? credited : known.Names;
+
+        return known.ThemeComposers.Count == 0
+            ? composers
+            : known.ThemeComposers.Concat(composers).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
 
     /// <inheritdoc />
     public IReadOnlyList<string> MusicCredits(BaseItem item) => _inner.MusicCredits(item);
+
+    /// <inheritdoc />
+    public ThemeSong? Theme(BaseItem item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+
+        return _inner.Theme(item)
+            ?? (Plugin.Config.ResearchComposers ? _catalogue.Known(KeysFor(item)).Theme : null);
+    }
 
     /// <summary>Builds the cache keys for a library item from the ids it carries.</summary>
     /// <param name="item">The library item.</param>
@@ -167,4 +200,7 @@ public sealed class NoPeopleLookup : IPeopleLookup
 
     /// <inheritdoc />
     public IReadOnlyList<string> MusicCredits(BaseItem item) => Array.Empty<string>();
+
+    /// <inheritdoc />
+    public ThemeSong? Theme(BaseItem item) => null;
 }
