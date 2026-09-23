@@ -129,6 +129,19 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool UseMusicBrainzForComposers { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets a value indicating whether a show's Wikipedia article is read for what its
+    /// theme is called, when Wikidata does not say.
+    /// </summary>
+    /// <remarks>
+    /// Wikidata records the theme music of only the most famous shows; the article's infobox
+    /// records it for far more -- The Sopranos, Firefly, House, Mad Men. A theme that is a song is
+    /// best searched for by its title and performer, which no amount of searching by the show's
+    /// title and the word "theme" will reliably turn up. Only series are asked about, five articles
+    /// to a request, reached through the Wikidata record rather than searched for by name.
+    /// </remarks>
+    public bool UseWikipediaForThemes { get; set; } = true;
+
+    /// <summary>
     /// Gets or sets how old the composer cache may get before a run refreshes it itself.
     /// </summary>
     /// <remarks>

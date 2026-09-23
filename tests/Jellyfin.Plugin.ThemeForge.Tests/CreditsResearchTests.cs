@@ -140,8 +140,11 @@ public class CreditsResearchTests
             new CreditsRequest("imdb:tt0303461", new[] { "imdb:tt0303461" }, "tt0303461", null, true, "Firefly"),
         });
 
+        // The query uses P31 itself, to leave out seasons, so what must be absent is the injected
+        // fragment rather than the property.
         Assert.NotNull(query);
-        Assert.DoesNotContain("wdt:P31", query, StringComparison.Ordinal);
+        Assert.DoesNotContain("?item wdt:P31 ?x", query, StringComparison.Ordinal);
+        Assert.DoesNotContain("tt00\"", query, StringComparison.Ordinal);
         Assert.Contains("\"tt0303461\"", query, StringComparison.Ordinal);
     }
 
@@ -255,7 +258,7 @@ public class ComposerSnapshotTests
     private static ComposerSnapshot WithBattlestar()
     {
         var snapshot = new ComposerSnapshot();
-        snapshot.Record(
+        snapshot.RecordComposers(
             new[] { "imdb:tt0407362", "tmdbtv:1972" },
             new ResearchedCredits(new[] { "Bear McCreary" }, null, null),
             "Wikidata",
@@ -288,8 +291,8 @@ public class ComposerSnapshotTests
     {
         var snapshot = WithBattlestar();
 
-        Assert.False(snapshot.NeedsLookUp(new[] { "imdb:tt0407362" }, Now.AddDays(59)));
-        Assert.True(snapshot.NeedsLookUp(new[] { "imdb:tt0407362" }, Now.AddDays(61)));
+        Assert.False(snapshot.NeedsComposers(new[] { "imdb:tt0407362" }, Now.AddDays(59)));
+        Assert.True(snapshot.NeedsComposers(new[] { "imdb:tt0407362" }, Now.AddDays(61)));
     }
 
     [Fact]
@@ -298,10 +301,10 @@ public class ComposerSnapshotTests
         // Without remembering a miss, a quarter of any library hits the network on every scan.
         // Remembering it for as long as a hit would be worse: the databases do grow.
         var snapshot = new ComposerSnapshot();
-        snapshot.Record(new[] { "imdb:tt0000000" }, ResearchedCredits.None, "nobody", Now);
+        snapshot.RecordComposers(new[] { "imdb:tt0000000" }, ResearchedCredits.None, "nobody", Now);
 
-        Assert.False(snapshot.NeedsLookUp(new[] { "imdb:tt0000000" }, Now.AddDays(13)));
-        Assert.True(snapshot.NeedsLookUp(new[] { "imdb:tt0000000" }, Now.AddDays(15)));
+        Assert.False(snapshot.NeedsComposers(new[] { "imdb:tt0000000" }, Now.AddDays(13)));
+        Assert.True(snapshot.NeedsComposers(new[] { "imdb:tt0000000" }, Now.AddDays(15)));
     }
 
     [Fact]
@@ -314,7 +317,7 @@ public class ComposerSnapshotTests
     public void RecordingAgainReplacesRatherThanAccumulates()
     {
         var snapshot = WithBattlestar();
-        snapshot.Record(
+        snapshot.RecordComposers(
             new[] { "imdb:tt0407362" },
             new ResearchedCredits(new[] { "Richard Gibbs" }, null, null),
             "MusicBrainz",
@@ -341,7 +344,7 @@ public class ComposerSnapshotTests
     public void OnlyAnAnswerThatNamesSomebodyCountsAsKnown()
     {
         var snapshot = new ComposerSnapshot();
-        snapshot.Record(new[] { "imdb:tt0000000" }, ResearchedCredits.None, "nobody", Now);
+        snapshot.RecordComposers(new[] { "imdb:tt0000000" }, ResearchedCredits.None, "nobody", Now);
 
         Assert.Single(snapshot.Entries);
         Assert.Equal(0, snapshot.Known);

@@ -5,7 +5,20 @@ using System.Text.Json.Serialization;
 
 namespace Jellyfin.Plugin.ThemeForge.Engines.Credits;
 
-/// <summary>What was found out about who wrote a work's music.</summary>
+/// <summary>The theme itself: what it is called, and who performs it.</summary>
+/// <param name="Title">The song or piece, as credited.</param>
+/// <param name="Performer">Who performs it, when exactly one performer is named; otherwise null.</param>
+public sealed record ThemeSong(string Title, string? Performer)
+{
+    /// <summary>Gets the words to search for: the song, and its performer when known.</summary>
+    public string SearchText => string.IsNullOrWhiteSpace(Performer) ? Title : Title + " " + Performer;
+
+    /// <inheritdoc />
+    public override string ToString() =>
+        string.IsNullOrWhiteSpace(Performer) ? $"“{Title}”" : $"“{Title}” by {Performer}";
+}
+
+/// <summary>What was found out about a work's music: who wrote it, and what its theme is called.</summary>
 /// <param name="Composers">The composers, most prominent first. Empty when none were found.</param>
 /// <param name="Artist">The artist credited on the soundtrack release, when that is all there is.</param>
 /// <param name="ReleaseGroupId">The MusicBrainz release group, when known, so a later look-up can skip a step.</param>
@@ -17,10 +30,24 @@ public sealed record ResearchedCredits(
     /// <summary>Nothing was found.</summary>
     public static readonly ResearchedCredits None = new(Array.Empty<string>(), null, null);
 
-    /// <summary>Gets a value indicating whether this says anything useful.</summary>
+    /// <summary>Gets the theme song, when one is known.</summary>
+    public ThemeSong? Theme { get; init; }
+
+    /// <summary>Gets who wrote the theme, which is often not who scored the work.</summary>
+    /// <remarks>Dexter's theme is Rolfe Kent's; its score is Daniel Licht's.</remarks>
+    public IReadOnlyList<string> ThemeComposers { get; init; } = Array.Empty<string>();
+
+    /// <summary>Gets the English Wikipedia article about the work, when there is one.</summary>
+    /// <remarks>A lead rather than an answer: it is how the infobox is found.</remarks>
+    public string? WikipediaTitle { get; init; }
+
+    /// <summary>Gets a value indicating whether this names somebody who wrote the music.</summary>
     public bool Any => Composers.Count > 0 || !string.IsNullOrWhiteSpace(Artist);
 
-    /// <summary>Gets every name this record offers, composers first.</summary>
+    /// <summary>Gets a value indicating whether anything is known about the theme.</summary>
+    public bool KnowsTheme => Theme is not null || ThemeComposers.Count > 0;
+
+    /// <summary>Gets every name this record offers for who wrote the music, composers first.</summary>
     public IReadOnlyList<string> Names =>
         Composers.Count > 0
             ? Composers
@@ -28,6 +55,12 @@ public sealed record ResearchedCredits(
 }
 
 /// <summary>One work's credits, as they were found and when.</summary>
+/// <remarks>
+/// Two questions are answered here, and each has its own date, because they are answered by
+/// different sources and go stale separately. The composer fields keep the names they had in 2.5,
+/// so a cache written by 2.5 still loads: its composers stand, and its theme question, which has no
+/// date yet, is asked once.
+/// </remarks>
 public sealed class ComposerCredits
 {
     /// <summary>Gets or sets the provider id this record answers for, such as <c>imdb:tt0407362</c>.</summary>
@@ -42,35 +75,73 @@ public sealed class ComposerCredits
     /// <summary>Gets or sets the MusicBrainz release group, when one was found.</summary>
     public string? ReleaseGroupId { get; set; }
 
-    /// <summary>Gets or sets which source answered, or where the question was last put.</summary>
+    /// <summary>Gets or sets which source named the composer, or <c>nobody</c>.</summary>
     public string Source { get; set; } = string.Empty;
 
-    /// <summary>Gets or sets when the question was last asked.</summary>
+    /// <summary>Gets or sets when the composer question was last settled; the default means never.</summary>
     public DateTime LookedUpUtc { get; set; }
 
-    /// <summary>Gets a value indicating whether anything was found.</summary>
+    /// <summary>Gets or sets the theme song's title.</summary>
+    public string? ThemeTitle { get; set; }
+
+    /// <summary>Gets or sets who performs the theme song.</summary>
+    public string? ThemePerformer { get; set; }
+
+    /// <summary>Gets or sets who wrote the theme.</summary>
+    public List<string> ThemeComposers { get; set; } = new();
+
+    /// <summary>Gets or sets which source named the theme, or <c>nobody</c>.</summary>
+    public string? ThemeSource { get; set; }
+
+    /// <summary>Gets or sets when the theme question was last settled; null means never.</summary>
+    public DateTime? ThemeLookedUpUtc { get; set; }
+
+    /// <summary>Gets or sets the English Wikipedia article about the work.</summary>
+    public string? WikipediaTitle { get; set; }
+
+    /// <summary>Gets a value indicating whether somebody is named as having written the music.</summary>
     [JsonIgnore]
     public bool Found => Composers.Count > 0 || !string.IsNullOrWhiteSpace(Artist);
 
+    /// <summary>Gets a value indicating whether anything is known about the theme.</summary>
+    [JsonIgnore]
+    public bool ThemeFound => !string.IsNullOrWhiteSpace(ThemeTitle) || ThemeComposers.Count > 0;
+
     /// <summary>Reads this record back as credits.</summary>
     /// <returns>The credits.</returns>
-    public ResearchedCredits AsCredits() => new(Composers, Artist, ReleaseGroupId);
+    public ResearchedCredits AsCredits() => new(Composers, Artist, ReleaseGroupId)
+    {
+        Theme = string.IsNullOrWhiteSpace(ThemeTitle) ? null : new ThemeSong(ThemeTitle, ThemePerformer),
+        ThemeComposers = ThemeComposers,
+        WikipediaTitle = WikipediaTitle,
+    };
+
+    /// <summary>Copies this record, so a copy can be changed while the original is being read.</summary>
+    /// <returns>The copy.</returns>
+    public ComposerCredits Clone()
+    {
+        var copy = (ComposerCredits)MemberwiseClone();
+        copy.Composers = Composers.ToList();
+        copy.ThemeComposers = ThemeComposers.ToList();
+        return copy;
+    }
 }
 
 /// <summary>
-/// What research has established about who wrote the music, kept locally.
+/// What research has established about a work's music, kept locally.
 /// </summary>
 /// <remarks>
 /// <para>
 /// Jellyfin records a composer for very few items, and without one the ladder's composer rung is
 /// dropped, the composer bonus never pays, and an ordinary title such as <c>Lost</c> has nothing
 /// to corroborate it. The answer is public and stable — a film's composer does not change — so it
-/// is worth looking up once and keeping.
+/// is worth looking up once and keeping. The same goes for what the theme is called.
 /// </para>
 /// <para>
 /// Misses are kept as carefully as hits. A quarter of any library has no composer recorded
 /// anywhere, and without remembering that, those items would be asked about again on every scan,
-/// which is most of the traffic this cache exists to avoid.
+/// which is most of the traffic this cache exists to avoid. A question that could not be asked —
+/// the service was down, or refused — is not a miss, and is not recorded as one.
 /// </para>
 /// </remarks>
 public sealed class ComposerSnapshot
@@ -102,9 +173,13 @@ public sealed class ComposerSnapshot
     [JsonIgnore]
     public TimeSpan Age => DateTime.UtcNow - UpdatedUtc;
 
-    /// <summary>Gets how many records name at least one person.</summary>
+    /// <summary>Gets how many records name at least one person who wrote the music.</summary>
     [JsonIgnore]
     public int Known => Entries.Count(entry => entry.Found);
+
+    /// <summary>Gets how many records know something about the theme.</summary>
+    [JsonIgnore]
+    public int ThemesKnown => Entries.Count(entry => entry.ThemeFound);
 
     /// <summary>Finds what is known about a work, by any id it is known by.</summary>
     /// <param name="keys">The provider keys to try, best first.</param>
@@ -128,14 +203,24 @@ public sealed class ComposerSnapshot
         return null;
     }
 
-    /// <summary>Reports whether a work should be looked up again.</summary>
+    /// <summary>Reports whether either question about a work should be asked again.</summary>
     /// <param name="keys">The provider keys to try.</param>
     /// <param name="nowUtc">The current time.</param>
-    /// <returns><see langword="true"/> when nothing is known, or what is known has aged out.</returns>
+    /// <returns><see langword="true"/> when something is unknown or has aged out.</returns>
     public bool NeedsLookUp(IEnumerable<string> keys, DateTime nowUtc)
     {
+        var list = keys as IReadOnlyCollection<string> ?? keys.ToList();
+        return NeedsComposers(list, nowUtc) || NeedsTheme(list, nowUtc);
+    }
+
+    /// <summary>Reports whether who wrote a work's music should be asked again.</summary>
+    /// <param name="keys">The provider keys to try.</param>
+    /// <param name="nowUtc">The current time.</param>
+    /// <returns><see langword="true"/> when it was never settled, or the answer has aged out.</returns>
+    public bool NeedsComposers(IEnumerable<string> keys, DateTime nowUtc)
+    {
         var found = Find(keys);
-        if (found is null)
+        if (found is null || found.LookedUpUtc == default)
         {
             return true;
         }
@@ -143,31 +228,94 @@ public sealed class ComposerSnapshot
         return nowUtc - found.LookedUpUtc > (found.Found ? HitLifetime : MissLifetime);
     }
 
-    /// <summary>Records what a source answered, replacing anything held for the same keys.</summary>
+    /// <summary>Reports whether what a work's theme is called should be asked again.</summary>
+    /// <param name="keys">The provider keys to try.</param>
+    /// <param name="nowUtc">The current time.</param>
+    /// <returns><see langword="true"/> when it was never settled, or the answer has aged out.</returns>
+    public bool NeedsTheme(IEnumerable<string> keys, DateTime nowUtc)
+    {
+        var found = Find(keys);
+        if (found?.ThemeLookedUpUtc is not { } asked)
+        {
+            return true;
+        }
+
+        return nowUtc - asked > (found.ThemeFound ? HitLifetime : MissLifetime);
+    }
+
+    /// <summary>Records who wrote a work's music, leaving what is known about its theme alone.</summary>
     /// <param name="keys">Every id this work is known by.</param>
     /// <param name="credits">What was found, which may be nothing.</param>
-    /// <param name="source">Which source answered, or which was asked last.</param>
+    /// <param name="source">Which source answered, or <c>nobody</c>.</param>
     /// <param name="nowUtc">The current time.</param>
-    public void Record(IReadOnlyList<string> keys, ResearchedCredits credits, string source, DateTime nowUtc)
+    public void RecordComposers(IReadOnlyList<string> keys, ResearchedCredits credits, string source, DateTime nowUtc)
     {
-        ArgumentNullException.ThrowIfNull(keys);
         ArgumentNullException.ThrowIfNull(credits);
 
-        foreach (var key in keys.Where(key => !string.IsNullOrEmpty(key)))
+        foreach (var entry in EntriesFor(keys))
         {
-            Entries.RemoveAll(entry => string.Equals(entry.Key, key, StringComparison.OrdinalIgnoreCase));
-            Entries.Add(new ComposerCredits
+            entry.Composers = credits.Composers.ToList();
+            entry.Artist = credits.Artist;
+            entry.Source = source;
+            entry.LookedUpUtc = nowUtc;
+            Leads(entry, credits);
+        }
+    }
+
+    /// <summary>Records what a work's theme is called, leaving who wrote its music alone.</summary>
+    /// <param name="keys">Every id this work is known by.</param>
+    /// <param name="credits">What was found, which may be nothing.</param>
+    /// <param name="source">Which source answered, or <c>nobody</c>.</param>
+    /// <param name="nowUtc">The current time.</param>
+    public void RecordTheme(IReadOnlyList<string> keys, ResearchedCredits credits, string source, DateTime nowUtc)
+    {
+        ArgumentNullException.ThrowIfNull(credits);
+
+        foreach (var entry in EntriesFor(keys))
+        {
+            entry.ThemeTitle = credits.Theme?.Title;
+            entry.ThemePerformer = credits.Theme?.Performer;
+            entry.ThemeComposers = credits.ThemeComposers.ToList();
+            entry.ThemeSource = source;
+            entry.ThemeLookedUpUtc = nowUtc;
+            Leads(entry, credits);
+        }
+    }
+
+    /// <summary>Copies the whole cache, so a sync can change the copy while searches read the original.</summary>
+    /// <returns>The copy.</returns>
+    public ComposerSnapshot Clone() => new()
+    {
+        UpdatedUtc = UpdatedUtc,
+        Entries = Entries.Select(entry => entry.Clone()).ToList(),
+    };
+
+    private static void Leads(ComposerCredits entry, ResearchedCredits credits)
+    {
+        entry.ReleaseGroupId = credits.ReleaseGroupId ?? entry.ReleaseGroupId;
+        entry.WikipediaTitle = credits.WikipediaTitle ?? entry.WikipediaTitle;
+    }
+
+    /// <summary>Finds or makes the record for each id, one per id.</summary>
+    private List<ComposerCredits> EntriesFor(IReadOnlyList<string> keys)
+    {
+        ArgumentNullException.ThrowIfNull(keys);
+
+        var entries = new List<ComposerCredits>();
+        foreach (var key in keys.Where(key => !string.IsNullOrEmpty(key)).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var entry = Entries.Find(existing => string.Equals(existing.Key, key, StringComparison.OrdinalIgnoreCase));
+            if (entry is null)
             {
-                Key = key,
-                Composers = credits.Composers.ToList(),
-                Artist = credits.Artist,
-                ReleaseGroupId = credits.ReleaseGroupId,
-                Source = source,
-                LookedUpUtc = nowUtc,
-            });
+                entry = new ComposerCredits { Key = key };
+                Entries.Add(entry);
+            }
+
+            entries.Add(entry);
         }
 
         _byKey = null;
+        return entries;
     }
 }
 

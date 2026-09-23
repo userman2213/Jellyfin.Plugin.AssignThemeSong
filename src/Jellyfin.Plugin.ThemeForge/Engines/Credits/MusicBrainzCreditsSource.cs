@@ -78,6 +78,9 @@ public sealed class MusicBrainzCreditsSource : ICreditsSource
     public int Order => 10;
 
     /// <inheritdoc />
+    public CreditsQuestion Answers => CreditsQuestion.Composers;
+
+    /// <inheritdoc />
     public bool IsEnabled(PluginConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
@@ -85,7 +88,7 @@ public sealed class MusicBrainzCreditsSource : ICreditsSource
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyDictionary<string, ResearchedCredits>> LookUpAsync(
+    public async Task<CreditsAnswer> LookUpAsync(
         IReadOnlyList<CreditsRequest> batch,
         PluginConfiguration configuration,
         IProgress<double>? progress,
@@ -94,15 +97,17 @@ public sealed class MusicBrainzCreditsSource : ICreditsSource
         ArgumentNullException.ThrowIfNull(batch);
 
         var found = new Dictionary<string, ResearchedCredits>(StringComparer.OrdinalIgnoreCase);
+        var failed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         // Nothing to ask about a work with no IMDb id and no release group from the first source.
+        // That is a definite "nothing here", not a failure.
         var askable = batch
             .Where(work => !string.IsNullOrWhiteSpace(work.ImdbId) || !string.IsNullOrWhiteSpace(work.ReleaseGroupId))
             .ToList();
 
         if (askable.Count == 0)
         {
-            return found;
+            return new CreditsAnswer(found, failed);
         }
 
         var client = _httpClientFactory.CreateClient(NamedClient.Default);
@@ -117,8 +122,12 @@ public sealed class MusicBrainzCreditsSource : ICreditsSource
                 ? string.Format(CultureInfo.InvariantCulture, ByReleaseGroup, Uri.EscapeDataString(group))
                 : string.Format(CultureInfo.InvariantCulture, ByImdbUrl, Uri.EscapeDataString(work.ImdbId!));
 
-            var body = await GetAsync(client, url, work.Label, cancellationToken).ConfigureAwait(false);
-            if (body is not null)
+            var (body, couldNotAsk) = await GetAsync(client, url, work.Label, cancellationToken).ConfigureAwait(false);
+            if (couldNotAsk)
+            {
+                failed.Add(work.Key);
+            }
+            else if (body is not null)
             {
                 var credits = Parse(body);
                 if (credits.Any)
@@ -135,11 +144,16 @@ public sealed class MusicBrainzCreditsSource : ICreditsSource
             }
         }
 
-        return found;
+        return new CreditsAnswer(found, failed);
     }
 
     /// <summary>Fetches one document, waiting and trying again when the service is busy.</summary>
-    private async Task<string?> GetAsync(HttpClient client, string url, string label, CancellationToken cancellationToken)
+    /// <returns>
+    /// The document, or no document with <c>CouldNotAsk</c> saying why: false when the service
+    /// answered that there is nothing (a 404 is a definite "not linked"), true when it could not
+    /// be asked at all and the work should be tried again.
+    /// </returns>
+    private async Task<(string? Body, bool CouldNotAsk)> GetAsync(HttpClient client, string url, string label, CancellationToken cancellationToken)
     {
         for (var attempt = 1; attempt <= Attempts; attempt++)
         {
@@ -158,21 +172,23 @@ public sealed class MusicBrainzCreditsSource : ICreditsSource
                     continue;
                 }
 
-                if (response.StatusCode == HttpStatusCode.NotFound || !response.IsSuccessStatusCode)
+                if (response.IsSuccessStatusCode)
                 {
-                    return null;
+                    return (await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false), false);
                 }
 
-                return await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                // A server-side failure, or "too fast" that outlasted the retries, says nothing
+                // about the work. Anything else -- 404 above all -- is the service's answer.
+                return (null, (int)response.StatusCode >= 500 || response.StatusCode == HttpStatusCode.TooManyRequests);
             }
             catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
             {
                 _logger.LogDebug(ex, "ThemeForge: could not ask MusicBrainz about \"{Item}\".", label);
-                return null;
+                return (null, true);
             }
         }
 
-        return null;
+        return (null, true);
     }
 
     /// <summary>

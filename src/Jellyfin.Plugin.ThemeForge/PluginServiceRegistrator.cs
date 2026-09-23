@@ -50,6 +50,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         // the rest of the pipeline, which goes on asking one synchronous question as before.
         serviceCollection.AddSingleton<ICreditsSource, WikidataCreditsSource>();
         serviceCollection.AddSingleton<ICreditsSource, MusicBrainzCreditsSource>();
+        serviceCollection.AddSingleton<ICreditsSource, WikipediaThemeSource>();
         serviceCollection.AddSingleton<IComposerCatalogue, ComposerCatalogue>();
 
         // Pipeline engines
