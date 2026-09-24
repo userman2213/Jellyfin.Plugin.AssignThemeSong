@@ -30,8 +30,8 @@ public interface IHeadlessBrowser
     /// </summary>
     /// <param name="url">The absolute URL to load.</param>
     /// <param name="isComplete">
-    /// Decides whether a render produced the page rather than a bot challenge standing in for it.
-    /// A render it rejects is retried once.
+    /// Decides whether a render produced the page rather than a check standing in for it. A render
+    /// it rejects is retried once.
     /// </param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The rendered HTML, or null when it could not be had.</returns>
@@ -43,25 +43,25 @@ public interface IHeadlessBrowser
 /// </summary>
 /// <remarks>
 /// <para>
-/// Used for one thing only: IMDb, which answers a server's plain request with a bot challenge
-/// that carries a <c>2xx</c> status and clears only when a browser engine runs its script. The
-/// browser is started the way yt-dlp and FFmpeg are, through <see cref="IProcessRunner"/>, rather
-/// than through a driver library that would put a second copy of Chromium on the server.
+/// Used for one thing only: an IMDb page that came back as a bot check rather than the listing,
+/// which clears when a browser engine runs its script. The browser is started the way yt-dlp and
+/// FFmpeg are, through <see cref="IProcessRunner"/>, rather than through a driver library that
+/// would put a second copy of Chromium on the server.
 /// </para>
 /// <para>
-/// The profile directory is what makes this affordable. It keeps the clearance the challenge
-/// grants, so the challenge is solved once rather than per lookup: a cold render has been measured
-/// at over a minute and a warm one at a few seconds. Chrome will not run two instances against one
-/// profile, so renders are serialised.
+/// The profile directory is what makes this affordable. It keeps whatever clearance a render earns,
+/// so a check is solved once rather than per lookup: a first render has been measured at over a
+/// minute and a later one at a few seconds. Chrome will not run two instances against one profile,
+/// so renders are serialised.
 /// </para>
 /// </remarks>
 public sealed class HeadlessBrowser : IHeadlessBrowser
 {
     /// <summary>How many times a render is attempted before giving up.</summary>
     /// <remarks>
-    /// A first render can come back as a challenge that has not resolved; the retry runs with the
-    /// clearance the first attempt stored. It also covers Chrome exiting early because the previous
-    /// instance still held the profile lock, which produces a partial document.
+    /// A first render can come back as a check that has not resolved; the retry runs with whatever
+    /// the first attempt stored. It also covers Chrome exiting early because the previous instance
+    /// still held the profile lock, which produces a partial document.
     /// </remarks>
     private const int Attempts = 2;
 
@@ -226,7 +226,7 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         if (!(Plugin.Instance?.Configuration?.ImdbDownloadBrowser ?? true))
         {
             _logger.LogWarning(
-                "IMDb needs a browser, none is installed, and downloading one is switched off. "
+                "This page needs a browser, none is installed, and downloading one is switched off. "
                 + "Install Chrome or Chromium, or set a browser path in the settings.");
             return null;
         }
@@ -264,11 +264,11 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
             "--password-store=basic",
             "--disable-blink-features=AutomationControlled",
 
-            // Chrome's own headless user agent says "HeadlessChrome", which IMDb answers with 403
-            // outright, so it is always replaced.
+            // Chrome's own headless user agent says "HeadlessChrome", which IMDb refuses, so it is
+            // always replaced.
             "--user-agent=" + BrowserIdentity.UserAgent,
 
-            // Advances timers as fast as it can, so the challenge's own delays are not spent in
+            // Advances timers as fast as it can, so a check's own delays are not spent in
             // wall-clock time, then prints the DOM once the page settles.
             "--virtual-time-budget=" + ((int)timeout.TotalMilliseconds - 5000).ToString(
                 System.Globalization.CultureInfo.InvariantCulture),
@@ -282,8 +282,8 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         }
 
         // Chrome's sandbox cannot start inside most container images, which is how Jellyfin is
-        // usually deployed. The browser only ever loads the lookup URL, and the flag is exposed
-        // so a server running outside a container can keep the sandbox.
+        // usually deployed. The browser only ever loads the lookup URL, and the flag is exposed so
+        // a server running outside a container can keep the sandbox.
         if (configuration?.ImdbBrowserNoSandbox ?? true)
         {
             arguments.Add("--no-sandbox");

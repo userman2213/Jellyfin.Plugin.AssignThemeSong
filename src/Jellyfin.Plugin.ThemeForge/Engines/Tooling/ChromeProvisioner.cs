@@ -80,8 +80,8 @@ public interface IChromeProvisioner
 /// </para>
 /// <para>
 /// The full <c>chrome</c> build is taken rather than <c>chrome-headless-shell</c>. The shell is the
-/// older headless implementation and is the cheaper download, but it is not what a bot challenge
-/// expects to be talking to.
+/// older headless implementation and the cheaper download, but it is the less complete browser, and
+/// the point of using one at all is to be a complete browser.
 /// </para>
 /// </remarks>
 public sealed class ChromeProvisioner : IChromeProvisioner
@@ -124,7 +124,7 @@ public sealed class ChromeProvisioner : IChromeProvisioner
             }
             catch (IOException ex)
             {
-                // Without a profile every render re-solves the challenge: slower, still works.
+                // Without a profile every render starts from nothing: slower, still works.
                 _logger.LogWarning(ex, "Could not make the browser profile directory");
                 return null;
             }

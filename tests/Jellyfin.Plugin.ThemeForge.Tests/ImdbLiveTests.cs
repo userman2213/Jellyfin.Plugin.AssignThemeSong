@@ -16,12 +16,11 @@ namespace Jellyfin.Plugin.ThemeForge.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Behind <c>THEMEFORGE_NETWORK_TESTS</c> like the other live tests, and more conditional than
-/// most: IMDb's bot check is applied per address, so whether a cold attempt clears depends on where
-/// the test runs. A run that cannot get past the check is reported as inconclusive rather than
-/// failed, because the failure would be the network's and not the code's. What is asserted
-/// unconditionally is that the code reaches a definite answer and never returns a challenge page
-/// dressed up as a listing.
+/// Behind <c>THEMEFORGE_NETWORK_TESTS</c> like the other live tests, and more conditional than most:
+/// whether IMDb serves the page or a check depends on where the test runs, so a run that does not
+/// get the listing is reported as inconclusive rather than failed -- that failure would be the
+/// network's and not the code's. What is asserted unconditionally is that the code reaches a
+/// definite answer and never returns a check page dressed up as a listing.
 /// </para>
 /// <para>
 /// The browser download is a few hundred megabytes, so it is a separate test.
@@ -57,7 +56,8 @@ public class ImdbLiveTests
 
         if (listing.Refused)
         {
-            // IMDb is challenging this address. Not a code failure; the settings page reports it.
+            // This network was served a check rather than the page. Not a code failure; the
+            // settings page reports it.
             Assert.Empty(listing.Entries);
             return;
         }
@@ -87,7 +87,7 @@ public class ImdbLiveTests
     }
 
     [NetworkFact]
-    public async Task NeverReturnsAChallengePageAsAListing()
+    public async Task NeverReturnsACheckPageAsAListing()
     {
         var source = Source(Browser());
 

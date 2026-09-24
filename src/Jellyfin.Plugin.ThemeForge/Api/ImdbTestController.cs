@@ -95,10 +95,9 @@ public class ImdbBrowserStatus
 /// Lets an administrator find out whether this server can actually read IMDb.
 /// </summary>
 /// <remarks>
-/// IMDb's bot check is applied per address: it clears readily from a home connection and often not
-/// at all from a hosted one. That is not something the plugin can fix, and without a way to try it
-/// the only symptom is themes quietly not being found. This runs the real path and says which
-/// stage stopped, so the answer is a report rather than a guess.
+/// Whether IMDb serves the page or a bot check depends on where the request comes from, and without
+/// a way to try it the only symptom either way is themes appearing or not. This runs the real path
+/// and says which stage did what, so the answer is a report rather than a guess.
 /// </remarks>
 [ApiController]
 [Authorize(Policy = "RequiresElevation")]
@@ -254,13 +253,15 @@ public class ImdbTestController : ControllerBase
             Ok = listing.Entries.Count > 0,
             ElapsedMs = stage.ElapsedMilliseconds,
             Detail = listing.Refused
-                ? "IMDb refused, and its bot check did not clear"
+                ? "IMDb did not serve the listing, in a browser or otherwise"
                 : listing.Entries.Count > 0
                     ? string.Format(
                         CultureInfo.InvariantCulture,
                         "Read the listing ({0} entries){1}",
                         listing.Entries.Count,
-                        listing.UsedBrowser ? ", after the direct request was refused" : " without needing a browser")
+                        listing.UsedBrowser
+                            ? ", after the direct request came back as a check"
+                            : " from the direct request, no browser needed")
                     : "IMDb answered but listed nothing",
         });
 
@@ -320,20 +321,21 @@ public class ImdbTestController : ControllerBase
         {
             return listing.UsedBrowser
                 ? $"Working. IMDb named “{theme.Title}” as the theme, read through the headless browser."
-                : $"Working. IMDb named “{theme.Title}” as the theme, and no browser was needed.";
+                : $"Working. IMDb named “{theme.Title}” as the theme, straight from the direct "
+                  + "request — this server does not need the browser at all.";
         }
 
         if (listing.Refused)
         {
             if (_browser.FindBrowser() is null)
             {
-                return "IMDb refused a direct request and there is no browser to fall back on. "
-                     + "Download one below, or set a browser path.";
+                return "The direct request did not get the listing, and there is no browser to fall "
+                     + "back on. Download one below, or set a browser path.";
             }
 
-            return "IMDb refused a direct request and its bot check did not clear in the browser "
-                 + "either. This means IMDb is challenging this server's address, which is usual on "
-                 + "a hosted or VPS server and unusual on a home connection. Nothing else in "
+            return "Neither the direct request nor the browser got the listing. This network is "
+                 + "being served a bot check instead of the page; it depends on where the request "
+                 + "comes from rather than on anything ThemeForge can change. Nothing else in "
                  + "ThemeForge is affected.";
         }
 

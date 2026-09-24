@@ -12,8 +12,8 @@ namespace Jellyfin.Plugin.ThemeForge.Tests;
 /// </summary>
 /// <remarks>
 /// The fixtures are real listings, trimmed to their soundtrack rows: two films, two series, the
-/// older markup, and the bot challenge IMDb serves instead of the page. The films are the reason
-/// the choosing rule exists, so they are pinned rather than sampled.
+/// older markup, and the check page some networks are served instead. The films are the reason the
+/// choosing rule exists, so they are pinned rather than sampled.
 /// </remarks>
 public class ImdbSoundtrackTests
 {
@@ -187,8 +187,8 @@ public class ImdbSoundtrackTests
     [Fact]
     public void DoesNotMistakeARealListingForAChallengeBecauseItMentionsOne()
     {
-        // A megabyte-long page that happens to contain the word is the page, not a challenge:
-        // the real listings are served alongside the challenge script's own domain.
+        // A megabyte-long page that happens to contain the word is the page, not a check stub:
+        // the real listings reference the check script's own domain.
         var page = "<html>" + new string('x', 25000) + "awswaf</html>";
 
         Assert.False(ImdbSoundtrackSource.IsChallenge(page));

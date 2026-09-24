@@ -147,11 +147,8 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The last resort, and the one source read against the site's wishes. IMDb answers a request
-    /// that identifies itself as a program with <c>403</c> and a browser-shaped one with a bot
-    /// challenge, so reading it means presenting as a browser and rendering the page in headless
-    /// Chrome when that is refused. IMDb's terms do not permit automated reading. It is on by
-    /// choice, and this switch turns all of it off.
+    /// The last place looked. Asked only about titles Wikidata and Wikipedia left without a theme,
+    /// and only by IMDb id, never by name.
     /// </para>
     /// <para>
     /// Only asked about titles Wikidata and Wikipedia left without a theme, and only by IMDb id.
@@ -167,9 +164,10 @@ public class PluginConfiguration : BasePluginConfiguration
     /// a plain request for it is refused.
     /// </summary>
     /// <remarks>
-    /// Turning this off leaves the plain request, which succeeds only where IMDb is not challenging
-    /// the server. The bot check is applied per address and is far harsher on hosted servers than on
-    /// home connections.
+    /// Some networks are served a bot check in place of the page, which clears only when a browser
+    /// engine runs its script. Whether a given network is depends on where the request comes from.
+    /// Turning this off leaves the direct request, which is all a network that is never challenged
+    /// needs.
     /// </remarks>
     public bool UseImdbBrowser { get; set; } = true;
 
@@ -197,7 +195,7 @@ public class PluginConfiguration : BasePluginConfiguration
     /// Gets or sets how long the browser is given to render one page, in seconds.
     /// </summary>
     /// <remarks>
-    /// Clearing the bot check on a cold profile has been measured at over a minute; once the profile
+    /// A first render that has to clear a check has been measured at over a minute; once the profile
     /// holds the clearance a render takes a few seconds.
     /// </remarks>
     public int ImdbBrowserTimeoutSeconds { get; set; } = 120;
@@ -212,8 +210,8 @@ public class PluginConfiguration : BasePluginConfiguration
     /// desktop Chrome one.
     /// </summary>
     /// <remarks>
-    /// Worth moving on when this stops working: a user agent going stale is the usual reason a bot
-    /// filter starts refusing.
+    /// Chrome's own headless user agent says "HeadlessChrome", which IMDb refuses, so one is always
+    /// sent. Worth moving on if the built-in one goes stale.
     /// </remarks>
     public string ImdbUserAgent { get; set; } = string.Empty;
 

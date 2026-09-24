@@ -17,22 +17,20 @@ namespace Jellyfin.Plugin.ThemeForge.Engines.Credits;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The last source asked, and the only one that is not asked politely. IMDb answers a request that
-/// identifies itself as a program with <c>403</c>, and a browser-shaped one with an Amazon bot
-/// challenge that carries a <c>2xx</c> status and clears only when a browser engine runs its
-/// script. Reading it means presenting as a browser and, when that is refused, rendering the page
-/// in headless Chrome. IMDb's terms do not permit automated reading, which is why this is a
-/// deliberate, separable source with its own switch rather than part of the ordinary chain.
+/// The last source asked: only about works that Wikidata and Wikipedia could not name a theme for,
+/// and only about works with an IMDb id, since the listing is keyed on the id and nothing is
+/// searched for by name.
 /// </para>
 /// <para>
-/// It is asked only about works that Wikidata and Wikipedia could not name a theme for, and only
-/// about works with an IMDb id -- the listing is keyed on the id, so nothing is searched for by
-/// name. A plain request is tried first because it is an order of magnitude faster and succeeds
-/// where IMDb is not challenging the server; the browser is a fallback, not the first move.
+/// The pages are built for a browser, so the request sends what a browser sends. Some networks are
+/// answered with an Amazon bot check instead of the page -- a <c>2xx</c> status carrying a script
+/// that clears it -- and where that happens the page is rendered in headless Chrome instead. The
+/// direct request is always tried first: it is an order of magnitude faster, and on a connection
+/// that is never challenged it is all that is needed.
 /// </para>
 /// <para>
-/// A challenge is not a miss. A work IMDb refused to answer about is reported as failed, so it is
-/// asked again on the next run rather than being remembered as having no theme for a fortnight.
+/// A refusal is not a miss. A work IMDb did not answer about is reported as failed, so it is asked
+/// again on the next run rather than remembered as having no theme for a fortnight.
 /// </para>
 /// </remarks>
 public sealed class ImdbSoundtrackSource : ICreditsSource
@@ -43,8 +41,9 @@ public sealed class ImdbSoundtrackSource : ICreditsSource
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(30);
 
     /// <summary>
-    /// How long to leave between requests. IMDb is being read against its wishes; going through it
-    /// quickly is both rude and the fastest way to be blocked outright.
+    /// How long to leave between requests. One a couple of seconds is plenty for a source consulted
+    /// only about what nothing else could answer, and going through a library faster than that is
+    /// the quickest way to wear out a welcome.
     /// </summary>
     private static readonly TimeSpan Spacing = TimeSpan.FromSeconds(2);
 
@@ -204,12 +203,14 @@ public sealed class ImdbSoundtrackSource : ICreditsSource
         if (!configuration.UseImdbBrowser)
         {
             _logger.LogWarning(
-                "IMDb refused a plain request for {Url} and rendering in a browser is switched off.",
+                "IMDb did not answer the direct request for {Url}, and rendering in a browser is "
+                + "switched off.",
                 soundtrackUrl);
             return new Listing(Array.Empty<SoundtrackEntry>(), true, false, null);
         }
 
-        _logger.LogDebug("IMDb refused a plain request for {Url}; rendering it instead", soundtrackUrl);
+        _logger.LogDebug(
+            "IMDb did not answer the direct request for {Url}; rendering it instead", soundtrackUrl);
 
         var rendered = await _browser
             .RenderAsync(soundtrackUrl, LooksLikeTheListing, cancellationToken)
@@ -218,8 +219,9 @@ public sealed class ImdbSoundtrackSource : ICreditsSource
         if (rendered is null)
         {
             _logger.LogWarning(
-                "IMDb's bot check did not clear for {Url}, in a browser or otherwise. This is usual "
-                + "on a hosted server and unusual on a home connection; the settings page can test it.",
+                "Could not read {Url}, in a browser or otherwise. Whether this network is served a "
+                + "bot check instead of the page depends on where the request comes from; the "
+                + "settings page can test it against one title.",
                 soundtrackUrl);
             return new Listing(Array.Empty<SoundtrackEntry>(), true, true, null);
         }
@@ -227,7 +229,7 @@ public sealed class ImdbSoundtrackSource : ICreditsSource
         return new Listing(ImdbSoundtrackPage.Parse(rendered), false, true, rendered);
     }
 
-    /// <summary>Tells a rendered listing apart from a challenge standing in for it.</summary>
+    /// <summary>Tells a rendered listing apart from a check's page standing in for it.</summary>
     /// <param name="html">The document.</param>
     /// <returns><see langword="true"/> when it is the real page.</returns>
     internal static bool LooksLikeTheListing(string html) =>
@@ -238,8 +240,8 @@ public sealed class ImdbSoundtrackSource : ICreditsSource
     /// Asks IMDb for a page as a browser would.
     /// </summary>
     /// <returns>
-    /// The body, or null with <c>refused</c> set when a bot filter turned the request away rather
-    /// than the page simply not existing.
+    /// The body, or null with <c>refused</c> set when the request was turned away or answered with a
+    /// check, rather than the page simply not existing.
     /// </returns>
     private async Task<(string? Html, bool Refused)> RequestAsync(
         string url,
@@ -276,8 +278,8 @@ public sealed class ImdbSoundtrackSource : ICreditsSource
 
             var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 
-            // The challenge arrives with a success status, so the status code alone would let it
-            // through as content.
+            // A check arrives with a success status, so the status code alone would let it through
+            // as content.
             if (IsChallenge(body))
             {
                 return (null, true);
@@ -301,12 +303,12 @@ public sealed class ImdbSoundtrackSource : ICreditsSource
         }
     }
 
-    /// <summary>Recognises the interstitial a bot filter serves in place of the page.</summary>
+    /// <summary>Recognises the interstitial served in place of the page where a check applies.</summary>
     /// <param name="body">The response body.</param>
     /// <returns><see langword="true"/> when it is a challenge.</returns>
     internal static bool IsChallenge(string body)
     {
-        // A real listing is well over a megabyte; a challenge stub is a couple of kilobytes.
+        // A real listing is well over a megabyte; a check's stub page is a couple of kilobytes.
         if (string.IsNullOrEmpty(body) || body.Length > 20000)
         {
             return false;

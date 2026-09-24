@@ -378,24 +378,22 @@
                         <span>Read IMDb's soundtrack listing when nothing else names the theme</span>
                     </label>
                     <div class="fieldDescription" style="margin:.25em 0 1em 0;">
-                        The last resort, and the only source read against the site's wishes: IMDb answers a
-                        request that says it is a program with <code>403</code>, and a browser-shaped one with a
-                        bot check, and its terms do not permit automated reading. Asked only about titles
-                        Wikidata and Wikipedia left without a theme, and only by IMDb id. An entry is taken only
-                        when the listing calls it the title music or names it after the work &mdash; for a film
-                        the listing is the licensed songs in the order they play, so its first entry is whatever
-                        plays first rather than the theme. Use <strong>Test the IMDb lookup</strong> below to
-                        find out whether your server can read it at all.
+                        The last place ThemeForge looks: only titles Wikidata and Wikipedia left without a theme,
+                        and only by IMDb id. An entry is taken only when the listing calls it the title music or
+                        names it after the work &mdash; for a film the listing is the licensed songs in the order
+                        they play, so its first entry is whatever plays first rather than the theme, and taking it
+                        would assign the wrong music. Series listings do open with the theme.
+                        <strong>Test the IMDb lookup</strong> below shows it working on one title.
                     </div>
                     <label class="emby-checkbox-label">
                         <input is="emby-checkbox" type="checkbox" id="UseImdbBrowser" />
                         <span>Render IMDb's page in headless Chrome when a plain request is refused</span>
                     </label>
                     <div class="fieldDescription" style="margin:.25em 0 1em 0;">
-                        IMDb's bot check clears only when a browser engine runs its script. A plain request is
-                        tried first because it is far quicker and works where IMDb is not challenging the server.
-                        The check is applied per address and is much harsher on hosted servers than on home
-                        connections.
+                        Some networks are served a bot check instead of the page, which clears only when a browser
+                        engine runs its script. The direct request is always tried first and is far quicker, so the
+                        browser costs nothing on a connection that is never challenged. Whether yours is depends on
+                        where the request comes from, not on ThemeForge.
                     </div>
                     <label class="emby-checkbox-label">
                         <input is="emby-checkbox" type="checkbox" id="ImdbDownloadBrowser" />
@@ -417,7 +415,7 @@
                     <div class="inputContainer">
                         <input is="emby-input" type="number" id="ImdbBrowserTimeoutSeconds" min="20" max="600" step="10" label="Give the browser this long to render a page (seconds)" />
                         <div class="fieldDescription">
-                            Clearing the bot check on a cold profile has been measured at over a minute; once the
+                            A first render that has to clear a check has been measured at over a minute; once the
                             stored session holds the clearance a render takes a few seconds.
                         </div>
                     </div>
@@ -431,17 +429,17 @@
                     <div class="inputContainer">
                         <input is="emby-input" type="text" id="ImdbUserAgent" label="User agent sent to IMDb (leave empty for the built-in one)" />
                         <div class="fieldDescription">
-                            Used for the plain request and given to the browser &mdash; Chrome's own headless user
-                            agent says &ldquo;HeadlessChrome&rdquo;, which IMDb refuses outright. A user agent going
-                            stale is the usual reason this stops working, so moving it on is the first thing to try.
+                            Used for the request and given to the browser &mdash; Chrome's own headless user agent
+                            says &ldquo;HeadlessChrome&rdquo;, which IMDb refuses. Worth moving on if the built-in
+                            one ever goes stale.
                         </div>
                     </div>
 
                     <h3 class="sectionTitle" style="margin-top:1.5em;">Test the IMDb lookup</h3>
                     <div class="fieldDescription" style="margin:.25em 0 1em 0;">
-                        Reads one title's listing for real and reports each stage, so you can see whether this
-                        server can reach IMDb before relying on it. Save your settings first. The first run can
-                        take a minute or two if a browser has to be downloaded.
+                        Reads one title's listing for real and reports each stage, so you can see it working rather
+                        than infer it from themes appearing. Save your settings first. The first run can take a
+                        minute or two if a browser has to be downloaded.
                     </div>
                     <div class="inputContainer">
                         <input is="emby-input" type="text" id="tfImdbTestId" label="IMDb id to try" value="tt0137523" />

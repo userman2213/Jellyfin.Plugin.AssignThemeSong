@@ -72,7 +72,7 @@ So ThemeForge looks both up, **by the title's own database id and never by name*
 | [Wikidata](https://www.wikidata.org) | IMDb (P345), TMDB (P4947/P4983) | composer; theme music (P942) for famous shows | one query per 50 titles | CC0 |
 | [MusicBrainz](https://musicbrainz.org) | the IMDb URL of the film or show | composer, for what Wikidata missed | one request per title, 1/second | CC0 |
 | [Wikipedia](https://en.wikipedia.org) | the article Wikidata links to | a show's opening theme and who wrote it | one request per 5 shows | facts only |
-| [IMDb](https://www.imdb.com) | the IMDb id | a title's soundtrack listing, when nothing above named the theme | one request per title, 1 per 2 seconds | see below |
+| [IMDb](https://www.imdb.com) | the IMDb id | a title's soundtrack listing, when nothing above named the theme | one request per title, 1 per 2 seconds | facts only |
 
 Wikidata answers most of a library in a handful of requests; the other two are asked only about
 what it could not answer. Wikipedia's infobox names the theme for far more shows than Wikidata
@@ -109,46 +109,41 @@ settings.
 
 ### IMDb
 
-IMDb lists the music used in every title, and it is the last place ThemeForge looks: only for
-titles Wikidata and Wikipedia left without a theme, and only by IMDb id. It is **on by default**,
-and the one source read against the site's wishes. Read this before leaving it on.
-
-**IMDb does not want to be read by a program.** It answers a request that identifies itself as one
-with `403`, and a browser-shaped one with an Amazon bot challenge — `HTTP 202`, an empty page and
-`x-amzn-waf-action: challenge`. Reading it at all means presenting as a browser and, when that is
-refused, rendering the page in headless Chrome so the challenge's own script clears it.
-**IMDb's terms do not permit automated reading.** Every other source here is asked in ThemeForge's
-own name because Wikimedia and MusicBrainz ask to be told who is calling; this one is not, and that
-disguise is confined to `BrowserIdentity`, used by nothing else. Switching
-**Read IMDb's soundtrack listing** off removes all of it.
-
-**Whether it works depends on your server's address, not on ThemeForge.** The challenge is applied
-per IP: it clears readily from a home connection and often not at all from a hosted or VPS server,
-where it can stop clearing partway through a run. **Test the IMDb lookup** in the settings runs the
-real path against one title and reports each stage, so this is a report rather than a guess.
-Nothing else in ThemeForge is affected either way.
+IMDb lists the music used in every title, and it is the last place ThemeForge looks: only for titles
+Wikidata and Wikipedia left without a theme, and only by IMDb id, never by name. On by default.
 
 **For a film, the listing is usually not the theme.** It is the licensed songs in the order they
 play: the first entry for Fight Club is a Rolfe Kent cue and for The Godfather a wedding sequence.
-So an entry is taken only when the listing calls it the title music — "Main Title", "Opening
-Theme", "Love Theme from The Godfather" — or names it after the work, or the title is a series,
-where the listing does open with the theme: The Sopranos gives "Woke Up This Morning" and Firefly
-"The Ballad of Serenity". A film whose listing names no theme yields **nothing**, which is the
-right answer — no theme found is recoverable and the wrong song assigned as one is not. The rule
-is deliberately not fooled by a song with "theme" in its name: Fight Club's listing contains
-"Theme from Valley of the Dolls" and "KDFW News Theme", and neither is the film's theme.
+A wrong theme is worse than none, so an entry is taken only when the listing calls it the title
+music — "Main Title", "Opening Theme", "Love Theme from The Godfather" — or names it after the work,
+or the title is a series, where the listing does open with the theme: The Sopranos gives "Woke Up
+This Morning" and Firefly "The Ballad of Serenity". A film whose listing names no theme yields
+**nothing**, which is the right answer. The rule is deliberately not fooled by a song with "theme"
+in its name: Fight Club's listing contains "Theme from Valley of the Dolls" and "KDFW News Theme",
+and neither is the film's theme.
 
-A title IMDb refuses to answer about is **not** recorded as having no theme; it is asked again on
-the next run, like any other service that was unreachable. Requests are spaced two seconds apart.
+Requests are spaced two seconds apart. A title IMDb does not answer about is **not** recorded as
+having no theme; it is asked again on the next run, like any other service that was unreachable.
+IMDb's own downloadable datasets have no soundtrack data, so there is no bulk alternative to reading
+the page.
 
-IMDb's own downloadable datasets have no soundtrack data at all, so there is no bulk alternative.
+**Test the IMDb lookup** in the settings runs the real path against one title and reports each stage
+— the request, whether a browser was used, and which entry it took — so you can see it working
+rather than infer it from themes appearing.
 
-#### The browser
+#### If your network gets a challenge
 
-The headless browser is used only for IMDb, and only when a plain request is refused. It is started
-as a child process, the way yt-dlp and FFmpeg already are, so there is no driver library and no
-second copy of Chromium. ThemeForge looks for one in this order: the **Browser path** in the
-settings, the copy it downloaded for itself, then Chrome, Chromium or Edge installed on the server.
+Some networks are served an Amazon bot check instead of the page: `HTTP 202`, an empty body and
+`x-amzn-waf-action: challenge`. It is applied per address, and it depends entirely on where the
+request comes from — plenty of connections never see it. Where it does happen the check clears only
+when a browser engine runs its script, so ThemeForge can render the page in headless Chrome instead.
+The direct request is always tried first; the browser is a fallback and costs nothing when it is not
+needed. **Render IMDb's page in headless Chrome** switches the fallback off.
+
+The browser is used for IMDb and nothing else. It is started as a child process, the way yt-dlp and
+FFmpeg already are, so there is no driver library and no second copy of Chromium. ThemeForge looks
+for one in this order: the **Browser path** in the settings, the copy it downloaded for itself, then
+Chrome, Chromium or Edge installed on the server.
 
 If none is found and **Download Chrome if this server has no browser** is on, it fetches Chrome for
 Testing for the server's platform — Linux, macOS and Windows, x64 and arm64 — into its tools folder.
@@ -160,11 +155,10 @@ through the system works just as well:
 sudo apt install chromium          # or: chromium-browser
 ```
 
-The clearance the challenge grants is kept in a profile beside the browser, so it is solved once
+Whatever clearance a render earns is kept in a profile beside the browser, so a check is solved once
 rather than per lookup: a cold render has been measured at over a minute and a warm one at a few
-seconds. Chrome's own headless user agent says "HeadlessChrome", which IMDb refuses outright, so the
-user agent is replaced; a user agent going stale is the usual reason this stops working, and
-**User agent sent to IMDb** is the first thing to move on.
+seconds. Chrome's own headless user agent says "HeadlessChrome", which IMDb refuses, so the user
+agent is replaced; **User agent sent to IMDb** overrides it if the built-in one ever goes stale.
 
 ## Installing
 
