@@ -1,125 +1,211 @@
-﻿[
-  {
-    "name": "xThemeSong",
-    "guid": "97db7543-d64d-45e1-b2e7-62729b56371f",
-    "overview": "Download theme songs from YouTube or upload custom MP3s for your media library",
-    "description": "A plugin that automatically downloads theme songs from YouTube by user provided video ID/URL or allows uploading custom MP3 files. Theme songs are saved as theme.mp3 in media folders along with metadata in theme.json files. Features modern UI with loading animations, audio player, and drag-and-drop upload.",
-    "owner": "Kirtan Patel",
-    "category": "General",
-    "imageUrl": "https://raw.githubusercontent.com/kirtan3d/Jellyfin.Plugin.AssignThemeSong/main/images/icon.png",
-    "versions": [
-      {
-          "version": "1.2.5.0",
-          "checksum": "ef3f0d0764ad75428ae1fd0f8ef5881e",
-          "changelog": "v1.2.5: Fixed permission check with parseInt, JSON casing, non-admin route for user prefs",
-          "targetAbi": "10.11.0.0",
-          "sourceUrl": "https://github.com/kirtan3d/Jellyfin.Plugin.AssignThemeSong/releases/download/v1.2.5/xThemeSong_v1.2.5.zip",
-          "timestamp": "2026-01-26T12:24:00Z"
-      },
-      {
-          "version": "1.2.4.0",
-          "checksum": "25aa4412216ef98262fff7d6e2dd93c1",
-          "changelog": "v1.2.4: Fixed page conflicts - admin config and user preferences now separate pages",
-          "targetAbi": "10.11.0.0",
-          "sourceUrl": "https://github.com/kirtan3d/Jellyfin.Plugin.AssignThemeSong/releases/download/v1.2.4/xThemeSong_v1.2.4.zip",
-          "timestamp": "2025-12-27T09:25:00Z"
-      },
-      {
-          "version": "1.2.3.0",
-          "checksum": "62d222a84b45dedcadc4bb33c72bfbe5",
-          "changelog": "v1.2.3: User preferences accessible in sidebar - EnableInMainMenu + client-side sidebar injection",
-          "targetAbi": "10.11.0.0",
-          "sourceUrl": "https://github.com/kirtan3d/Jellyfin.Plugin.AssignThemeSong/releases/download/v1.2.3/xThemeSong_v1.2.3.zip",
-          "timestamp": "2025-12-27T08:40:00Z"
-      },
-      {
-          "version": "1.2.2.0",
-          "checksum": "f840854446ed686fddf85aee5149095b",
-          "changelog": "v1.2.2: Fixed user preferences userId parameter, client-side permission checks hide menu for non-admins",
-          "targetAbi": "10.11.0.0",
-          "sourceUrl": "https://github.com/kirtan3d/Jellyfin.Plugin.AssignThemeSong/releases/download/v1.2.2/xThemeSong_v1.2.2.zip",
-          "timestamp": "2025-12-25T11:30:00Z"
-      },
-      {
-          "version": "1.2.1.0",
-          "checksum": "b7deda7b0113cf9a37d600cc6399725e",
-          "changelog": "v1.2.1: Fixed user preferences menu visibility and permission checks - now properly restricts non-admin users",
-          "targetAbi": "10.11.0.0",
-          "sourceUrl": "https://github.com/kirtan3d/Jellyfin.Plugin.AssignThemeSong/releases/download/v1.2.1/xThemeSong_v1.2.1.zip",
-          "timestamp": "2025-12-25T10:50:00Z"
-      },
-      {
-          "version": "1.2.0.0",
-          "checksum": "0163a46343f356c880c8d1da282dbe60",
-          "changelog": "v1.2.0: Major update - Fixed scheduled task error, Export/Import themes, Role-Based Access Control, Per-User Preferences, reduced warnings from 5 to 1",
-          "targetAbi": "10.11.0.0",
-          "sourceUrl": "https://github.com/kirtan3d/Jellyfin.Plugin.AssignThemeSong/releases/download/v1.2.0/xThemeSong_v1.2.0.zip",
-          "timestamp": "2025-12-25T09:30:00Z"
-      },
-      {
-          "version": "1.1.0.0",
-          "checksum": "e6ad5f1311ecb0f50dac97c6427897c6",
-          "changelog": "v1.1.0: Enhanced UI - tabbed settings page, improved Media Library overview with inline audio players, bulk YouTube URL assignment, better table styling",
-          "targetAbi": "10.11.0.0",
-          "sourceUrl": "https://github.com/kirtan3d/Jellyfin.Plugin.AssignThemeSong/releases/download/v1.1.0/xThemeSong_v1.1.0.zip",
-          "timestamp": "2025-12-03T14:45:00Z"
-      },
-      {
-          "version": "1.0.6.0",
-          "checksum": "73d9709d7b4cdfe68d1c8ddfd23e3772",
-          "changelog": "v1.0.6: Fix config page tabs and improve Media Library UI",
-          "targetAbi": "10.11.0.0",
-          "sourceUrl": "https://github.com/kirtan3d/Jellyfin.Plugin.AssignThemeSong/releases/download/v1.0.6/xThemeSong_v1.0.6.zip",
-          "timestamp": "2025-12-03T13:45:00Z"
-      },
-      {
-          "version": "1.0.5.0",
-          "checksum": "9453c4b55f37140eee993e1dd788bb21",
-          "changelog": "v1.0.5: Fix Media Library overview - use proper item type filtering",
-          "targetAbi": "10.11.0.0",
-          "sourceUrl": "https://github.com/kirtan3d/Jellyfin.Plugin.AssignThemeSong/releases/download/v1.0.5/xThemeSong_v1.0.5.zip",
-          "timestamp": "2025-12-03T13:30:00Z"
-      },
-      {
-        "version": "1.0.4.0",
-        "checksum": "6d033beb04bdeea6fc9f1b1b8bd56b8b",
-        "changelog": "v1.0.4: Fixed critical build issue - plugin DLL was being deleted during build. Plugin now loads correctly in Jellyfin.",
-        "targetAbi": "10.11.0.0",
-        "sourceUrl": "https://github.com/kirtan3d/Jellyfin.Plugin.AssignThemeSong/releases/download/v1.0.4/xThemeSong_v1.0.4.zip",
-        "timestamp": "2025-12-03T12:54:00Z"
-      },
-      {
-        "version": "1.0.3.0",
-        "checksum": "ea7c5d613ac41cb613c883d42a8948e5",
-        "changelog": "v1.0.3: Fixed plugin initialization - resolved null reference issue that prevented settings page and menu from appearing.",
-        "targetAbi": "10.11.0.0",
-        "sourceUrl": "https://github.com/kirtan3d/Jellyfin.Plugin.AssignThemeSong/releases/download/v1.0.3/xThemeSong_v1.0.3.zip",
-        "timestamp": "2025-12-03T12:38:00Z"
-      },
-      {
-        "version": "1.0.2.0",
-        "checksum": "8c56db2e3fe433cdd6ee5687c1236b3f",
-        "changelog": "v1.0.2: Added delete theme song functionality, custom FFmpeg path configuration, media library overview tab with bulk URL assignment, handle theme.mp3 without theme.json.",
-        "targetAbi": "10.11.0.0",
-        "sourceUrl": "https://github.com/kirtan3d/Jellyfin.Plugin.AssignThemeSong/releases/download/v1.0.2/xThemeSong_v1.0.2.zip",
-        "timestamp": "2025-12-03T12:23:00Z"
-      },
-      {
-        "version": "1.0.1.0",
-        "checksum": "0cdaf6326ec7490fa8826151092040b9",
-        "changelog": "v1.0.1: Fixed TV show path handling - theme songs now correctly save to show folder instead of parent directory. Also fixed Season to use parent Series folder.",
-        "targetAbi": "10.11.0.0",
-        "sourceUrl": "https://github.com/kirtan3d/Jellyfin.Plugin.AssignThemeSong/releases/download/v1.0.1/xThemeSong_v1.0.1.zip",
-        "timestamp": "2025-12-01T15:54:00Z"
-      },
-      {
-        "version": "1.0.0.0",
-        "checksum": "c308b40a2fd98229df9871b337e0228a",
-        "changelog": "v1.0.0: Major release with improved UI. Requires Jellyfin 10.11.0+ (uses .NET 9). Features: loading animations, modal success/error messages, audio player, YouTube download, MP3 upload.",
-        "targetAbi": "10.11.0.0",
-        "sourceUrl": "https://github.com/kirtan3d/Jellyfin.Plugin.AssignThemeSong/releases/download/v1.0.0/xThemeSong_v1.0.0.zip",
-        "timestamp": "2025-12-01T15:29:00Z"
-      }
-    ]
-  }
+[
+    {
+        "guid": "bfb42f2f-93f8-4d6b-97e6-1750035c211f",
+        "name": "ThemeForge",
+        "owner": "userman2213",
+        "category": "General",
+        "imageUrl": "https://raw.githubusercontent.com/userman2213/Jellyfin.Plugin.AssignThemeSong/claude/jellyfin-theme-song-plugin-e3ko2x/src/Jellyfin.Plugin.ThemeForge/images/icon.png",
+        "overview": "Automatically finds, scores and assigns theme songs for movies and TV shows.",
+        "description": "ThemeForge searches YouTube with yt-dlp, ranks every candidate with an explainable scoring engine, and writes the winner beside your media exactly as it was delivered. High-confidence matches are assigned automatically; anything less certain waits in a review queue. Audio processing -- raising quiet themes, normalising, fades, trimming -- is available but off until you turn it on, so nothing is ever made quieter without asking. All decisions are recorded in a persistent index, so re-runs are idempotent and manual choices are never overwritten.",
+        "versions": [
+            {
+                "version": "2.9.0.1",
+                "targetAbi": "12.0.0.0",
+                "framework": "net10.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_2.9.0.1.zip",
+                "checksum": "70fdc04b0deda78bbce8e0b48aba4877",
+                "timestamp": "2026-09-24T16:00:00Z",
+                "changelog": "Build for Jellyfin 12.\n\n**ThemerrDB first, then IMDb.** That is now literally the order.\n\n**A title ThemerrDB has a theme for is not looked up at all.** Its theme is taken outright, so there\nis no search to sharpen and nothing worth asking anybody about. On a library ThemerrDB covers well\nthat is most of it, and each one skipped is a page not fetched. The run says how many it skipped.\n\n**IMDb is asked first for everything else.** It was third before, behind Wikidata and Wikipedia, and\nonly saw what they could not name. One IMDb page names the theme, who performs it and who wrote the\nscore, where the other two each answer part of that for part of a library \u2014 so it goes first, and\nthey are asked afterwards about whatever it could not name.\n\nThe chain, end to end: **ThemerrDB \u2192 IMDb \u2192 Wikidata \u2192 Wikipedia \u2192 search YouTube.**"
+            },
+            {
+                "version": "2.9.0.0",
+                "targetAbi": "10.11.0.0",
+                "framework": "net9.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_2.9.0.0.zip",
+                "checksum": "c98f6b9a4a73c2e3c14abbab4ac34a85",
+                "timestamp": "2026-09-24T16:00:00Z",
+                "changelog": "Build for Jellyfin 10.11.\n\n**ThemerrDB first, then IMDb.** That is now literally the order.\n\n**A title ThemerrDB has a theme for is not looked up at all.** Its theme is taken outright, so there\nis no search to sharpen and nothing worth asking anybody about. On a library ThemerrDB covers well\nthat is most of it, and each one skipped is a page not fetched. The run says how many it skipped.\n\n**IMDb is asked first for everything else.** It was third before, behind Wikidata and Wikipedia, and\nonly saw what they could not name. One IMDb page names the theme, who performs it and who wrote the\nscore, where the other two each answer part of that for part of a library \u2014 so it goes first, and\nthey are asked afterwards about whatever it could not name.\n\nThe chain, end to end: **ThemerrDB \u2192 IMDb \u2192 Wikidata \u2192 Wikipedia \u2192 search YouTube.**"
+            },
+            {
+                "version": "2.8.0.1",
+                "targetAbi": "12.0.0.0",
+                "framework": "net10.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_2.8.0.1.zip",
+                "checksum": "2a95f34356a2d9f76fdc42cb309e47e5",
+                "timestamp": "2026-09-24T15:51:01Z",
+                "changelog": "Build for Jellyfin 12.\n\nMusicBrainz is gone, and IMDb now says who wrote the music as well as what the theme is called.\n\n**MusicBrainz is removed.** It was the slow half of the research at one request per second, and it\nanswered only the composer question. Wikidata still answers most of a library in a handful of\nrequests, Wikipedia still names the theme for the shows Wikidata does not, and IMDb now covers the\ncomposer ground MusicBrainz used to. Its setting is gone from **Who wrote the music**; nothing needs\ndoing on upgrade.\n\n**IMDb answers for the composer too.** Its listing credits who wrote each entry, and a film's score\ncues are credited to one person over and over while the licensed songs have a different writer each\n\u2014 so a writer credited once is a songwriter, and one credited five times is who scored the film. A\nwriter is reported as the composer only when the listing credits them more than once, which keeps\none-off songwriters out. Credits naming several people, as \"Fred Wise , Milton Leeds , Bob Russell ,\nand Nicholas Roubanis\", are split into the people in them, and the name somebody was credited under\n(\"as George Brown\") is dropped: a single string of four names matches nothing and scores nothing.\n\nThe order is unchanged and is what it looks like: **ThemerrDB first**, which gives a theme outright;\nand for everything it has no entry for, the theme and composer are looked up \u2014 Wikidata, then\nWikipedia, then IMDb \u2014 and searched for on YouTube."
+            },
+            {
+                "version": "2.8.0.0",
+                "targetAbi": "10.11.0.0",
+                "framework": "net9.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_2.8.0.0.zip",
+                "checksum": "7890f043df06bfeb90353b255eafafa0",
+                "timestamp": "2026-09-24T15:51:01Z",
+                "changelog": "Build for Jellyfin 10.11.\n\nMusicBrainz is gone, and IMDb now says who wrote the music as well as what the theme is called.\n\n**MusicBrainz is removed.** It was the slow half of the research at one request per second, and it\nanswered only the composer question. Wikidata still answers most of a library in a handful of\nrequests, Wikipedia still names the theme for the shows Wikidata does not, and IMDb now covers the\ncomposer ground MusicBrainz used to. Its setting is gone from **Who wrote the music**; nothing needs\ndoing on upgrade.\n\n**IMDb answers for the composer too.** Its listing credits who wrote each entry, and a film's score\ncues are credited to one person over and over while the licensed songs have a different writer each\n\u2014 so a writer credited once is a songwriter, and one credited five times is who scored the film. A\nwriter is reported as the composer only when the listing credits them more than once, which keeps\none-off songwriters out. Credits naming several people, as \"Fred Wise , Milton Leeds , Bob Russell ,\nand Nicholas Roubanis\", are split into the people in them, and the name somebody was credited under\n(\"as George Brown\") is dropped: a single string of four names matches nothing and scores nothing.\n\nThe order is unchanged and is what it looks like: **ThemerrDB first**, which gives a theme outright;\nand for everything it has no entry for, the theme and composer are looked up \u2014 Wikidata, then\nWikipedia, then IMDb \u2014 and searched for on YouTube."
+            },
+            {
+                "version": "2.7.1.1",
+                "targetAbi": "12.0.0.0",
+                "framework": "net10.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_2.7.1.1.zip",
+                "checksum": "8e36dcc4ca5a070593a269c8d4854e52",
+                "timestamp": "2026-09-24T15:32:12Z",
+                "changelog": "Build for Jellyfin 12.\n\nThemeForge now reads IMDb's soundtrack listing for titles nothing else could name a theme for.\n\n**A new source, on by default.** Wikidata and Wikipedia name the theme for the shows they cover and\nleave the rest unnamed, and an unnamed theme is searched for by the work's title and the word\n\"theme\", which is the weakest query there is. IMDb lists the music for every title, so it is now\nasked about whatever they could not answer \u2014 by IMDb id, never by name, and after both of them.\n\n**For a film, the listing is usually not the theme**, and a wrong theme is worse than none. It is the\nlicensed songs in the order they play: the first entry for Fight Club is a Rolfe Kent cue and for The\nGodfather a wedding sequence. So an entry is taken only when the listing calls it the title music, or\nnames it after the work, or the title is a series \u2014 where the listing does open with the theme, giving\n\"Woke Up This Morning\" for The Sopranos and \"The Ballad of Serenity\" for Firefly. A film that names no\ntheme yields nothing. The rule is not fooled by a song with \"theme\" in its name, which Fight Club's\nlisting has two of.\n\n**Test the IMDb lookup**, in the settings, runs the real path against one title and reports each\nstage \u2014 the request, whether a browser was used, and which entry it took \u2014 so you can see it working\nrather than infer it from themes appearing.\n\n**Some networks are served a bot check instead of the page.** Whether yours is depends on where the\nrequest comes from; many connections never see one. Where it happens the check clears only when a\nbrowser engine runs its script, so ThemeForge can render the page in headless Chrome instead. The\ndirect request is always tried first, so the fallback costs nothing when it is not needed, and it can\nbe switched off. If your server has no browser, ThemeForge can fetch Chrome for Testing for its own\nplatform \u2014 Linux, macOS and Windows, x64 and arm64 \u2014 into its tools folder: a one-off 150\u2013200 MB\ndownload the settings page can start and undo on your terms. Whatever clearance a render earns is\nkept, so a check is solved once rather than per lookup.\n\nA title IMDb does not answer about is not remembered as having no theme; it is asked again next run."
+            },
+            {
+                "version": "2.7.1.0",
+                "targetAbi": "10.11.0.0",
+                "framework": "net9.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_2.7.1.0.zip",
+                "checksum": "5181d31ab4760715050343e3d99c958c",
+                "timestamp": "2026-09-24T15:32:12Z",
+                "changelog": "Build for Jellyfin 10.11.\n\nThemeForge now reads IMDb's soundtrack listing for titles nothing else could name a theme for.\n\n**A new source, on by default.** Wikidata and Wikipedia name the theme for the shows they cover and\nleave the rest unnamed, and an unnamed theme is searched for by the work's title and the word\n\"theme\", which is the weakest query there is. IMDb lists the music for every title, so it is now\nasked about whatever they could not answer \u2014 by IMDb id, never by name, and after both of them.\n\n**For a film, the listing is usually not the theme**, and a wrong theme is worse than none. It is the\nlicensed songs in the order they play: the first entry for Fight Club is a Rolfe Kent cue and for The\nGodfather a wedding sequence. So an entry is taken only when the listing calls it the title music, or\nnames it after the work, or the title is a series \u2014 where the listing does open with the theme, giving\n\"Woke Up This Morning\" for The Sopranos and \"The Ballad of Serenity\" for Firefly. A film that names no\ntheme yields nothing. The rule is not fooled by a song with \"theme\" in its name, which Fight Club's\nlisting has two of.\n\n**Test the IMDb lookup**, in the settings, runs the real path against one title and reports each\nstage \u2014 the request, whether a browser was used, and which entry it took \u2014 so you can see it working\nrather than infer it from themes appearing.\n\n**Some networks are served a bot check instead of the page.** Whether yours is depends on where the\nrequest comes from; many connections never see one. Where it happens the check clears only when a\nbrowser engine runs its script, so ThemeForge can render the page in headless Chrome instead. The\ndirect request is always tried first, so the fallback costs nothing when it is not needed, and it can\nbe switched off. If your server has no browser, ThemeForge can fetch Chrome for Testing for its own\nplatform \u2014 Linux, macOS and Windows, x64 and arm64 \u2014 into its tools folder: a one-off 150\u2013200 MB\ndownload the settings page can start and undo on your terms. Whatever clearance a render earns is\nkept, so a check is solved once rather than per lookup.\n\nA title IMDb does not answer about is not remembered as having no theme; it is asked again next run."
+            },
+            {
+                "version": "2.7.0.1",
+                "targetAbi": "12.0.0.0",
+                "framework": "net10.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_2.7.0.1.zip",
+                "checksum": "8fbb977475e5c25882d29f8aa2ea8ff9",
+                "timestamp": "2026-09-24T15:23:52Z",
+                "changelog": "Build for Jellyfin 12.\n\nThemeForge now reads IMDb's soundtrack listing for titles nothing else could name a theme for.\n\n**A new source, on by default.** Wikidata and Wikipedia name the theme for the shows they cover and\nleave the rest unnamed, and an unnamed theme is searched for by the work's title and the word\n\"theme\", which is the weakest query there is. IMDb lists the music for every title, so it is now\nasked about whatever they could not answer \u2014 by IMDb id, never by name, and after both of them.\n\n**Read this before leaving it on.** IMDb does not want to be read by a program: it answers a request\nthat says it is one with `403`, and a browser-shaped one with an Amazon bot challenge, and its terms\ndo not permit automated reading. ThemeForge presents as a browser and, when that is refused, renders\nthe page in headless Chrome. That disguise is used by this one source and nothing else; every other\nsource is still asked in ThemeForge's own name. **Read IMDb's soundtrack listing** in the settings\nturns all of it off.\n\n**Whether it works depends on your server's address.** The challenge is applied per IP: it clears\nreadily from a home connection and often never from a hosted or VPS server. So the settings page\ngains **Test the IMDb lookup**, which runs the real path against one title and reports every stage \u2014\nthe direct request, whether a browser was needed, the render, and which entry it took. Nothing else\nin ThemeForge is affected either way.\n\n**For a film, the listing is usually not the theme**, and a wrong theme is worse than none. It is the\nlicensed songs in the order they play: the first entry for Fight Club is a Rolfe Kent cue and for The\nGodfather a wedding sequence. So an entry is taken only when the listing calls it the title music, or\nnames it after the work, or the title is a series \u2014 where the listing does open with the theme, giving\n\"Woke Up This Morning\" for The Sopranos and \"The Ballad of Serenity\" for Firefly. A film that names no\ntheme yields nothing. The rule is not fooled by a song with \"theme\" in its name, which Fight Club's\nlisting has two of.\n\n**The browser looks after itself.** It is used only for IMDb and only when a plain request is refused,\nand it is started as a child process like yt-dlp and FFmpeg rather than through a driver library. If\nyour server has no browser, ThemeForge can fetch Chrome for Testing for its own platform \u2014 Linux,\nmacOS and Windows, x64 and arm64 \u2014 into its tools folder: a one-off 150\u2013200 MB download, which the\nsettings page can start and undo on your terms. The clearance the challenge grants is kept, so it is\nsolved once rather than per lookup.\n\nA title IMDb refuses to answer about is not remembered as having no theme; it is asked again next run."
+            },
+            {
+                "version": "2.7.0.0",
+                "targetAbi": "10.11.0.0",
+                "framework": "net9.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_2.7.0.0.zip",
+                "checksum": "80dec2c5add64cfac52ad34c2bf46004",
+                "timestamp": "2026-09-24T15:23:52Z",
+                "changelog": "Build for Jellyfin 10.11.\n\nThemeForge now reads IMDb's soundtrack listing for titles nothing else could name a theme for.\n\n**A new source, on by default.** Wikidata and Wikipedia name the theme for the shows they cover and\nleave the rest unnamed, and an unnamed theme is searched for by the work's title and the word\n\"theme\", which is the weakest query there is. IMDb lists the music for every title, so it is now\nasked about whatever they could not answer \u2014 by IMDb id, never by name, and after both of them.\n\n**Read this before leaving it on.** IMDb does not want to be read by a program: it answers a request\nthat says it is one with `403`, and a browser-shaped one with an Amazon bot challenge, and its terms\ndo not permit automated reading. ThemeForge presents as a browser and, when that is refused, renders\nthe page in headless Chrome. That disguise is used by this one source and nothing else; every other\nsource is still asked in ThemeForge's own name. **Read IMDb's soundtrack listing** in the settings\nturns all of it off.\n\n**Whether it works depends on your server's address.** The challenge is applied per IP: it clears\nreadily from a home connection and often never from a hosted or VPS server. So the settings page\ngains **Test the IMDb lookup**, which runs the real path against one title and reports every stage \u2014\nthe direct request, whether a browser was needed, the render, and which entry it took. Nothing else\nin ThemeForge is affected either way.\n\n**For a film, the listing is usually not the theme**, and a wrong theme is worse than none. It is the\nlicensed songs in the order they play: the first entry for Fight Club is a Rolfe Kent cue and for The\nGodfather a wedding sequence. So an entry is taken only when the listing calls it the title music, or\nnames it after the work, or the title is a series \u2014 where the listing does open with the theme, giving\n\"Woke Up This Morning\" for The Sopranos and \"The Ballad of Serenity\" for Firefly. A film that names no\ntheme yields nothing. The rule is not fooled by a song with \"theme\" in its name, which Fight Club's\nlisting has two of.\n\n**The browser looks after itself.** It is used only for IMDb and only when a plain request is refused,\nand it is started as a child process like yt-dlp and FFmpeg rather than through a driver library. If\nyour server has no browser, ThemeForge can fetch Chrome for Testing for its own platform \u2014 Linux,\nmacOS and Windows, x64 and arm64 \u2014 into its tools folder: a one-off 150\u2013200 MB download, which the\nsettings page can start and undo on your terms. The clearance the challenge grants is kept, so it is\nsolved once rather than per lookup.\n\nA title IMDb refuses to answer about is not remembered as having no theme; it is asked again next run."
+            },
+            {
+                "version": "2.6.0.1",
+                "targetAbi": "12.0.0.0",
+                "framework": "net10.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_2.6.0.1.zip",
+                "checksum": "2b14499313d74666adbaccb18b45c176",
+                "timestamp": "2026-09-23T09:28:41Z",
+                "changelog": "Build for Jellyfin 12.\n\nThemeForge now finds out what a theme is called, and searches for it by name.\n\n**Theme songs.** For a show whose theme is a song, the song's own title and performer are the most\nspecific search there is: \"The Sopranos Woke Up This Morning Alabama 3\" finds what \"The Sopranos\ntheme song\" only sometimes does. ThemeForge now looks the theme up in Wikidata and, for shows\nWikidata has nothing on, in the show's Wikipedia article. Both are reached by the title's own\ndatabase id, never by searching for its name. In testing on well-known shows, 12 of 19 had their\ntheme song found this way, among them The Sopranos, Firefly, House, Mad Men, Friends and Scrubs.\nWhen it is known it is searched for first.\n\nAn upload titled only by song and artist -- \"Alabama 3 - Woke Up This Morning\" -- used to be\nrejected for not naming the show. It is now recognised as the show's theme, as long as it names the\nperformer as well as the song: Scrubs' theme is \"Superman\", and so are a hundred other songs.\n\nWikipedia often also says who wrote the theme, which is not always who scored the show. Dexter's\ntheme is Rolfe Kent's and its score Daniel Licht's, so ThemeForge now searches for Rolfe Kent.\n\nDiagnostics shows how many of your series have a theme song known by name. The new Wikipedia\nlookup can be switched off under **Who wrote the music**.\n\n**Why not IMDb?** IMDb answers requests from a server with a bot challenge and forbids automated\nreading, and its soundtrack lists for films are the licensed songs used in the film rather than the\ntheme. The README has the details.\n\n**Fixed.**\n- A lookup that could not be made -- the service was down, or asked ThemeForge to slow down -- was\n  remembered as \"nobody knows\" for a fortnight, for every title in it. It is now asked again on the\n  next run, and a Wikidata outage no longer sends the whole library to MusicBrainz.\n- A name Wikidata has no English label for came back as an id such as \"Q115522708\", and would have\n  been searched for. It is now ignored.\n- A show that shares its IMDb id with one of its own seasons, such as The X-Files, could be looked\n  up as the season. Seasons and episodes are now left out."
+            },
+            {
+                "version": "2.6.0.0",
+                "targetAbi": "10.11.0.0",
+                "framework": "net9.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_2.6.0.0.zip",
+                "checksum": "efb40b8910dfec83e816b8b041604af3",
+                "timestamp": "2026-09-23T09:28:41Z",
+                "changelog": "Build for Jellyfin 10.11.\n\nThemeForge now finds out what a theme is called, and searches for it by name.\n\n**Theme songs.** For a show whose theme is a song, the song's own title and performer are the most\nspecific search there is: \"The Sopranos Woke Up This Morning Alabama 3\" finds what \"The Sopranos\ntheme song\" only sometimes does. ThemeForge now looks the theme up in Wikidata and, for shows\nWikidata has nothing on, in the show's Wikipedia article. Both are reached by the title's own\ndatabase id, never by searching for its name. In testing on well-known shows, 12 of 19 had their\ntheme song found this way, among them The Sopranos, Firefly, House, Mad Men, Friends and Scrubs.\nWhen it is known it is searched for first.\n\nAn upload titled only by song and artist -- \"Alabama 3 - Woke Up This Morning\" -- used to be\nrejected for not naming the show. It is now recognised as the show's theme, as long as it names the\nperformer as well as the song: Scrubs' theme is \"Superman\", and so are a hundred other songs.\n\nWikipedia often also says who wrote the theme, which is not always who scored the show. Dexter's\ntheme is Rolfe Kent's and its score Daniel Licht's, so ThemeForge now searches for Rolfe Kent.\n\nDiagnostics shows how many of your series have a theme song known by name. The new Wikipedia\nlookup can be switched off under **Who wrote the music**.\n\n**Why not IMDb?** IMDb answers requests from a server with a bot challenge and forbids automated\nreading, and its soundtrack lists for films are the licensed songs used in the film rather than the\ntheme. The README has the details.\n\n**Fixed.**\n- A lookup that could not be made -- the service was down, or asked ThemeForge to slow down -- was\n  remembered as \"nobody knows\" for a fortnight, for every title in it. It is now asked again on the\n  next run, and a Wikidata outage no longer sends the whole library to MusicBrainz.\n- A name Wikidata has no English label for came back as an id such as \"Q115522708\", and would have\n  been searched for. It is now ignored.\n- A show that shares its IMDb id with one of its own seasons, such as The X-Files, could be looked\n  up as the season. Seasons and episodes are now left out."
+            },
+            {
+                "version": "2.5.0.1",
+                "targetAbi": "12.0.0.0",
+                "framework": "net10.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_2.5.0.1.zip",
+                "checksum": "9977e7b868b5d612aba7d679290656a8",
+                "timestamp": "2026-09-18T07:11:21Z",
+                "changelog": "Build for Jellyfin 12.\n\nThemeForge now finds out who wrote the music, and the manual search does what an unattended run\ndoes.\n\n**Who wrote the music.** The composer's name is the most specific thing a search can ask for, and\nJellyfin records one for very few items. Without it the search ladder quietly drops its composer\nphrasing, an upload that names the composer earns no bonus, and a title that is an ordinary word --\n*Lost*, *Alien* -- has nothing to corroborate it and is held below the auto-assign score.\n\nThemeForge now looks the composer up in Wikidata and MusicBrainz, by the title's own IMDb or TMDB\nid and never by name. Wikidata answers about three quarters of a library in a handful of requests;\nMusicBrainz is asked only about the rest. Both are public-domain databases. Answers are kept for\ntwo months, so a whole library costs a few requests once and nothing after that. Your library's own\ncredits always win -- this only fills in what is missing.\n\nA new scheduled task, **Look up who wrote the music**, runs daily at 02:00 UTC, an hour before the\ndiscovery run. **Diagnostics** now reports how many of your titles somebody is known for, which is\nthe number that says whether any of this helped on your library.\n\nLyricists, conductors and arrangers Jellyfin already knows about now count for half what the\ncomposer is worth when scoring, and are never searched for.\n\n**The manual search.** Searching for a theme by hand used to send a single query and never ask\nThemerrDB -- the weakest search in the plugin, on the page whose whole purpose is fixing a wrong\npick. It now asks the catalogues first, pins a ThemerrDB entry for the exact title at the top, and\nruns every phrasing of the item's ladder, pooling the results before deciding what to look at\nclosely. A line above the results says what it did. Typing your own words still searches for\nexactly those and nothing else.\n\nIt stays quick: the interactive search paces itself at 400 ms rather than the run's 1500 ms and\nruns three phrasings at a time, so a seven-phrasing search takes about ten seconds.\n\n**Fixed.** A search in which YouTube returned the same video twice faulted and showed an error\ninstead of results. Settings on the plugin page are now checked against the code that saves them,\nso a control that would silently discard what you type fails the build instead of reaching you."
+            },
+            {
+                "version": "2.5.0.0",
+                "targetAbi": "10.11.0.0",
+                "framework": "net9.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_2.5.0.0.zip",
+                "checksum": "2a64081ee1159481b07c14be09c6d8aa",
+                "timestamp": "2026-09-18T07:11:21Z",
+                "changelog": "Build for Jellyfin 10.11.\n\nThemeForge now finds out who wrote the music, and the manual search does what an unattended run\ndoes.\n\n**Who wrote the music.** The composer's name is the most specific thing a search can ask for, and\nJellyfin records one for very few items. Without it the search ladder quietly drops its composer\nphrasing, an upload that names the composer earns no bonus, and a title that is an ordinary word --\n*Lost*, *Alien* -- has nothing to corroborate it and is held below the auto-assign score.\n\nThemeForge now looks the composer up in Wikidata and MusicBrainz, by the title's own IMDb or TMDB\nid and never by name. Wikidata answers about three quarters of a library in a handful of requests;\nMusicBrainz is asked only about the rest. Both are public-domain databases. Answers are kept for\ntwo months, so a whole library costs a few requests once and nothing after that. Your library's own\ncredits always win -- this only fills in what is missing.\n\nA new scheduled task, **Look up who wrote the music**, runs daily at 02:00 UTC, an hour before the\ndiscovery run. **Diagnostics** now reports how many of your titles somebody is known for, which is\nthe number that says whether any of this helped on your library.\n\nLyricists, conductors and arrangers Jellyfin already knows about now count for half what the\ncomposer is worth when scoring, and are never searched for.\n\n**The manual search.** Searching for a theme by hand used to send a single query and never ask\nThemerrDB -- the weakest search in the plugin, on the page whose whole purpose is fixing a wrong\npick. It now asks the catalogues first, pins a ThemerrDB entry for the exact title at the top, and\nruns every phrasing of the item's ladder, pooling the results before deciding what to look at\nclosely. A line above the results says what it did. Typing your own words still searches for\nexactly those and nothing else.\n\nIt stays quick: the interactive search paces itself at 400 ms rather than the run's 1500 ms and\nruns three phrasings at a time, so a seven-phrasing search takes about ten seconds.\n\n**Fixed.** A search in which YouTube returned the same video twice faulted and showed an error\ninstead of results. Settings on the plugin page are now checked against the code that saves them,\nso a control that would silently discard what you type fails the build instead of reaching you."
+            },
+            {
+                "version": "2.4.0.1",
+                "targetAbi": "12.0.0.0",
+                "framework": "net10.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_2.4.0.1.zip",
+                "checksum": "77045d8a7a133625d7c5faac3b635724",
+                "timestamp": "2026-09-17T17:53:24Z",
+                "changelog": "Build for Jellyfin 12.\n\nYou can now search for a theme yourself and pick a different one. Until now a theme that was\nsimply wrong was a dead end: the runners-up were only ever shown for items that had no theme at\nall, so the only way to change one was to go and find a YouTube link by hand.\n\nThe control sits on the item page in Jellyfin, on every row of the Library tab, and on each item in\nthe review queue. It searches the moment it opens, with the same words an unattended run would have\nused, and you can edit them and search again. Every result shows its title, channel and length, a\nlink to listen, and what ThemeForge makes of it with a one-line reason -- including the results the\nrules reject, greyed out with the reason, because those are often the very video you were after.\n\nA theme picked this way is recorded as your decision and no later run replaces it, whatever the\nlibrary's rule says.\n\nThe score recorded against an item is now cleared when you assign a different video, and that video\nstops being listed as a runner-up that was passed over. Both used to be left describing the theme\nthat had been replaced."
+            },
+            {
+                "version": "2.4.0.0",
+                "targetAbi": "10.11.0.0",
+                "framework": "net9.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_2.4.0.0.zip",
+                "checksum": "9207bb8cc5ab481225678efe7a554188",
+                "timestamp": "2026-09-17T17:53:24Z",
+                "changelog": "Build for Jellyfin 10.11.\n\nYou can now search for a theme yourself and pick a different one. Until now a theme that was\nsimply wrong was a dead end: the runners-up were only ever shown for items that had no theme at\nall, so the only way to change one was to go and find a YouTube link by hand.\n\nThe control sits on the item page in Jellyfin, on every row of the Library tab, and on each item in\nthe review queue. It searches the moment it opens, with the same words an unattended run would have\nused, and you can edit them and search again. Every result shows its title, channel and length, a\nlink to listen, and what ThemeForge makes of it with a one-line reason -- including the results the\nrules reject, greyed out with the reason, because those are often the very video you were after.\n\nA theme picked this way is recorded as your decision and no later run replaces it, whatever the\nlibrary's rule says.\n\nThe score recorded against an item is now cleared when you assign a different video, and that video\nstops being listed as a runner-up that was passed over. Both used to be left describing the theme\nthat had been replaced."
+            },
+            {
+                "version": "2.3.0.1",
+                "targetAbi": "12.0.0.0",
+                "framework": "net10.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_2.3.0.1.zip",
+                "checksum": "eaad6dc5f3d9c3f25959b5b08f057174",
+                "timestamp": "2026-09-16T18:37:44Z",
+                "changelog": "Build for Jellyfin 12.\n\nThemes are now written exactly as they were downloaded. Until now every theme was normalised to\n-23 LUFS and faded in and out, and both were on by default, which made most themes quieter than\nthe upload they came from. Both are off. The best audio stream yt-dlp finds is kept as it is --\nthe same stream at the same volume, in the format it arrived in (theme.opus, theme.m4a or\ntheme.mp3) -- instead of being re-encoded to MP3. Nothing lowers the volume unless you ask for it.\n\nAudio processing is opt-in under Settings: raise quiet themes to a floor (this never lowers\nanything), normalise everything to one level, cut silence from the ends, fade, cap the length, or\nalways convert to MP3. A theme is only re-encoded when one of these has to change it.\n\nSettings still at the old defaults are switched off for you; anything you had changed is kept.\n\"Re-download all themes\", also under Settings, fetches every theme ThemeForge wrote again and\nwrites it with the current settings, without touching a single decision.\n\nBuilds for Jellyfin 10.11 and Jellyfin 12 are now published side by side, and the catalogue picks\nthe right one for your server."
+            },
+            {
+                "version": "2.3.0.0",
+                "targetAbi": "10.11.0.0",
+                "framework": "net9.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_2.3.0.0.zip",
+                "checksum": "6083c450f1c34df77139e6c76572b806",
+                "timestamp": "2026-09-16T18:37:44Z",
+                "changelog": "Build for Jellyfin 10.11.\n\nThemes are now written exactly as they were downloaded. Until now every theme was normalised to\n-23 LUFS and faded in and out, and both were on by default, which made most themes quieter than\nthe upload they came from. Both are off. The best audio stream yt-dlp finds is kept as it is --\nthe same stream at the same volume, in the format it arrived in (theme.opus, theme.m4a or\ntheme.mp3) -- instead of being re-encoded to MP3. Nothing lowers the volume unless you ask for it.\n\nAudio processing is opt-in under Settings: raise quiet themes to a floor (this never lowers\nanything), normalise everything to one level, cut silence from the ends, fade, cap the length, or\nalways convert to MP3. A theme is only re-encoded when one of these has to change it.\n\nSettings still at the old defaults are switched off for you; anything you had changed is kept.\n\"Re-download all themes\", also under Settings, fetches every theme ThemeForge wrote again and\nwrites it with the current settings, without touching a single decision.\n\nBuilds for Jellyfin 10.11 and Jellyfin 12 are now published side by side, and the catalogue picks\nthe right one for your server."
+            },
+            {
+                "version": "2.2.0.0",
+                "targetAbi": "10.11.0.0",
+                "framework": "net9.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_2.2.0.0.zip",
+                "checksum": "9b288e38839e881bcd0c5eac6c867124",
+                "timestamp": "2026-09-16T15:09:29Z",
+                "changelog": "ThemerrDB is now asked before anything that can defer an item. The retry backoff -- which exists to\nstop a failing search from running nightly forever -- used to sit in front of the catalogue lookup\ntoo, so every item that had failed once, or simply found nothing on YouTube, was invisible to\nThemerrDB for twelve hours to thirty days. Only a human decision or the library's overwrite rule\nstops the catalogue now. \"Nothing found\" is also its own state rather than being reported as a\nfailure, and the retry button releases every backoff.\n\nEverything the previous matcher gave up on is tried once more automatically.\n\nThe search finds more without accepting more. Season and episode numbers (\"Season 1\", \"S01E01\",\n\"Staffel 2\") are qualifiers, not siblings -- the previous version rejected \"Lost Season 1 Intro\".\nA year is evidence: the item's own year corroborates a match, and a different one (\"Battlestar\nGalactica (1978)\" for the 2004 series) rejects it, brackets included. A subtitle of two or more\nwords stands for the whole title. Claims to be a theme are recognised in several more languages.\n\nThe composer Jellyfin already records is searched for and recognised, and soundtrack uploads on\nrights-holders' \"- Topic\" channels -- titled by track, naming the show only on the album -- are\ngiven a hearing instead of being discarded unseen.\n\nItems with no theme now show what came closest and why, with a button to use one of them anyway.\nThe run summary says where its themes came from."
+            },
+            {
+                "version": "2.1.0.0",
+                "targetAbi": "10.11.0.0",
+                "framework": "net9.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_2.1.0.0.zip",
+                "checksum": "937260b61015aa3fd8fd787c733865bf",
+                "timestamp": "2026-09-06T17:59:53Z",
+                "changelog": "ThemerrDB is now asked first for films, shows and film collections, and its index is mirrored\nlocally by a daily scheduled task. Previously it was asked one item at a time and only about\nfilms, so a scan spent one request per title discovering that most were not in the database. A\ntitle that is not in it now costs nothing.\n\nA series carrying only a TheTVDB id is matched by name against the catalogued shows, strictly\nenough that \"Girls\" cannot match \"Golden Girls\". A film with no theme of its own inherits its\ncollection's, so Alien3 gets the Alien Collection theme.\n\nWhich catalogue answers first is stated rather than left to registration order: ThemerrDB, then\nPlex's archive for the series ThemerrDB does not have.\n\nA dry run no longer fills the review queue. It was recording the winning candidate and its score\nbefore returning, so items the run would have assigned outright sat in the queue at full marks and\nstayed after dry run was switched off. Those entries are cleared automatically."
+            },
+            {
+                "version": "2.0.0.0",
+                "targetAbi": "10.11.0.0",
+                "framework": "net9.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_2.0.0.0.zip",
+                "checksum": "3889c0d7766649836add16c236ce9f10",
+                "timestamp": "2026-09-06T13:41:34Z",
+                "changelog": "Rebuilt how a theme is matched to a title.\n\nThe old matcher scored any candidate whose title merely contained the show's name as a perfect\nmatch, so Lost matched \"Getting lost in the woods ASMR\" and Girls was assigned the theme for The\nGolden Girls. Titles are now matched on identity: the name has to appear as whole words, a\none-word title has to match exactly, and any content word left over beside it -- \"Golden\" Girls,\n\"Lost in Space\" -- means it names something else. Ordinary titles such as Friends or House go to\nthe review queue unless something in the candidate claims to be a theme.\n\nFilms are looked up in ThemerrDB by their TMDB id before any searching, and series can optionally\nbe looked up in Plex's theme archive by their TheTVDB id. A catalogue hit is the theme for that\nexact title, so it is used as it stands.\n\nDownloaded audio is measured before it is written, so a recap, a reaction or a stretch of dialogue\nis rejected rather than assigned.\n\nPer-library rules now actually reach the items they were set for, and saving one is verified\nagainst the file on disk instead of assumed. A new Diagnostics tab shows the settings in force,\nthe rule resolved for each library, and why each item was passed over.\n\nSettings lists no longer append to their defaults on every restart, so a keyword you delete stays\ndeleted.\n\nDecisions recorded by the old matcher are marked as such, and \"Start over\" under Settings\ndiscards them."
+            },
+            {
+                "version": "1.2.0.0",
+                "targetAbi": "10.11.0.0",
+                "framework": "net9.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_1.2.0.0.zip",
+                "checksum": "3264371bb3c92ab36c740b1c86fc9c51",
+                "timestamp": "2026-09-06T04:22:46Z",
+                "changelog": "Fixes downloads failing with HTTP 403. The plugin now uses its own yt-dlp rather than an older copy found on PATH, and replaces it automatically when it ages out - previously the update task downloaded a current yt-dlp that was then never used. Adds a \"Retry failed items\" action to clear the retry backoff, a warning when yt-dlp is too old, and takes a settings snapshot per run so a mid-run change cannot make the report disagree with what happened."
+            },
+            {
+                "version": "1.1.0.0",
+                "targetAbi": "10.11.0.0",
+                "framework": "net9.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_1.1.0.0.zip",
+                "checksum": "51677f09707da79daef3d9172f6fb7d8",
+                "timestamp": "2026-09-06T03:43:10Z",
+                "changelog": "Per-library rules for existing themes: leave them alone, replace only the ones ThemeForge chose, or replace everything. Adds a dedicated log file with its own level, full cleanup on uninstall, an action to remove every theme ThemeForge wrote, and a durable index that survives an interrupted run."
+            },
+            {
+                "version": "1.0.0.0",
+                "targetAbi": "10.11.0.0",
+                "framework": "net9.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_1.0.0.0.zip",
+                "checksum": "cc428ba6416bcc9dd2277c965526a5cc",
+                "timestamp": "2026-09-06T03:27:16Z",
+                "changelog": "First release. Automatic discovery and scoring, loudness-normalised themes, per-library rules for existing themes, review queue, a persistent decision index, a dedicated log file, and full cleanup on uninstall."
+            }
+        ]
+    }
 ]

@@ -1,0 +1,67 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>Jellyfin.Plugin.ThemeForge</AssemblyName>
+    <RootNamespace>Jellyfin.Plugin.ThemeForge</RootNamespace>
+    <!-- Per target framework: X.Y.Z.0 for the Jellyfin 10.11 build, X.Y.Z.1 for Jellyfin 12. -->
+    <Version>$(ThemeForgePackageVersion)</Version>
+    <AssemblyVersion>$(ThemeForgePackageVersion)</AssemblyVersion>
+    <FileVersion>$(ThemeForgePackageVersion)</FileVersion>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Referenced for compilation only. ExcludeAssets="runtime" is what keeps these and their
+      transitive dependencies out of the plugin output: the Jellyfin host already has them
+      loaded, and shipping a second copy invites assembly-identity conflicts. Deleting them
+      after the fact from a hand-written list is not equivalent, because every Jellyfin release
+      can add a transitive package the list has never heard of. The version is the one for the
+      Jellyfin line each target framework is built for, set in Directory.Build.props.
+    -->
+    <PackageReference Include="Jellyfin.Controller" Version="$(JellyfinVersion)" PrivateAssets="all" ExcludeAssets="runtime" />
+    <PackageReference Include="Jellyfin.Model" Version="$(JellyfinVersion)" PrivateAssets="all" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Configuration\**\*.html" />
+    <EmbeddedResource Include="Web\**\*.js" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Jellyfin.Plugin.ThemeForge.Tests" />
+  </ItemGroup>
+
+  <!--
+    meta.json is generated per target framework from the template beside this file, so that each
+    build output is a valid package for its Jellyfin line. Jellyfin reads the zip's own meta.json
+    (its targetAbi wins over the repository manifest, and a version mismatch is logged), so a
+    copied template with the 10.11 values in the 12 package would be wrong, not merely untidy.
+  -->
+  <Target Name="GeneratePluginMeta" BeforeTargets="AssignTargetPaths">
+    <PropertyGroup>
+      <_MetaOut>$(IntermediateOutputPath)meta.json</_MetaOut>
+      <_Meta>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/meta.json'))</_Meta>
+      <_Meta>$([System.Text.RegularExpressions.Regex]::Replace('$(_Meta)', '"version":\s*"[^"]*"', '"version": "$(ThemeForgePackageVersion)"'))</_Meta>
+      <_Meta>$([System.Text.RegularExpressions.Regex]::Replace('$(_Meta)', '"targetAbi":\s*"[^"]*"', '"targetAbi": "$(ThemeForgeTargetAbi)"'))</_Meta>
+      <_Meta>$([System.Text.RegularExpressions.Regex]::Replace('$(_Meta)', '"framework":\s*"[^"]*"', '"framework": "$(TargetFramework)"'))</_Meta>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(_MetaOut)" Lines="$(_Meta)" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <ItemGroup>
+      <None Include="$(_MetaOut)" Link="meta.json" CopyToOutputDirectory="PreserveNewest" />
+      <FileWrites Include="$(_MetaOut)" />
+    </ItemGroup>
+  </Target>
+
+  <!-- The build output is the plugin package, so keep it free of anything not needed. -->
+  <Target Name="TrimPluginOutput" AfterTargets="Build">
+    <ItemGroup>
+      <NotShipped Include="$(OutputPath)*.pdb" />
+      <NotShipped Include="$(OutputPath)*.xml" />
+      <NotShipped Include="$(OutputPath)*.runtimeconfig.json" />
+      <NotShipped Include="$(OutputPath)*.deps.json" />
+    </ItemGroup>
+    <Delete Files="@(NotShipped)" />
+  </Target>
+
+</Project>
