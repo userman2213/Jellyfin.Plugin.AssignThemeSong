@@ -9,6 +9,24 @@
         "description": "ThemeForge searches YouTube with yt-dlp, ranks every candidate with an explainable scoring engine, and writes the winner beside your media exactly as it was delivered. High-confidence matches are assigned automatically; anything less certain waits in a review queue. Audio processing -- raising quiet themes, normalising, fades, trimming -- is available but off until you turn it on, so nothing is ever made quieter without asking. All decisions are recorded in a persistent index, so re-runs are idempotent and manual choices are never overwritten.",
         "versions": [
             {
+                "version": "2.9.0.1",
+                "targetAbi": "12.0.0.0",
+                "framework": "net10.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_2.9.0.1.zip",
+                "checksum": "70fdc04b0deda78bbce8e0b48aba4877",
+                "timestamp": "2026-09-24T16:00:00Z",
+                "changelog": "Build for Jellyfin 12.\n\n**ThemerrDB first, then IMDb.** That is now literally the order.\n\n**A title ThemerrDB has a theme for is not looked up at all.** Its theme is taken outright, so there\nis no search to sharpen and nothing worth asking anybody about. On a library ThemerrDB covers well\nthat is most of it, and each one skipped is a page not fetched. The run says how many it skipped.\n\n**IMDb is asked first for everything else.** It was third before, behind Wikidata and Wikipedia, and\nonly saw what they could not name. One IMDb page names the theme, who performs it and who wrote the\nscore, where the other two each answer part of that for part of a library \u2014 so it goes first, and\nthey are asked afterwards about whatever it could not name.\n\nThe chain, end to end: **ThemerrDB \u2192 IMDb \u2192 Wikidata \u2192 Wikipedia \u2192 search YouTube.**"
+            },
+            {
+                "version": "2.9.0.0",
+                "targetAbi": "10.11.0.0",
+                "framework": "net9.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_2.9.0.0.zip",
+                "checksum": "c98f6b9a4a73c2e3c14abbab4ac34a85",
+                "timestamp": "2026-09-24T16:00:00Z",
+                "changelog": "Build for Jellyfin 10.11.\n\n**ThemerrDB first, then IMDb.** That is now literally the order.\n\n**A title ThemerrDB has a theme for is not looked up at all.** Its theme is taken outright, so there\nis no search to sharpen and nothing worth asking anybody about. On a library ThemerrDB covers well\nthat is most of it, and each one skipped is a page not fetched. The run says how many it skipped.\n\n**IMDb is asked first for everything else.** It was third before, behind Wikidata and Wikipedia, and\nonly saw what they could not name. One IMDb page names the theme, who performs it and who wrote the\nscore, where the other two each answer part of that for part of a library \u2014 so it goes first, and\nthey are asked afterwards about whatever it could not name.\n\nThe chain, end to end: **ThemerrDB \u2192 IMDb \u2192 Wikidata \u2192 Wikipedia \u2192 search YouTube.**"
+            },
+            {
                 "version": "2.8.0.1",
                 "targetAbi": "12.0.0.0",
                 "framework": "net10.0",
