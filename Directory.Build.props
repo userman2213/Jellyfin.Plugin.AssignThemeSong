@@ -15,7 +15,7 @@
          warning here is expected and must not fail the build. -->
     <NoWarn>$(NoWarn);NU1605</NoWarn>
 
-    <ThemeForgeVersion>2.7.0.0</ThemeForgeVersion>
+    <ThemeForgeVersion>2.7.1.0</ThemeForgeVersion>
   </PropertyGroup>
 
   <!--
