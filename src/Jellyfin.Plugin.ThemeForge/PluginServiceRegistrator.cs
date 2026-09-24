@@ -51,6 +51,9 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<ICreditsSource, WikidataCreditsSource>();
         serviceCollection.AddSingleton<ICreditsSource, MusicBrainzCreditsSource>();
         serviceCollection.AddSingleton<ICreditsSource, WikipediaThemeSource>();
+        serviceCollection.AddSingleton<IChromeProvisioner, ChromeProvisioner>();
+        serviceCollection.AddSingleton<IHeadlessBrowser, HeadlessBrowser>();
+        serviceCollection.AddSingleton<ICreditsSource, ImdbSoundtrackSource>();
         serviceCollection.AddSingleton<IComposerCatalogue, ComposerCatalogue>();
 
         // Pipeline engines

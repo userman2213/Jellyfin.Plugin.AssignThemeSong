@@ -373,6 +373,91 @@
                         Wikipedia does limit how fast it is asked; anything it turns away is asked about on
                         the next run.
                     </div>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="UseImdbSoundtrack" />
+                        <span>Read IMDb's soundtrack listing when nothing else names the theme</span>
+                    </label>
+                    <div class="fieldDescription" style="margin:.25em 0 1em 0;">
+                        The last resort, and the only source read against the site's wishes: IMDb answers a
+                        request that says it is a program with <code>403</code>, and a browser-shaped one with a
+                        bot check, and its terms do not permit automated reading. Asked only about titles
+                        Wikidata and Wikipedia left without a theme, and only by IMDb id. An entry is taken only
+                        when the listing calls it the title music or names it after the work &mdash; for a film
+                        the listing is the licensed songs in the order they play, so its first entry is whatever
+                        plays first rather than the theme. Use <strong>Test the IMDb lookup</strong> below to
+                        find out whether your server can read it at all.
+                    </div>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="UseImdbBrowser" />
+                        <span>Render IMDb's page in headless Chrome when a plain request is refused</span>
+                    </label>
+                    <div class="fieldDescription" style="margin:.25em 0 1em 0;">
+                        IMDb's bot check clears only when a browser engine runs its script. A plain request is
+                        tried first because it is far quicker and works where IMDb is not challenging the server.
+                        The check is applied per address and is much harsher on hosted servers than on home
+                        connections.
+                    </div>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="ImdbDownloadBrowser" />
+                        <span>Download Chrome if this server has no browser</span>
+                    </label>
+                    <div class="fieldDescription" style="margin:.25em 0 1em 0;">
+                        A one-off download of roughly 150&ndash;200&nbsp;MB into ThemeForge's tools folder beside
+                        yt-dlp, which expands to about 400&nbsp;MB. Covers Linux, macOS and Windows on both x64
+                        and arm64. You can start it yourself, and undo it, below.
+                    </div>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="ImdbBrowserNoSandbox" />
+                        <span>Start the browser with its own sandbox off</span>
+                    </label>
+                    <div class="fieldDescription" style="margin:.25em 0 1em 0;">
+                        Chrome's sandbox cannot start inside most container images, which is how Jellyfin is
+                        usually run, so this is on. Turn it off if your server runs Jellyfin outside a container.
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="ImdbBrowserTimeoutSeconds" min="20" max="600" step="10" label="Give the browser this long to render a page (seconds)" />
+                        <div class="fieldDescription">
+                            Clearing the bot check on a cold profile has been measured at over a minute; once the
+                            stored session holds the clearance a render takes a few seconds.
+                        </div>
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="text" id="ImdbBrowserPath" label="Browser path (leave empty to find one)" />
+                        <div class="fieldDescription">
+                            A Chrome, Chromium or Edge binary. ThemeForge prefers its own downloaded copy, then
+                            whatever is installed on the server.
+                        </div>
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="text" id="ImdbUserAgent" label="User agent sent to IMDb (leave empty for the built-in one)" />
+                        <div class="fieldDescription">
+                            Used for the plain request and given to the browser &mdash; Chrome's own headless user
+                            agent says &ldquo;HeadlessChrome&rdquo;, which IMDb refuses outright. A user agent going
+                            stale is the usual reason this stops working, so moving it on is the first thing to try.
+                        </div>
+                    </div>
+
+                    <h3 class="sectionTitle" style="margin-top:1.5em;">Test the IMDb lookup</h3>
+                    <div class="fieldDescription" style="margin:.25em 0 1em 0;">
+                        Reads one title's listing for real and reports each stage, so you can see whether this
+                        server can reach IMDb before relying on it. Save your settings first. The first run can
+                        take a minute or two if a browser has to be downloaded.
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="text" id="tfImdbTestId" label="IMDb id to try" value="tt0137523" />
+                    </div>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="tfImdbTestSeries" />
+                        <span>Treat it as a series</span>
+                    </label>
+                    <div style="margin:.75em 0;">
+                        <button is="emby-button" type="button" id="tfImdbTest" class="raised button-submit block"><span>Test the IMDb lookup</span></button>
+                        <button is="emby-button" type="button" id="tfImdbBrowserStatus" class="raised block"><span>Check the browser</span></button>
+                        <button is="emby-button" type="button" id="tfImdbBrowserInstall" class="raised block"><span>Download Chrome</span></button>
+                        <button is="emby-button" type="button" id="tfImdbBrowserRemove" class="raised block"><span>Remove the downloaded Chrome</span></button>
+                    </div>
+                    <div id="tfImdbTestResult" style="display:none;margin-bottom:1.5em;"></div>
+
                     <div class="inputContainer">
                         <input is="emby-input" type="number" id="ComposerCacheMaxAgeDays" min="1" max="60" step="1" label="Look up before a run if nothing has been looked up for (days)" />
                         <div class="fieldDescription">
@@ -535,7 +620,8 @@
                 'StopLadderOnConfidentHit', 'TrustTopicChannels',
                 'EnableFileLogging', 'UseThemerrDb', 'UsePlexThemeArchive', 'RejectNonMusic',
                 'SyncThemerrDb',
-                'ResearchComposers', 'SyncComposers', 'UseMusicBrainzForComposers', 'UseWikipediaForThemes'
+                'ResearchComposers', 'SyncComposers', 'UseMusicBrainzForComposers', 'UseWikipediaForThemes',
+                'UseImdbSoundtrack', 'UseImdbBrowser', 'ImdbDownloadBrowser', 'ImdbBrowserNoSandbox'
             ];
             var NUMBERS = [
                 'AutoAssignThreshold', 'ReviewThreshold', 'MinimumTitleSimilarity', 'AudioBitrate',
@@ -544,9 +630,10 @@
                 'MovieIdealMinSeconds', 'MovieIdealMaxSeconds', 'HardMinSeconds', 'HardMaxSeconds',
                 'MaxConcurrency', 'RequestDelayMs', 'MaxAttempts',
                 'MaxLogFileSizeMb', 'MaxLogFiles', 'FileLogLevel',
-                'MusicThreshold', 'SpeechThreshold', 'ThemerrDbMaxAgeDays', 'ComposerCacheMaxAgeDays'
+                'MusicThreshold', 'SpeechThreshold', 'ThemerrDbMaxAgeDays', 'ComposerCacheMaxAgeDays',
+                'ImdbBrowserTimeoutSeconds'
             ];
-            var TEXTS = ['YtDlpPath', 'FfmpegPath'];
+            var TEXTS = ['YtDlpPath', 'FfmpegPath', 'ImdbBrowserPath', 'ImdbUserAgent'];
             var LISTS = [
                 'SeriesQueryTemplates', 'MovieQueryTemplates', 'PositiveKeywords', 'NegativeKeywords',
                 'PreferredChannels', 'BlockedChannels', 'BlockedVideoIds'
@@ -757,6 +844,125 @@
                 }, function () {
                     Dashboard.hideLoadingMsg();
                     Dashboard.alert('Could not save the library rules.');
+                });
+            });
+
+            // ------------------------------------------------- the IMDb lookup test
+            function imdbBox(html, colour) {
+                var box = el('tfImdbTestResult');
+                box.style.display = 'block';
+                box.innerHTML = '<div style="padding:1em;border-left:4px solid ' + colour +
+                                ';background:rgba(255,255,255,.04);border-radius:4px;">' + html + '</div>';
+            }
+
+            function imdbEscape(value) {
+                var node = document.createElement('div');
+                node.textContent = value === null || value === undefined ? '' : String(value);
+                return node.innerHTML;
+            }
+
+            function imdbBusy(message) {
+                imdbBox('<p style="margin:0;">' + imdbEscape(message) + '</p>', '#00a4dc');
+            }
+
+            function imdbWhile(button, busyText, work) {
+                var label = button.querySelector('span') || button;
+                var original = label.textContent;
+                label.textContent = busyText;
+                button.disabled = true;
+                return work().then(function () {
+                    label.textContent = original;
+                    button.disabled = false;
+                }, function () {
+                    label.textContent = original;
+                    button.disabled = false;
+                    imdbBox('<p style="margin:0;color:#f44336;">That did not work. Check the log.</p>', '#f44336');
+                });
+            }
+
+            function showBrowserStatus(status) {
+                var html = '<p style="margin:0 0 .5em 0;">' + imdbEscape(status.Message) + '</p><ul style="margin:0;padding-left:1.2em;">';
+                html += '<li>Available: <strong>' + (status.Available ? 'yes' : 'no') + '</strong></li>';
+                html += '<li>Source: ' + imdbEscape(status.Source) + '</li>';
+                if (status.Version) { html += '<li>Version: ' + imdbEscape(status.Version) + '</li>'; }
+                if (status.Path) { html += '<li>Path: <code>' + imdbEscape(status.Path) + '</code></li>'; }
+                html += '<li>Platform: ' + imdbEscape(status.Platform || 'not supported') + '</li>';
+                html += '<li>May download: ' + (status.MayDownload ? 'yes' : 'no') + '</li>';
+                html += '</ul>';
+                imdbBox(html, status.Available ? '#4caf50' : '#ff9800');
+            }
+
+            function showImdbTest(result) {
+                var colour = result.Success ? '#4caf50' : '#ff9800';
+                var html = '<p style="margin:0 0 .75em 0;"><strong>' + imdbEscape(result.Summary) + '</strong></p>';
+
+                html += '<table style="width:100%;border-collapse:collapse;margin-bottom:.75em;"><tbody>';
+                (result.Steps || []).forEach(function (step) {
+                    html += '<tr>';
+                    html += '<td style="padding:2px 8px 2px 0;white-space:nowrap;color:' +
+                            (step.Ok ? '#4caf50' : '#ff9800') + ';">' +
+                            (step.Ok ? '\u2713' : '\u2717') + ' ' + imdbEscape(step.Name) + '</td>';
+                    html += '<td style="padding:2px 8px;">' + imdbEscape(step.Detail) + '</td>';
+                    html += '<td style="padding:2px 0;text-align:right;white-space:nowrap;opacity:.7;">' +
+                            (step.ElapsedMs / 1000).toFixed(1) + 's</td>';
+                    html += '</tr>';
+                });
+                html += '</tbody></table>';
+
+                if (result.BrowserPath) {
+                    html += '<p style="margin:0 0 .75em 0;opacity:.8;">Browser (' +
+                            imdbEscape(result.BrowserSource) + '): <code>' + imdbEscape(result.BrowserPath) +
+                            '</code>' + (result.BrowserVersion ? ' &mdash; ' + imdbEscape(result.BrowserVersion) : '') +
+                            '</p>';
+                }
+
+                if (result.Entries && result.Entries.length) {
+                    html += '<p style="margin:0 0 .25em 0;">The listing, as IMDb gives it (' +
+                            result.Entries.length + '):</p><ol style="margin:0;padding-left:1.4em;">';
+                    result.Entries.slice(0, 12).forEach(function (entry) {
+                        html += '<li>' + imdbEscape(entry) + '</li>';
+                    });
+                    html += '</ol>';
+                }
+
+                html += '<p style="margin:.75em 0 0 0;opacity:.7;">Took ' +
+                        (result.ElapsedMs / 1000).toFixed(1) + 's in total.</p>';
+                imdbBox(html, colour);
+            }
+
+            el('tfImdbTest').addEventListener('click', function () {
+                var button = this;
+                var id = (el('tfImdbTestId').value || '').trim();
+                var series = el('tfImdbTestSeries').checked;
+                imdbBusy('Reading the listing. If a browser has to be downloaded first this can take a few minutes...');
+                imdbWhile(button, 'Testing...', function () {
+                    return api('POST', 'Imdb/Test?imdbId=' + encodeURIComponent(id) + '&isSeries=' + series)
+                        .then(showImdbTest);
+                });
+            });
+
+            el('tfImdbBrowserStatus').addEventListener('click', function () {
+                var button = this;
+                imdbWhile(button, 'Checking...', function () {
+                    return api('GET', 'Imdb/Browser').then(showBrowserStatus);
+                });
+            });
+
+            el('tfImdbBrowserInstall').addEventListener('click', function () {
+                var button = this;
+                imdbBusy('Downloading Chrome, roughly 150-200 MB. This runs on the server and can take a few minutes...');
+                imdbWhile(button, 'Downloading...', function () {
+                    return api('POST', 'Imdb/Browser').then(showBrowserStatus);
+                });
+            });
+
+            el('tfImdbBrowserRemove').addEventListener('click', function () {
+                var button = this;
+                if (!window.confirm('Delete the Chrome that ThemeForge downloaded, and its stored IMDb session?')) {
+                    return;
+                }
+                imdbWhile(button, 'Removing...', function () {
+                    return api('DELETE', 'Imdb/Browser').then(showBrowserStatus);
                 });
             });
 

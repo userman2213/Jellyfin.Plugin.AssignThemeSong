@@ -142,6 +142,82 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool UseWikipediaForThemes { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets a value indicating whether IMDb's soundtrack listing is read for what a title's
+    /// theme is called, when nothing else could say.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The last resort, and the one source read against the site's wishes. IMDb answers a request
+    /// that identifies itself as a program with <c>403</c> and a browser-shaped one with a bot
+    /// challenge, so reading it means presenting as a browser and rendering the page in headless
+    /// Chrome when that is refused. IMDb's terms do not permit automated reading. It is on by
+    /// choice, and this switch turns all of it off.
+    /// </para>
+    /// <para>
+    /// Only asked about titles Wikidata and Wikipedia left without a theme, and only by IMDb id.
+    /// An entry is taken only when the listing names it as the title music, or names it after the
+    /// work, or the work is a series -- for a film the listing is the licensed songs in playback
+    /// order, and its first entry is whatever plays first rather than the theme.
+    /// </para>
+    /// </remarks>
+    public bool UseImdbSoundtrack { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether IMDb's page may be rendered in headless Chrome when
+    /// a plain request for it is refused.
+    /// </summary>
+    /// <remarks>
+    /// Turning this off leaves the plain request, which succeeds only where IMDb is not challenging
+    /// the server. The bot check is applied per address and is far harsher on hosted servers than on
+    /// home connections.
+    /// </remarks>
+    public bool UseImdbBrowser { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether ThemeForge may download its own copy of Chrome when
+    /// the server has no browser.
+    /// </summary>
+    /// <remarks>
+    /// A one-off download of roughly 150-200 MB, kept in the tools folder beside yt-dlp, which
+    /// expands to about 400 MB. The settings page can trigger and undo it.
+    /// </remarks>
+    public bool ImdbDownloadBrowser { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the browser is started with its own sandbox off.
+    /// </summary>
+    /// <remarks>
+    /// Chrome's sandbox cannot start inside most container images, which is how Jellyfin is usually
+    /// deployed, so this is on. A server running Jellyfin outside a container can turn it off and
+    /// keep the sandbox.
+    /// </remarks>
+    public bool ImdbBrowserNoSandbox { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets how long the browser is given to render one page, in seconds.
+    /// </summary>
+    /// <remarks>
+    /// Clearing the bot check on a cold profile has been measured at over a minute; once the profile
+    /// holds the clearance a render takes a few seconds.
+    /// </remarks>
+    public int ImdbBrowserTimeoutSeconds { get; set; } = 120;
+
+    /// <summary>
+    /// Gets or sets the path to a Chrome, Chromium or Edge binary. Empty means find one.
+    /// </summary>
+    public string ImdbBrowserPath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the user agent sent to IMDb and given to the browser. Empty means the built-in
+    /// desktop Chrome one.
+    /// </summary>
+    /// <remarks>
+    /// Worth moving on when this stops working: a user agent going stale is the usual reason a bot
+    /// filter starts refusing.
+    /// </remarks>
+    public string ImdbUserAgent { get; set; } = string.Empty;
+
+    /// <summary>
     /// Gets or sets how old the composer cache may get before a run refreshes it itself.
     /// </summary>
     /// <remarks>
