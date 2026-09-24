@@ -9,6 +9,24 @@
         "description": "ThemeForge searches YouTube with yt-dlp, ranks every candidate with an explainable scoring engine, and writes the winner beside your media exactly as it was delivered. High-confidence matches are assigned automatically; anything less certain waits in a review queue. Audio processing -- raising quiet themes, normalising, fades, trimming -- is available but off until you turn it on, so nothing is ever made quieter without asking. All decisions are recorded in a persistent index, so re-runs are idempotent and manual choices are never overwritten.",
         "versions": [
             {
+                "version": "2.8.0.1",
+                "targetAbi": "12.0.0.0",
+                "framework": "net10.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_2.8.0.1.zip",
+                "checksum": "2a95f34356a2d9f76fdc42cb309e47e5",
+                "timestamp": "2026-09-24T15:51:01Z",
+                "changelog": "Build for Jellyfin 12.\n\nMusicBrainz is gone, and IMDb now says who wrote the music as well as what the theme is called.\n\n**MusicBrainz is removed.** It was the slow half of the research at one request per second, and it\nanswered only the composer question. Wikidata still answers most of a library in a handful of\nrequests, Wikipedia still names the theme for the shows Wikidata does not, and IMDb now covers the\ncomposer ground MusicBrainz used to. Its setting is gone from **Who wrote the music**; nothing needs\ndoing on upgrade.\n\n**IMDb answers for the composer too.** Its listing credits who wrote each entry, and a film's score\ncues are credited to one person over and over while the licensed songs have a different writer each\n\u2014 so a writer credited once is a songwriter, and one credited five times is who scored the film. A\nwriter is reported as the composer only when the listing credits them more than once, which keeps\none-off songwriters out. Credits naming several people, as \"Fred Wise , Milton Leeds , Bob Russell ,\nand Nicholas Roubanis\", are split into the people in them, and the name somebody was credited under\n(\"as George Brown\") is dropped: a single string of four names matches nothing and scores nothing.\n\nThe order is unchanged and is what it looks like: **ThemerrDB first**, which gives a theme outright;\nand for everything it has no entry for, the theme and composer are looked up \u2014 Wikidata, then\nWikipedia, then IMDb \u2014 and searched for on YouTube."
+            },
+            {
+                "version": "2.8.0.0",
+                "targetAbi": "10.11.0.0",
+                "framework": "net9.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_2.8.0.0.zip",
+                "checksum": "7890f043df06bfeb90353b255eafafa0",
+                "timestamp": "2026-09-24T15:51:01Z",
+                "changelog": "Build for Jellyfin 10.11.\n\nMusicBrainz is gone, and IMDb now says who wrote the music as well as what the theme is called.\n\n**MusicBrainz is removed.** It was the slow half of the research at one request per second, and it\nanswered only the composer question. Wikidata still answers most of a library in a handful of\nrequests, Wikipedia still names the theme for the shows Wikidata does not, and IMDb now covers the\ncomposer ground MusicBrainz used to. Its setting is gone from **Who wrote the music**; nothing needs\ndoing on upgrade.\n\n**IMDb answers for the composer too.** Its listing credits who wrote each entry, and a film's score\ncues are credited to one person over and over while the licensed songs have a different writer each\n\u2014 so a writer credited once is a songwriter, and one credited five times is who scored the film. A\nwriter is reported as the composer only when the listing credits them more than once, which keeps\none-off songwriters out. Credits naming several people, as \"Fred Wise , Milton Leeds , Bob Russell ,\nand Nicholas Roubanis\", are split into the people in them, and the name somebody was credited under\n(\"as George Brown\") is dropped: a single string of four names matches nothing and scores nothing.\n\nThe order is unchanged and is what it looks like: **ThemerrDB first**, which gives a theme outright;\nand for everything it has no entry for, the theme and composer are looked up \u2014 Wikidata, then\nWikipedia, then IMDb \u2014 and searched for on YouTube."
+            },
+            {
                 "version": "2.7.1.1",
                 "targetAbi": "12.0.0.0",
                 "framework": "net10.0",
