@@ -230,14 +230,91 @@ public class ImdbSoundtrackTests
     }
 
     [Fact]
-    public void IsAskedLastAndAnswersOnlyAboutTheTheme()
+    public void IsAskedLastAndAnswersBothQuestions()
     {
         var source = new ImdbSoundtrackSource(
             new ThrowingHttpClientFactory(),
             new UnavailableBrowser(),
             new NullThemeForgeLogger<ImdbSoundtrackSource>());
 
-        Assert.Equal(CreditsQuestion.Theme, source.Answers);
+        // The listing credits who wrote and who performed each entry, so it can say both what the
+        // theme is called and who scored the work.
+        Assert.True(source.Answers.HasFlag(CreditsQuestion.Theme));
+        Assert.True(source.Answers.HasFlag(CreditsQuestion.Composers));
         Assert.True(source.Order > 20, "IMDb must be asked after Wikidata and Wikipedia.");
+    }
+
+    // ---- who wrote the music ----
+
+    [Fact]
+    public void NamesTheComposerAsTheWriterCreditedMostOften()
+    {
+        // The Godfather's listing credits Carmine Coppola on several cues and a different writer on
+        // each licensed song, which is what tells the score apart from the songs.
+        var entries = ImdbSoundtrackPage.Parse(Fixture("imdb-soundtrack-film-plain.html"));
+
+        var composers = ImdbSoundtrackPage.ScoreComposers(entries);
+
+        Assert.NotEmpty(composers);
+        Assert.Contains("Carmine Coppola", composers, StringComparer.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void LeavesOutAWriterCreditedOnlyOnce()
+    {
+        // A one-off songwriter is not the composer, however prominent the song.
+        var entries = new[]
+        {
+            new SoundtrackEntry("A", null, "Only Once"),
+            new SoundtrackEntry("B", null, "Twice Over"),
+            new SoundtrackEntry("C", null, "Twice Over"),
+        };
+
+        Assert.Equal(new[] { "Twice Over" }, ImdbSoundtrackPage.ScoreComposers(entries));
+    }
+
+    [Fact]
+    public void NamesNobodyFromASingleEntryListing()
+    {
+        // A series listing is usually one entry long; its theme's writer is reported separately.
+        var entries = ImdbSoundtrackPage.Parse(Fixture("imdb-soundtrack-series.html"));
+
+        Assert.Single(entries);
+        Assert.Empty(ImdbSoundtrackPage.ScoreComposers(entries));
+    }
+
+    [Theory]
+    [InlineData("Rolfe Kent", new[] { "Rolfe Kent" })]
+    [InlineData("Azam Ali , Greg Ellis", new[] { "Azam Ali", "Greg Ellis" })]
+    [InlineData("Gerry Rafferty and Joe Egan", new[] { "Gerry Rafferty", "Joe Egan" })]
+    [InlineData("Fred Wise , Milton Leeds , Bob Russell , and Nicholas Roubanis",
+        new[] { "Fred Wise", "Milton Leeds", "Bob Russell", "Nicholas Roubanis" })]
+    [InlineData("Ole Georg (as Henrik Nielsen)", new[] { "Ole Georg" })]
+    [InlineData("Al Martino (uncredited)", new[] { "Al Martino" })]
+    [InlineData("", new string[0])]
+    [InlineData(null, new string[0])]
+    public void SplitsACreditIntoThePeopleInIt(string? credit, string[] expected) =>
+        Assert.Equal(expected, ImdbSoundtrackPage.SplitNames(credit));
+
+    [Fact]
+    public void SplitsTheLongestRealCreditWithoutKeepingFragments()
+    {
+        // Jungle Boogie, as Pulp Fiction's listing credits it: eight writers, three of them with
+        // the name they were credited under in brackets.
+        const string Credit = "Ronald Bell , Claydes Smith , George 'Funky' Brown (as George Brown), "
+            + "Robert 'Spike' Mickens (as Robert Mickens), Don Boyce , Ricky Westfield , "
+            + "Dennis D.T. Thomas (as Dennis Thomas), and Robert 'Kool' Bell (as Robert Bell)";
+
+        var names = ImdbSoundtrackPage.SplitNames(Credit);
+
+        Assert.Contains("Ronald Bell", names, StringComparer.Ordinal);
+        Assert.Contains("Don Boyce", names, StringComparer.Ordinal);
+        Assert.All(names, name =>
+        {
+            Assert.DoesNotContain("(", name, StringComparison.Ordinal);
+            Assert.DoesNotContain(")", name, StringComparison.Ordinal);
+            Assert.NotEqual("and", name);
+            Assert.True(name.Length >= 3, $"kept a fragment: '{name}'");
+        });
     }
 }

@@ -167,7 +167,6 @@ public class CreditsLiveTests
     /// <summary>Alien. Wikidata has its composer, its soundtrack release and both of its ids.</summary>
     private const string Alien = "tt0078748";
 
-    /// <summary>Battlestar Galactica (2004), whose IMDb page MusicBrainz links to four releases.</summary>
     private const string Battlestar = "tt0407362";
 
     /// <summary>Alien's soundtrack release group, which Wikidata supplies alongside the composer.</summary>
@@ -256,34 +255,6 @@ public class CreditsLiveTests
         Assert.Equal(
             new Engines.Credits.ThemeSong("Woke Up This Morning", "Alabama 3"),
             Engines.Credits.WikipediaInfobox.Theme(articles["The Sopranos"]));
-    }
-
-    [NetworkFact]
-    public async Task MusicBrainzStillAnswersInBothOfTheShapesTheParserReads()
-    {
-        // Both lookups in one test, a second apart. MusicBrainz allows one request per second and
-        // answers 503 to a second one inside it -- which is exactly what happened when these were
-        // two tests, and is worth knowing about rather than working around.
-        using var client = Client();
-        client.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "application/json");
-
-        // The relationship lookup, which finds a release group from the film's IMDb page and
-        // wraps it in a relation. If that key is ever respelled, or the artist credit moves,
-        // this is where it shows.
-        var byImdb = Engines.Credits.MusicBrainzCreditsSource.Parse(
-            await Fetch(client, string.Format(CultureInfo.InvariantCulture, Engines.Credits.MusicBrainzCreditsSource.ByImdbUrl, Battlestar)));
-
-        Assert.Contains("Bear McCreary", byImdb.Composers, StringComparer.Ordinal);
-        Assert.NotNull(byImdb.ReleaseGroupId);
-
-        await Task.Delay(TimeSpan.FromSeconds(1));
-
-        // The short path, taken when Wikidata already supplied the id. It returns the release
-        // group unwrapped rather than inside a relation, which the parser has to handle too.
-        var byGroup = Engines.Credits.MusicBrainzCreditsSource.Parse(
-            await Fetch(client, string.Format(CultureInfo.InvariantCulture, Engines.Credits.MusicBrainzCreditsSource.ByReleaseGroup, AlienSoundtrack)));
-
-        Assert.Contains("Jerry Goldsmith", byGroup.Composers, StringComparer.Ordinal);
     }
 
     /// <summary>Fetches one document, waiting out a "too fast" exactly as the source does.</summary>

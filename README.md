@@ -70,15 +70,16 @@ So ThemeForge looks both up, **by the title's own database id and never by name*
 | Source | Keyed on | What it gives | Cost | Licence |
 |---|---|---|---|---|
 | [Wikidata](https://www.wikidata.org) | IMDb (P345), TMDB (P4947/P4983) | composer; theme music (P942) for famous shows | one query per 50 titles | CC0 |
-| [MusicBrainz](https://musicbrainz.org) | the IMDb URL of the film or show | composer, for what Wikidata missed | one request per title, 1/second | CC0 |
 | [Wikipedia](https://en.wikipedia.org) | the article Wikidata links to | a show's opening theme and who wrote it | one request per 5 shows | facts only |
-| [IMDb](https://www.imdb.com) | the IMDb id | a title's soundtrack listing, when nothing above named the theme | one request per title, 1 per 2 seconds | facts only |
+| [IMDb](https://www.imdb.com) | the IMDb id | a title's soundtrack listing: the theme, and who wrote the score | one request per title, 1 per 2 seconds | facts only |
 
 Wikidata answers most of a library in a handful of requests; the other two are asked only about
 what it could not answer. Wikipedia's infobox names the theme for far more shows than Wikidata
 does — The Sopranos, Firefly, House, Mad Men, True Detective, Scrubs — and often who wrote it, which
-is not always who scored the show: Dexter's theme is Rolfe Kent's, its score Daniel Licht's. Only
-the song's title and the names are kept.
+is not always who scored the show: Dexter's theme is Rolfe Kent's, its score Daniel Licht's. IMDb is
+asked last, about whatever is still unnamed, and its listing credits both who performed each entry
+and who wrote it, so it answers for the composer as well as the theme. Only the song's title and the
+names are kept.
 
 Answers are kept for two months and misses for a fortnight, so a whole library costs a few requests
 once and nothing thereafter. A service that is down or asks ThemeForge to slow down is not a miss:
@@ -91,7 +92,7 @@ has to name the performer as well as the song: Scrubs' theme is "Superman", and 
 other songs.
 
 Searching any of these services *by title* is deliberately not done, and this is not caution for
-its own sake: MusicBrainz returns a J-pop single for "Alien", and the composer of the 1978
+its own sake: a title search returns a J-pop single for "Alien", and the composer of the 1978
 Battlestar Galactica for the 2004 one. A wrong composer is worse than no composer, because it would
 be searched for and believed.
 
@@ -121,6 +122,15 @@ This Morning" and Firefly "The Ballad of Serenity". A film whose listing names n
 **nothing**, which is the right answer. The rule is deliberately not fooled by a song with "theme"
 in its name: Fight Club's listing contains "Theme from Valley of the Dolls" and "KDFW News Theme",
 and neither is the film's theme.
+
+**It names the composer too.** The listing credits who wrote each entry, and a film's score cues
+are credited to one person over and over while its licensed songs have a different writer each: a
+writer credited once is a songwriter, one credited five times is who scored the film. So a writer is
+reported as the composer only when the listing credits them more than once, which keeps one-off
+songwriters out. Credits naming several people — "Fred Wise , Milton Leeds , Bob Russell , and
+Nicholas Roubanis" — are split into the people in them, and the name somebody was credited under
+("as George Brown") is dropped, because a single string of four names matches nothing and scores
+nothing.
 
 Requests are spaced two seconds apart. A title IMDb does not answer about is **not** recorded as
 having no theme; it is asked again on the next run, like any other service that was unreachable.

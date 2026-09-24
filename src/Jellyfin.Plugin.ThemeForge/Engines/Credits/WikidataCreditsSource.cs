@@ -214,11 +214,11 @@ public sealed class WikidataCreditsSource : ICreditsSource
         }
 
         // P86 is the composer of the work. P406 is its soundtrack release, which supplies a
-        // performing artist when no composer is stated and the MusicBrainz id that lets the next
-        // source skip a step. P942 is its theme music, and P175 on that is who performs it. The
-        // sitelink is the English Wikipedia article, where a theme Wikidata lacks is often
-        // recorded. Seasons (Q3464665) and episodes (Q21191270) share their series' ids and are
-        // not the series. The label service resolves every name in the same request.
+        // performing artist when no composer is stated, and a MusicBrainz release group id that is
+        // recorded but no longer followed up. P942 is its theme music, and P175 on that is who
+        // performs it. The sitelink is the English Wikipedia article, where a theme Wikidata lacks
+        // is often recorded. Seasons (Q3464665) and episodes (Q21191270) share their series' ids and
+        // are not the series. The label service resolves every name in the same request.
         return string.Create(
             CultureInfo.InvariantCulture,
             $@"SELECT ?imdb ?tmdbFilm ?tmdbTv ?composerLabel ?performerLabel ?mbid ?themeLabel ?themePerformerLabel ?article WHERE {{

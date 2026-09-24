@@ -84,7 +84,11 @@ public sealed class ImdbSoundtrackSource : ICreditsSource
     public int Order => 30;
 
     /// <inheritdoc />
-    public CreditsQuestion Answers => CreditsQuestion.Theme;
+    /// <remarks>
+    /// The listing credits who wrote and who performed each entry, so it answers both questions:
+    /// what the theme is called, and who scored the work.
+    /// </remarks>
+    public CreditsQuestion Answers => CreditsQuestion.Composers | CreditsQuestion.Theme;
 
     /// <inheritdoc />
     public bool IsEnabled(PluginConfiguration configuration)
@@ -139,29 +143,47 @@ public sealed class ImdbSoundtrackSource : ICreditsSource
             {
                 var theme = ImdbSoundtrackPage.ChooseTheme(listing.Entries, work.IsSeries, work.Label);
 
-                if (theme is null)
+                // Who scored the work is a separate question from what its theme is called, and the
+                // listing can answer one without the other: a film that names no theme still credits
+                // its score cues, and a series with one entry names a theme and no score.
+                var composers = ImdbSoundtrackPage.ScoreComposers(listing.Entries);
+                var themeComposers = theme is null
+                    ? (IReadOnlyList<string>)Array.Empty<string>()
+                    : ImdbSoundtrackPage.SplitNames(theme.Writer);
+
+                if (theme is null && composers.Count == 0)
                 {
                     // A film listing that names no theme is the common case, and taking its first
                     // entry would be taking whatever song plays first. See ImdbSoundtrackPage.
                     _logger.LogDebug(
-                        "IMDb lists {Count} entries for {Label}, none of them a theme",
+                        "IMDb lists {Count} entries for {Label}, none of them a theme and no writer "
+                        + "credited more than once",
                         listing.Entries.Count,
                         work.Label);
                 }
                 else
                 {
-                    found[work.Key] = new ResearchedCredits(Array.Empty<string>(), null, null)
+                    var credits = new ResearchedCredits(composers, null, null)
                     {
-                        Theme = new ThemeSong(theme.Title, theme.Performer),
-                        ThemeComposers = theme.Writer is null
-                            ? Array.Empty<string>()
-                            : new[] { theme.Writer },
+                        Theme = theme is null ? null : new ThemeSong(theme.Title, theme.Performer),
+                        ThemeComposers = themeComposers,
                     };
 
-                    _logger.LogInformation(
-                        "IMDb names {Theme} as the theme for {Label}",
-                        found[work.Key].Theme,
-                        work.Label);
+                    found[work.Key] = credits;
+
+                    if (theme is not null)
+                    {
+                        _logger.LogInformation(
+                            "IMDb names {Theme} as the theme for {Label}", credits.Theme, work.Label);
+                    }
+
+                    if (composers.Count > 0)
+                    {
+                        _logger.LogInformation(
+                            "IMDb credits {Composers} with the music of {Label}",
+                            string.Join(", ", composers),
+                            work.Label);
+                    }
                 }
             }
 

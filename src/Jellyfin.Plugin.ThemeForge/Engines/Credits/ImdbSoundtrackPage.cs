@@ -71,6 +71,12 @@ public static class ImdbSoundtrackPage
 
     private static readonly Regex WhitespaceRegex = new(@"\s+", RegexOptions.Compiled);
 
+    /// <summary>"(as George Brown)" -- the name somebody was credited under, not another person.</summary>
+    private static readonly Regex AliasRegex = new(@"\((?:as|uncredited)[^)]*\)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>What separates one person from the next in a credit.</summary>
+    private static readonly Regex NameSeparatorRegex = new(@",|\band\b|&|/", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
     private static readonly Regex BothRolesRegex = new(
         @"(?:Written|Composed|Music)\s+and\s+Performed\s+by\s+(.+)",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -134,6 +140,85 @@ public static class ImdbSoundtrackPage
         // A series listing opens with its title music often enough to be worth taking. A film
         // listing opens with whatever plays first, so it is left alone.
         return isSeries ? entries[0] : null;
+    }
+
+    /// <summary>
+    /// Works out who scored a title from its listing, by finding the writer credited on the most
+    /// entries.
+    /// </summary>
+    /// <remarks>
+    /// A film's listing credits a different writer on nearly every song, and its score cues to one
+    /// person over and over: for a score to appear once is a licensed song, for it to appear five
+    /// times is the composer. So a writer is only reported when the listing credits them more than
+    /// once, which keeps one-off songwriters out. A series listing is usually one entry long and
+    /// yields nothing here, which is correct -- the theme's own writer is reported separately.
+    /// </remarks>
+    /// <param name="entries">The listing.</param>
+    /// <returns>The composers, most credited first. Empty when no writer is credited twice.</returns>
+    public static IReadOnlyList<string> ScoreComposers(IReadOnlyList<SoundtrackEntry> entries)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var entry in entries)
+        {
+            foreach (var name in SplitNames(entry.Writer))
+            {
+                counts[name] = counts.TryGetValue(name, out var seen) ? seen + 1 : 1;
+            }
+        }
+
+        return counts
+            .Where(pair => pair.Value > 1)
+            .OrderByDescending(pair => pair.Value)
+            .ThenBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(pair => pair.Key)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Splits one credit into the people in it.
+    /// </summary>
+    /// <remarks>
+    /// A credit names anything from one person to a whole band's writing room, as
+    /// "Fred Wise , Milton Leeds , Bob Russell , and Nicholas Roubanis", and often carries the name
+    /// a person was credited under: "George 'Funky' Brown (as George Brown)". The parenthetical is
+    /// dropped and the rest split apart, because a single string of four names matches nothing and
+    /// scores nothing.
+    /// </remarks>
+    /// <param name="credit">The credit, or null.</param>
+    /// <returns>The names in it.</returns>
+    public static IReadOnlyList<string> SplitNames(string? credit)
+    {
+        if (string.IsNullOrWhiteSpace(credit))
+        {
+            return Array.Empty<string>();
+        }
+
+        var withoutAliases = AliasRegex.Replace(credit, " ");
+
+        return NameSeparatorRegex.Split(withoutAliases)
+            .Select(name => WhitespaceRegex.Replace(name, " ").Trim().Trim(','))
+            .Where(IsPlausibleName)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    /// <summary>Rejects the fragments splitting leaves behind.</summary>
+    private static bool IsPlausibleName(string name)
+    {
+        // Two characters is not a name, and a credit sometimes trails "and others" or a bare word.
+        if (name.Length < 3)
+        {
+            return false;
+        }
+
+        return name.IndexOfAny(new[] { '(', ')' }) < 0
+            && !name.Equals("and", StringComparison.OrdinalIgnoreCase)
+            && !name.Equals("others", StringComparison.OrdinalIgnoreCase)
+            && !name.Equals("unknown", StringComparison.OrdinalIgnoreCase)
+            && name.Any(char.IsLetter);
     }
 
     /// <summary>Reports whether an entry's own name says it is the title music.</summary>

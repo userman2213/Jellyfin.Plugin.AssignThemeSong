@@ -21,7 +21,7 @@ public sealed record ThemeSong(string Title, string? Performer)
 /// <summary>What was found out about a work's music: who wrote it, and what its theme is called.</summary>
 /// <param name="Composers">The composers, most prominent first. Empty when none were found.</param>
 /// <param name="Artist">The artist credited on the soundtrack release, when that is all there is.</param>
-/// <param name="ReleaseGroupId">The MusicBrainz release group, when known, so a later look-up can skip a step.</param>
+/// <param name="ReleaseGroupId">The MusicBrainz release group id Wikidata recorded, when it did.</param>
 public sealed record ResearchedCredits(
     IReadOnlyList<string> Composers,
     string? Artist,
@@ -72,7 +72,7 @@ public sealed class ComposerCredits
     /// <summary>Gets or sets the artist credited on the soundtrack, when no composer was named.</summary>
     public string? Artist { get; set; }
 
-    /// <summary>Gets or sets the MusicBrainz release group, when one was found.</summary>
+    /// <summary>Gets or sets the MusicBrainz release group id, when one was found.</summary>
     public string? ReleaseGroupId { get; set; }
 
     /// <summary>Gets or sets which source named the composer, or <c>nobody</c>.</summary>

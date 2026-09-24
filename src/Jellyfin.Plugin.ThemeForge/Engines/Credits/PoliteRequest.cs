@@ -8,9 +8,8 @@ namespace Jellyfin.Plugin.ThemeForge.Engines.Credits;
 /// Says who is calling.
 /// </summary>
 /// <remarks>
-/// Both of the databases consulted here require it, and both say so plainly: Wikimedia answers a
-/// request with no informative User-Agent with 403 and a note that such scripts "may be blocked
-/// without notice", and MusicBrainz throttles anonymous callers harder. Naming the plugin and
+/// Wikimedia requires it and says so plainly: a request with no informative User-Agent is answered
+/// with 403 and a note that such scripts "may be blocked without notice". Naming the plugin and
 /// linking to it is also simply the courteous thing to do when using somebody's free service.
 /// </remarks>
 public static class PoliteRequest

@@ -117,18 +117,6 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool SyncComposers { get; set; } = true;
 
     /// <summary>
-    /// Gets or sets a value indicating whether MusicBrainz is asked about the works Wikidata could
-    /// not answer.
-    /// </summary>
-    /// <remarks>
-    /// Wikidata answers about three quarters of a library in a handful of requests. MusicBrainz
-    /// covers much of the rest, but it is one request per work at one per second, so it is the
-    /// slower half of the job and worth being able to switch off on its own. Only its lookup by
-    /// IMDb id is used: searching it by title returns the 1978 composer for a 2004 series.
-    /// </remarks>
-    public bool UseMusicBrainzForComposers { get; set; } = true;
-
-    /// <summary>
     /// Gets or sets a value indicating whether a show's Wikipedia article is read for what its
     /// theme is called, when Wikidata does not say.
     /// </summary>

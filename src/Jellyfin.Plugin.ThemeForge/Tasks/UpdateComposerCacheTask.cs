@@ -47,7 +47,7 @@ public sealed class UpdateComposerCacheTask : IScheduledTask
 
     /// <inheritdoc />
     public string Description =>
-        "Asks Wikidata, MusicBrainz and Wikipedia who wrote the music of every film and series in the library, "
+        "Asks Wikidata, Wikipedia and IMDb who wrote the music of every film and series in the library, "
         + "and what its theme is called, by its own database id, and keeps the answers. A theme's own title and "
         + "performer are the most specific thing a search can ask for, and Jellyfin records neither. Answers are "
         + "kept for two months, so this is cheap after the first run.";

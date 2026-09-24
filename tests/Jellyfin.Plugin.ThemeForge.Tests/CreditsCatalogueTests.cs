@@ -15,7 +15,7 @@ namespace Jellyfin.Plugin.ThemeForge.Tests;
 /// </summary>
 /// <remarks>
 /// Until 2.6 a Wikidata outage was recorded as "nobody knows" for every title in the library, for
-/// a fortnight -- after sending every one of them to MusicBrainz at one request a second. These
+/// a fortnight -- after sending every one of them to the slow source a request at a time. These
 /// tests pin the rule that replaced it: a question a source could not ask is left open, and only
 /// one every applicable source actually asked, and could not answer, is a miss.
 /// </remarks>
@@ -77,8 +77,8 @@ public sealed class CreditsCatalogueTests : IDisposable
     private static Source Wikidata(Func<IReadOnlyList<CreditsRequest>, CreditsAnswer> answer) =>
         new("Wikidata", 0, CreditsQuestion.Composers | CreditsQuestion.Theme, answer);
 
-    private static Source MusicBrainz(Func<IReadOnlyList<CreditsRequest>, CreditsAnswer> answer) =>
-        new("MusicBrainz", 10, CreditsQuestion.Composers, answer);
+    private static Source Imdb(Func<IReadOnlyList<CreditsRequest>, CreditsAnswer> answer) =>
+        new("IMDb", 30, CreditsQuestion.Composers, answer);
 
     private static Source Wikipedia(Func<IReadOnlyList<CreditsRequest>, CreditsAnswer> answer) =>
         new("Wikipedia", 20, CreditsQuestion.Theme, answer);
@@ -119,21 +119,22 @@ public sealed class CreditsCatalogueTests : IDisposable
     }
 
     [Fact]
-    public async Task AWikidataOutageDoesNotBecomeAMusicBrainzCrawl()
+    public async Task AWikidataOutageDoesNotBecomeACrawlOfTheSlowSource()
     {
-        // MusicBrainz is one request a second. Whatever Wikidata could not ask about waits for the
-        // next run, where it is asked about in order, rather than all going to MusicBrainz now.
-        var musicBrainz = MusicBrainz(_ => CreditsAnswer.Nothing);
+        // The last source is the slow one, a request at a time. Whatever Wikidata could not ask
+        // about waits for the next run, where it is asked in order, rather than all going to the
+        // slow source now.
+        var imdb = Imdb(_ => CreditsAnswer.Nothing);
 
-        await Catalogue(Wikidata(CreditsAnswer.FailedFor), musicBrainz).SyncAsync(new[] { Battlestar }, null, CancellationToken.None);
+        await Catalogue(Wikidata(CreditsAnswer.FailedFor), imdb).SyncAsync(new[] { Battlestar }, null, CancellationToken.None);
 
-        Assert.Empty(musicBrainz.Asked);
+        Assert.Empty(imdb.Asked);
     }
 
     [Fact]
     public async Task AWorkEveryoneWasAskedAboutAndNobodyKnowsIsAMiss()
     {
-        var catalogue = Catalogue(Wikidata(_ => CreditsAnswer.Nothing), MusicBrainz(_ => CreditsAnswer.Nothing), Wikipedia(_ => CreditsAnswer.Nothing));
+        var catalogue = Catalogue(Wikidata(_ => CreditsAnswer.Nothing), Imdb(_ => CreditsAnswer.Nothing), Wikipedia(_ => CreditsAnswer.Nothing));
 
         var snapshot = await catalogue.SyncAsync(new[] { Battlestar }, null, CancellationToken.None);
         var record = snapshot.Find(Battlestar.Keys);
@@ -195,7 +196,7 @@ public sealed class CreditsCatalogueTests : IDisposable
     public async Task ACacheWrittenBy25StillLoadsAndOnlyTheNewQuestionIsAsked()
     {
         // 2.5 wrote composers with no theme fields. Its answers stand; the theme, which it never
-        // asked about, is asked once -- and MusicBrainz, the slow source, is not troubled again.
+        // asked about, is asked once -- and the slow source is not troubled again.
         Directory.CreateDirectory(_directory);
         var asked = DateTime.UtcNow.AddDays(-3).ToString("O");
         File.WriteAllText(SnapshotPath, $$"""
@@ -205,15 +206,15 @@ public sealed class CreditsCatalogueTests : IDisposable
             """);
 
         var wikidata = Wikidata(_ => CreditsAnswer.Nothing);
-        var musicBrainz = MusicBrainz(_ => CreditsAnswer.Nothing);
-        var catalogue = Catalogue(wikidata, musicBrainz);
+        var imdb = Imdb(_ => CreditsAnswer.Nothing);
+        var catalogue = Catalogue(wikidata, imdb);
 
         Assert.Equal(new[] { "Bear McCreary" }, catalogue.Known(Battlestar.Keys).Composers);
 
         await catalogue.SyncAsync(new[] { Battlestar }, null, CancellationToken.None);
 
         Assert.Single(wikidata.Asked);
-        Assert.Empty(musicBrainz.Asked);
+        Assert.Empty(imdb.Asked);
         Assert.Equal(new[] { "Bear McCreary" }, catalogue.Known(Battlestar.Keys).Composers);
     }
 

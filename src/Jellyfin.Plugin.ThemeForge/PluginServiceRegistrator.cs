@@ -49,7 +49,6 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         // are asked once per work and the answer kept; the decorator is what puts it in front of
         // the rest of the pipeline, which goes on asking one synchronous question as before.
         serviceCollection.AddSingleton<ICreditsSource, WikidataCreditsSource>();
-        serviceCollection.AddSingleton<ICreditsSource, MusicBrainzCreditsSource>();
         serviceCollection.AddSingleton<ICreditsSource, WikipediaThemeSource>();
         serviceCollection.AddSingleton<IChromeProvisioner, ChromeProvisioner>();
         serviceCollection.AddSingleton<IHeadlessBrowser, HeadlessBrowser>();

@@ -70,7 +70,7 @@ public sealed class ComposerCatalogue : IComposerCatalogue
     /// <summary>Guards the first read from disk only, which is why it is not the sync gate.</summary>
     /// <remarks>
     /// <see cref="Known"/> is called from identity resolution, on whatever thread is serving a
-    /// page. Were it to wait on <see cref="_gate"/> it would block behind a MusicBrainz pass that
+    /// page. Were it to wait on <see cref="_gate"/> it would block behind a slow pass that
     /// can run for minutes. Loading a file is short and has its own lock.
     /// </remarks>
     private readonly object _load = new();
@@ -440,7 +440,7 @@ public sealed class ComposerCatalogue : IComposerCatalogue
         /// </summary>
         /// <remarks>
         /// The last part keeps a Wikidata outage from becoming a crawl of the whole library at
-        /// MusicBrainz's one request a second: whatever Wikidata could not ask about waits, and is
+        /// a slow source's one request at a time: whatever Wikidata could not ask about waits, and is
         /// asked about in order on the next run.
         /// </remarks>
         public bool Wants(CreditsQuestion answers) =>

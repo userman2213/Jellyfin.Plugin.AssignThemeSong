@@ -1231,7 +1231,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
     /// <summary>Turns the library into the questions the credits sources can be asked.</summary>
     /// <remarks>
     /// Items with no provider ids are left out. Neither source can be asked about a title by name
-    /// -- MusicBrainz's title search returns the 1978 composer for the 2004 Battlestar Galactica --
+    /// -- a title search returns the 1978 composer for the 2004 Battlestar Galactica --
     /// so including them would only mean asking questions nothing can answer.
     /// </remarks>
     private IReadOnlyList<CreditsRequest> ComposerRequests(PluginConfiguration configuration)

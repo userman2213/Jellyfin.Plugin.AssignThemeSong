@@ -28,7 +28,10 @@ public enum CreditsQuestion
 /// <param name="TmdbId">The TMDB id, when known.</param>
 /// <param name="IsSeries">Whether it is a series.</param>
 /// <param name="Label">A human-readable name, for the log.</param>
-/// <param name="ReleaseGroupId">A MusicBrainz release group an earlier source supplied, when it did.</param>
+/// <param name="ReleaseGroupId">
+/// A MusicBrainz release group Wikidata recorded. Carried and cached but not currently read by any
+/// source; it was the lead MusicBrainz followed before that source was removed.
+/// </param>
 public sealed record CreditsRequest(
     string Key,
     IReadOnlyList<string> Keys,

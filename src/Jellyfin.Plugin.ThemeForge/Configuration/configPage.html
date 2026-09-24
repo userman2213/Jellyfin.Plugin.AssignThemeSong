@@ -332,7 +332,7 @@
                         <span>Look up who wrote the music, and what the theme is called</span>
                     </label>
                     <div class="fieldDescription" style="margin:.25em 0 1em 0;">
-                        Asks Wikidata and MusicBrainz by the title's own IMDb or TMDB id, never by name.
+                        Asks Wikidata by the title's own IMDb or TMDB id, never by name.
                         Both are public-domain databases, and answers are kept for two months, so a whole
                         library costs a handful of requests once. Your library's own credits are never
                         replaced; this only fills in what is missing. When the theme is a song, its title
@@ -348,17 +348,6 @@
                         Runs at 02:00 UTC, an hour before the discovery run. Turning it off does not disable the
                         research; each run then looks up only what it happens to need, which spreads the same
                         requests through the run instead of getting them over with.
-                    </div>
-                    <label class="emby-checkbox-label">
-                        <input is="emby-checkbox" type="checkbox" id="UseMusicBrainzForComposers" />
-                        <span>Ask MusicBrainz about whatever Wikidata could not answer</span>
-                    </label>
-                    <div class="fieldDescription" style="margin:.25em 0 1em 0;">
-                        Wikidata answers about three quarters of a library in a handful of requests. MusicBrainz
-                        covers much of the rest &mdash; it is what finds the composers of Sherlock and Rick and
-                        Morty &mdash; but at one request per second, so it is the slow half of the job. Only its
-                        lookup by IMDb id is used: searching it by title returns the 1978 composer for the 2004
-                        Battlestar Galactica.
                     </div>
                     <label class="emby-checkbox-label">
                         <input is="emby-checkbox" type="checkbox" id="UseWikipediaForThemes" />
@@ -618,7 +607,7 @@
                 'StopLadderOnConfidentHit', 'TrustTopicChannels',
                 'EnableFileLogging', 'UseThemerrDb', 'UsePlexThemeArchive', 'RejectNonMusic',
                 'SyncThemerrDb',
-                'ResearchComposers', 'SyncComposers', 'UseMusicBrainzForComposers', 'UseWikipediaForThemes',
+                'ResearchComposers', 'SyncComposers', 'UseWikipediaForThemes',
                 'UseImdbSoundtrack', 'UseImdbBrowser', 'ImdbDownloadBrowser', 'ImdbBrowserNoSandbox'
             ];
             var NUMBERS = [
