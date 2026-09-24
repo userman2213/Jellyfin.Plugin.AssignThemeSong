@@ -67,19 +67,23 @@ corroborate it and is held below the auto-assign score.
 
 So ThemeForge looks both up, **by the title's own database id and never by name**:
 
-| Source | Keyed on | What it gives | Cost | Licence |
+| Asked | Source | Keyed on | What it gives | Cost |
 |---|---|---|---|---|
-| [Wikidata](https://www.wikidata.org) | IMDb (P345), TMDB (P4947/P4983) | composer; theme music (P942) for famous shows | one query per 50 titles | CC0 |
-| [Wikipedia](https://en.wikipedia.org) | the article Wikidata links to | a show's opening theme and who wrote it | one request per 5 shows | facts only |
-| [IMDb](https://www.imdb.com) | the IMDb id | a title's soundtrack listing: the theme, and who wrote the score | one request per title, 1 per 2 seconds | facts only |
+| 1st | [IMDb](https://www.imdb.com) | the IMDb id | the theme, who performs it, and who wrote the score | one request per title, 1 per 2 seconds |
+| 2nd | [Wikidata](https://www.wikidata.org) | IMDb (P345), TMDB (P4947/P4983) | composer; theme music (P942) for famous shows | one query per 50 titles |
+| 3rd | [Wikipedia](https://en.wikipedia.org) | the article Wikidata links to | a show's opening theme and who wrote it | one request per 5 shows |
 
-Wikidata answers most of a library in a handful of requests; the other two are asked only about
-what it could not answer. Wikipedia's infobox names the theme for far more shows than Wikidata
-does — The Sopranos, Firefly, House, Mad Men, True Detective, Scrubs — and often who wrote it, which
-is not always who scored the show: Dexter's theme is Rolfe Kent's, its score Daniel Licht's. IMDb is
-asked last, about whatever is still unnamed, and its listing credits both who performed each entry
-and who wrote it, so it answers for the composer as well as the theme. Only the song's title and the
-names are kept.
+**Nothing is looked up for a title ThemerrDB already has a theme for.** That theme is taken
+outright, so there is no search to sharpen and nothing worth asking about; on a library ThemerrDB
+covers well that is most of it, and each one costs nothing.
+
+For the rest, IMDb is asked first: one page names the theme, who performs it and who wrote the
+score, where the other two each answer part of that for part of a library. Wikidata follows, about
+whatever IMDb could not name, and answers a great many titles in a handful of requests; Wikipedia's
+infobox is asked last and names the theme for far more shows than Wikidata does — The Sopranos,
+Firefly, House, Mad Men, True Detective, Scrubs — and often who wrote it, which is not always who
+scored the show: Dexter's theme is Rolfe Kent's, its score Daniel Licht's. Only the song's title and
+the names are kept.
 
 Answers are kept for two months and misses for a fortnight, so a whole library costs a few requests
 once and nothing thereafter. A service that is down or asks ThemeForge to slow down is not a miss:
@@ -110,8 +114,9 @@ settings.
 
 ### IMDb
 
-IMDb lists the music used in every title, and it is the last place ThemeForge looks: only for titles
-Wikidata and Wikipedia left without a theme, and only by IMDb id, never by name. On by default.
+IMDb lists the music used in every title, so it is the first place ThemeForge looks once ThemerrDB
+has had its say: one page names the theme, who performs it and who wrote the score. Asked by IMDb id,
+never by name. On by default.
 
 **For a film, the listing is usually not the theme.** It is the licensed songs in the order they
 play: the first entry for Fight Club is a Rolfe Kent cue and for The Godfather a wedding sequence.

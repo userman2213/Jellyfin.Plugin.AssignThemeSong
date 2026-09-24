@@ -17,9 +17,10 @@ namespace Jellyfin.Plugin.ThemeForge.Engines.Credits;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The last source asked: only about works that Wikidata and Wikipedia could not name a theme for,
-/// and only about works with an IMDb id, since the listing is keyed on the id and nothing is
-/// searched for by name.
+/// The first source asked, once ThemerrDB has had its say: one listing names the theme, who performs
+/// it and who wrote the score, where the others answer part of that for part of a library. Asked only
+/// about works with an IMDb id, since the listing is keyed on the id and nothing is searched for by
+/// name; Wikidata and Wikipedia follow, about whatever it could not name.
 /// </para>
 /// <para>
 /// The pages are built for a browser, so the request sends what a browser sends. Some networks are
@@ -41,9 +42,9 @@ public sealed class ImdbSoundtrackSource : ICreditsSource
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(30);
 
     /// <summary>
-    /// How long to leave between requests. One a couple of seconds is plenty for a source consulted
-    /// only about what nothing else could answer, and going through a library faster than that is
-    /// the quickest way to wear out a welcome.
+    /// How long to leave between requests. Being asked first means being asked about a whole
+    /// library's worth of titles, one page each, so this is what keeps a first run a steady trickle
+    /// rather than a burst.
     /// </summary>
     private static readonly TimeSpan Spacing = TimeSpan.FromSeconds(2);
 
@@ -80,8 +81,13 @@ public sealed class ImdbSoundtrackSource : ICreditsSource
     public string Name => "IMDb";
 
     /// <inheritdoc />
-    /// <remarks>Last: everything else answers without any of this.</remarks>
-    public int Order => 30;
+    /// <remarks>
+    /// First. ThemerrDB gives a theme outright, and for everything it has no entry for IMDb is the
+    /// source asked next: one page names the theme, who performs it and who wrote the score, where
+    /// Wikidata and Wikipedia each answer part of that for part of a library. They are asked after
+    /// this, about whatever IMDb could not name.
+    /// </remarks>
+    public int Order => -10;
 
     /// <inheritdoc />
     /// <remarks>

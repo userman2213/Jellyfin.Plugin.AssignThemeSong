@@ -131,15 +131,15 @@ public class PluginConfiguration : BasePluginConfiguration
 
     /// <summary>
     /// Gets or sets a value indicating whether IMDb's soundtrack listing is read for what a title's
-    /// theme is called, when nothing else could say.
+    /// theme is called and who scored it.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The last place looked. Asked only about titles Wikidata and Wikipedia left without a theme,
-    /// and only by IMDb id, never by name.
+    /// The first source asked, for every title ThemerrDB has no theme for: one page names the theme,
+    /// who performs it and who wrote the score. By IMDb id, never by name. Wikidata and Wikipedia are
+    /// asked afterwards, about whatever it could not name.
     /// </para>
     /// <para>
-    /// Only asked about titles Wikidata and Wikipedia left without a theme, and only by IMDb id.
     /// An entry is taken only when the listing names it as the title music, or names it after the
     /// work, or the work is a series -- for a film the listing is the licensed songs in playback
     /// order, and its first entry is whatever plays first rather than the theme.

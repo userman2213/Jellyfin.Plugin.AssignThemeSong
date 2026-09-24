@@ -230,7 +230,7 @@ public class ImdbSoundtrackTests
     }
 
     [Fact]
-    public void IsAskedLastAndAnswersBothQuestions()
+    public void IsAskedFirstAndAnswersBothQuestions()
     {
         var source = new ImdbSoundtrackSource(
             new ThrowingHttpClientFactory(),
@@ -241,7 +241,10 @@ public class ImdbSoundtrackTests
         // theme is called and who scored the work.
         Assert.True(source.Answers.HasFlag(CreditsQuestion.Theme));
         Assert.True(source.Answers.HasFlag(CreditsQuestion.Composers));
-        Assert.True(source.Order > 20, "IMDb must be asked after Wikidata and Wikipedia.");
+        // Straight after ThemerrDB, ahead of Wikidata and Wikipedia.
+        Assert.True(
+            source.Order < 0,
+            "IMDb must be the first credits source asked, before Wikidata and Wikipedia.");
     }
 
     // ---- who wrote the music ----

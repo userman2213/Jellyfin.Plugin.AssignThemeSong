@@ -1213,7 +1213,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
     public async Task<ComposerCoverage> SyncComposersAsync(IProgress<double>? progress, CancellationToken cancellationToken)
     {
         var configuration = Plugin.Config.ShallowCopy();
-        var works = ComposerRequests(configuration);
+        var works = await ComposerRequestsAsync(configuration, cancellationToken).ConfigureAwait(false);
 
         if (works.Count > 0)
         {
@@ -1230,14 +1230,31 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
 
     /// <summary>Turns the library into the questions the credits sources can be asked.</summary>
     /// <remarks>
-    /// Items with no provider ids are left out. Neither source can be asked about a title by name
-    /// -- a title search returns the 1978 composer for the 2004 Battlestar Galactica --
-    /// so including them would only mean asking questions nothing can answer.
+    /// <para>
+    /// ThemerrDB comes first, so a title it has a theme for is left out: that theme is taken
+    /// outright and nothing has to be searched for, which makes looking up what the theme is called
+    /// and who wrote it a question nobody needs the answer to. On a library ThemerrDB covers well
+    /// this is most of it, and every one left out is a page not fetched.
+    /// </para>
+    /// <para>
+    /// Items with no provider ids are left out too. No source can be asked about a title by name
+    /// -- a title search returns the 1978 composer for the 2004 Battlestar Galactica -- so
+    /// including them would only mean asking questions nothing can answer.
+    /// </para>
     /// </remarks>
-    private IReadOnlyList<CreditsRequest> ComposerRequests(PluginConfiguration configuration)
+    private async Task<IReadOnlyList<CreditsRequest>> ComposerRequestsAsync(
+        PluginConfiguration configuration,
+        CancellationToken cancellationToken)
     {
+        // Only consulted when ThemerrDB is switched on: with it off it gives nothing, so nothing it
+        // lists should be skipped. An unsynced snapshot lists nothing and skips nothing either.
+        var catalogue = configuration.UseThemerrDb
+            ? await _themerrDb.GetAsync(cancellationToken).ConfigureAwait(false)
+            : null;
+
         var works = new List<CreditsRequest>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var covered = 0;
 
         foreach (var item in GetLibraryItems(configuration))
         {
@@ -1253,6 +1270,12 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
                 continue;
             }
 
+            if (catalogue is not null && HasThemerrTheme(catalogue, identity))
+            {
+                covered++;
+                continue;
+            }
+
             works.Add(new CreditsRequest(
                 keys[0],
                 keys,
@@ -1262,7 +1285,29 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
                 identity.Label));
         }
 
+        if (covered > 0)
+        {
+            _logger.LogInformation(
+                "{Covered} titles already have a theme in ThemerrDB and are not looked up; "
+                + "{Remaining} are.",
+                covered,
+                works.Count);
+        }
+
         return works;
+    }
+
+    /// <summary>Reports whether ThemerrDB has a theme for a title, by any id it is known by.</summary>
+    internal static bool HasThemerrTheme(ThemerrDbSnapshot catalogue, MediaIdentity identity)
+    {
+        if (identity.IsSeries)
+        {
+            return catalogue.HasShow(identity.TmdbId);
+        }
+
+        return catalogue.HasMovie(identity.TmdbId)
+            || catalogue.HasMovieByImdb(identity.ImdbId)
+            || catalogue.CollectionContaining(identity.TmdbId) is not null;
     }
 
     /// <summary>
