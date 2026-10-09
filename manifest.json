@@ -9,6 +9,15 @@
         "description": "ThemeForge searches YouTube with yt-dlp, ranks every candidate with an explainable scoring engine, and writes the winner beside your media exactly as it was delivered. High-confidence matches are assigned automatically; anything less certain waits in a review queue. Audio processing -- raising quiet themes, normalising, fades, trimming -- is available but off until you turn it on, so nothing is ever made quieter without asking. All decisions are recorded in a persistent index, so re-runs are idempotent and manual choices are never overwritten.",
         "versions": [
             {
+                "version": "3.0.0.0",
+                "targetAbi": "12.0.0.0",
+                "framework": "net10.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_3.0.0.0.zip",
+                "checksum": "6ee109436ef6d117b8cb578b8678a936",
+                "timestamp": "2026-10-09T22:56:20Z",
+                "changelog": "For Jellyfin 12 and later.\n\n**ThemeForge 3.0 is for Jellyfin 12 and later only.** Earlier releases came as two builds, one\nfor Jellyfin 10.11 and one for Jellyfin 12; from 3.0 there is only the Jellyfin 12 build. A server\nstill on Jellyfin 10.11 keeps ThemeForge 2.11.0, which stays in the catalogue, and is simply not\noffered anything newer.\n\nNothing else changes: theme picking, settings and the index are as in 2.11, and an update from\n2.11 on Jellyfin 12 keeps everything you have."
+            },
+            {
                 "version": "2.11.0.1",
                 "targetAbi": "12.0.0.0",
                 "framework": "net10.0",

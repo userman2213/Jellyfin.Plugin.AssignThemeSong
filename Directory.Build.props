@@ -20,7 +20,7 @@
          warning here is expected and must not fail the build. -->
     <NoWarn>$(NoWarn);NU1605</NoWarn>
 
-    <ThemeForgeVersion>2.11.0.0</ThemeForgeVersion>
+    <ThemeForgeVersion>3.0.0.0</ThemeForgeVersion>
 
     <!-- The plugin SDK the build compiles against, and the Jellyfin ABI the package declares. -->
     <JellyfinVersion>12.0.0</JellyfinVersion>
