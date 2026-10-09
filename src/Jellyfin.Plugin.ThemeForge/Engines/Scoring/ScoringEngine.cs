@@ -75,7 +75,7 @@ public sealed class ScoringEngine : IScoringEngine
             }
 
             var raw = Math.Clamp(verdict.Raw, -1, 1);
-            signals.Add(new Signal(rule.Name, raw, weight, verdict.Reason));
+            signals.Add(new Signal(rule.Name, raw, weight, verdict.Reason, ReviewOnly: verdict.ReviewOnly));
 
             earned += raw * weight;
             if (rule.ContributesPositively)

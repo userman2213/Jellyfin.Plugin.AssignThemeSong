@@ -19,6 +19,44 @@ public class DecisionPolicyTests
             : new List<Signal> { new("Test", 1, total, "scored") },
     };
 
+    private static ScoreResult ReviewOnly(double total, string title = "a song from the soundtrack") => new()
+    {
+        Candidate = TestData.Candidate(title),
+        Total = total,
+        Breakdown = new List<Signal> { new("Test", 1, total, "nothing says it is the theme", ReviewOnly: true) },
+    };
+
+    [Fact]
+    public void AReviewOnlyCandidateIsOfferedHoweverWellItScores()
+    {
+        var decision = _policy.Decide(new[] { ReviewOnly(95) }, TestData.Config());
+
+        Assert.Equal(DecisionOutcome.Review, decision.Outcome);
+        Assert.True(decision.HeldBack);
+        Assert.Contains("nothing says it is the theme", decision.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AReviewOnlyCandidateIsPassedOverForOneThatMayBeAssigned()
+    {
+        var assignable = Scored(80);
+        var decision = _policy.Decide(new[] { ReviewOnly(90), assignable }, TestData.Config());
+
+        Assert.Equal(DecisionOutcome.AutoAssign, decision.Outcome);
+        Assert.Same(assignable, decision.Best);
+    }
+
+    [Fact]
+    public void AReviewOnlyCandidateIsNotPassedOverForOneBelowTheThreshold()
+    {
+        var top = ReviewOnly(90);
+        var decision = _policy.Decide(new[] { top, Scored(60) }, TestData.Config());
+
+        Assert.Equal(DecisionOutcome.Review, decision.Outcome);
+        Assert.Same(top, decision.Best);
+        Assert.True(decision.HeldBack);
+    }
+
     [Fact]
     public void AboveTheAutoAssignThresholdIsAssigned()
     {

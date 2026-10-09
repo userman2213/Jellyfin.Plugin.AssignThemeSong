@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.ThemeForge.Engines.Credits;
+using Jellyfin.Plugin.ThemeForge.Engines.Decision;
 using Jellyfin.Plugin.ThemeForge.Engines.Discovery;
 using Jellyfin.Plugin.ThemeForge.Engines.Identity;
 using Jellyfin.Plugin.ThemeForge.Engines.Query;
@@ -128,7 +129,80 @@ public class BenchmarkRegressionTests
         Assert.True(ranked.Single(r => r.Candidate.Title.Contains("(US)", StringComparison.Ordinal)).IsVetoed);
     }
 
+    [Fact]
+    public void GameOfThronesTakesTheSoundtracksOwnMainTitleOverACoverAndAnArrangement()
+    {
+        // After the first round of fixes: "Game of Thrones (Theme) by Ramin Djawadi/arr. Brown", a
+        // concert band's arrangement, at 97.0 -- Wikidata names the theme "Game of Thrones Theme",
+        // and the upload matched it word for word. Behind it, an orchestra's concert performance
+        // tied with the soundtrack's own upload and won on views.
+        var query = Query("Game of Thrones Game of Thrones Theme Ramin Djawadi", 0, "{title} {theme}");
+        var identity = TestData.Series(
+            "Game of Thrones",
+            2011,
+            composers: new[] { "Ramin Djawadi" },
+            theme: new ThemeSong("Game of Thrones Theme", "Ramin Djawadi"));
+
+        var ranked = Rank(
+            identity,
+            Real("Game of Thrones (Theme) by Ramin Djawadi/arr. Brown", "Hal Leonard Concert Band", 124, 593_595, query),
+            Real("\"Main Theme\" - Game of Thrones (Ramin Djawadi) - Film Symphony Orchestra", "filmsymphony", 129, 5_280_953, query),
+            Real("Game of Thrones S8 Official Soundtrack | Main Title - Ramin Djawadi | WaterTower", "WaterTower Music", 112, 4_762_992, query),
+            Real("Ramin Djawadi performing \"Game Of Thrones Main Title\" Live on KCRW", "KCRW", 103, 296_536, query),
+            Real("Game of Thrones S8 Official Soundtrack | A Song of Ice and Fire - Ramin Djawadi  | WaterTower", "WaterTower Music", 132, 11_610_363, query));
+
+        Assert.Equal("WaterTower Music", ranked[0].Candidate.Channel);
+        Assert.Contains("Main Title", ranked[0].Candidate.Title, StringComparison.Ordinal);
+
+        var arrangement = ranked.Single(r => r.Candidate.Title.Contains("arr.", StringComparison.Ordinal));
+        Assert.Contains(arrangement.Breakdown, s => s.Rule == "NegativeKeywords");
+    }
+
+    [Fact]
+    public void DriveDoesNotAssignASongThatNeverSaysItIsTheTheme()
+    {
+        // After the first round of fixes: "Drive Soundtrack - Desire - Under Your Spell" at 73.0,
+        // assigned -- a song that plays in the film, on nothing but its title, length and views.
+        var query = Query("Drive 2011 main theme soundtrack", 1, "{title} {year} main theme soundtrack");
+        var identity = TestData.Movie("Drive", 2011, composers: new[] { "Cliff Martinez" });
+
+        var ranked = Rank(
+            identity,
+            Real("Drive Soundtrack - Desire - Under Your Spell", "Eamon Nolan", 234, 833_968, query),
+            Real("Electric Youth & College - A Real Hero (DRIVE)", "clarencito", 268, 11_935_104, query));
+        var decision = new DecisionPolicy().Decide(ranked, TestData.Config());
+
+        Assert.True(ranked[0].Total >= TestData.Config().AutoAssignThreshold, $"scored {ranked[0].Total:F1}");
+        Assert.True(ranked[0].IsReviewOnly);
+        Assert.Equal(DecisionOutcome.Review, decision.Outcome);
+    }
+
+    [Fact]
+    public void APieceByTheWorksOwnComposerIsStillAssigned()
+    {
+        // Inception is known by "Time", whose title says nothing about a theme. Its composer is
+        // what vouches for it.
+        var query = Query("Inception 2010 main theme soundtrack", 1, "{title} {year} main theme soundtrack");
+        var identity = TestData.Movie("Inception", 2010, composers: new[] { "Hans Zimmer" });
+
+        var ranked = Rank(identity, Real("Hans Zimmer - Time (Inception)", "Hans Zimmer Fan", 275, 60_000_000, query));
+        var decision = new DecisionPolicy().Decide(ranked, TestData.Config());
+
+        Assert.False(ranked[0].IsReviewOnly);
+        Assert.Equal(DecisionOutcome.AutoAssign, decision.Outcome);
+    }
+
     // ---- the pieces, on their own ----------------------------------------------------
+
+    [Theory]
+    [InlineData("Misirlou", "Pulp Fiction", true)]
+    [InlineData("Woke Up This Morning", "The Sopranos", true)]
+    [InlineData("Game of Thrones Theme", "Game of Thrones", false)]
+    [InlineData("The X-Files", "The X-Files", false)]
+    [InlineData("Main Title", "Dexter", false)]
+    [InlineData("Twin Peaks Theme", "Twin Peaks", false)]
+    public void TellsASongsTitleFromADescriptionOfTheTheme(string theme, string work, bool isASong) =>
+        Assert.Equal(isASong, KeywordAffinityRule.IsASongTitle(theme, work));
 
     [Theory]
     [InlineData("Drive Original Soundtrack - 8. He Had a Good Time", "Drive", 8)]

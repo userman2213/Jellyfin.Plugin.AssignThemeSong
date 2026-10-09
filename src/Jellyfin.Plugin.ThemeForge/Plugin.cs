@@ -195,6 +195,12 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
                 _logger.LogInformation("ThemeForge: the search ladders were still the previous defaults and have been brought up to date.");
             }
 
+            if (ShippedKeywords.Upgrade(Configuration))
+            {
+                changed = true;
+                _logger.LogInformation("ThemeForge: the disqualifying words were still the previous defaults and now also catch arrangements.");
+            }
+
             if (AudioDefaults.Upgrade(Configuration))
             {
                 changed = true;

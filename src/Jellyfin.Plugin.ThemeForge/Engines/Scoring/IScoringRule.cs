@@ -11,7 +11,11 @@ namespace Jellyfin.Plugin.ThemeForge.Engines.Scoring;
 /// <param name="Raw">The opinion, from -1 (certainly wrong) to +1 (certainly right).</param>
 /// <param name="Reason">A short explanation shown to the user in the review queue.</param>
 /// <param name="IsVeto">When true the candidate is disqualified regardless of every other rule.</param>
-public readonly record struct RuleVerdict(double Raw, string Reason, bool IsVeto = false)
+/// <param name="ReviewOnly">
+/// When true the candidate may be offered for review, but is never assigned without somebody
+/// looking at it, however well it scores.
+/// </param>
+public readonly record struct RuleVerdict(double Raw, string Reason, bool IsVeto = false, bool ReviewOnly = false)
 {
     /// <summary>Expresses no opinion, so a missing input cannot drag a candidate down.</summary>
     /// <param name="reason">Why the rule had nothing to say.</param>

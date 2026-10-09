@@ -304,11 +304,11 @@ public sealed class JsonThemeIndex : IThemeIndex, IDisposable
     /// they survived dry run being switched off.
     /// </para>
     /// <para>
-    /// They are identifiable exactly. A genuine review entry scores <i>below</i> the auto-assign
-    /// threshold, because that is the only way the decision policy produces one. An entry queued
-    /// because its audio was ambiguous has been through acquisition, so its attempt count is at
-    /// least one. An entry that is awaiting review, has never been attempted, and scores at or
-    /// above the threshold can only have come from that early return.
+    /// They are identifiable exactly. A genuine review entry was queued by a real run, which counts
+    /// the attempt before it searches, so its attempt count is at least one -- whatever it scored:
+    /// since 2.10 one can score above the auto-assign threshold and still be queued, when nothing
+    /// says it is the theme. An entry that is awaiting review, has never been attempted, and scores
+    /// at or above the threshold can only have come from that early return.
     /// </para>
     /// </remarks>
     /// <returns>How many entries were cleared.</returns>

@@ -261,16 +261,7 @@ public class PluginConfiguration : BasePluginConfiguration
     };
 
     /// <summary>Gets or sets words that suggest the candidate is not a theme. These carry the heaviest negative weight.</summary>
-    public string[] NegativeKeywords { get; set; } =
-    {
-        "reaction", "cover", "remix", "tutorial", "lesson", "how to play",
-        "1 hour", "10 hours", "hour loop", "loop", "extended", "amv",
-        "trailer", "review", "explained", "recap", "full episode", "episode",
-        "karaoke", "sheet music", "guitar", "piano tutorial", "8 bit", "8-bit",
-        "nightcore", "slowed", "reverb", "fan made", "fanmade", "parody",
-        "behind the scenes", "interview", "compilation", "every",
-        "joke", "bloopers", "deleted scene", "best of", "funniest", "scene",
-    };
+    public string[] NegativeKeywords { get; set; } = ShippedKeywords.Negative.ToArray();
 
     /// <summary>Gets or sets channel names or ids that are trusted sources of themes.</summary>
     public string[] PreferredChannels { get; set; } = Array.Empty<string>();

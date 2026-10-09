@@ -36,6 +36,17 @@ namespace Jellyfin.Plugin.ThemeForge.Engines.Scoring.Rules;
 /// is a track of the album, and only the first track, or one that calls itself the title music, is
 /// likely to be the theme.
 /// </para>
+/// <para>
+/// A title with nothing to say it is the title music -- no theme words, not the named theme song,
+/// not by the work's composer -- is offered for review at most. Every other signal can be at full
+/// strength for a song that merely plays in the film: "Drive Soundtrack - Desire - Under Your
+/// Spell" scored 73 on its title, its length and its views, and was assigned as Drive's theme.
+/// </para>
+/// <para>
+/// Among uploads that do say they are the theme, one that also says it is official earns a step
+/// more. Three Game of Thrones uploads of the main title tied, and the more-watched of the other two
+/// was an orchestra's concert performance rather than the soundtrack's own.
+/// </para>
 /// </remarks>
 public sealed class KeywordAffinityRule : IScoringRule
 {
@@ -51,6 +62,17 @@ public sealed class KeywordAffinityRule : IScoringRule
         "main theme", "main title", "opening theme", "theme song", "title theme", "opening credits",
         "title sequence", "intro theme", "opening titles",
     };
+
+    /// <summary>The words with which an upload says it is the theme, which a song's own title never uses.</summary>
+    private static readonly string[] ThemeWords =
+    {
+        "theme", "main title", "opening", "intro", "title sequence", "titles", "end credits",
+    };
+
+    /// <summary>"Official", as a word: what a studio's or label's own upload says of itself.</summary>
+    private static readonly Regex Official = new(
+        @"(?<![\p{L}\p{N}])official(?![\p{L}\p{N}])",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     /// <summary>
     /// A track number leading a title segment: "8. He Had a Good Time", "08 - He Had a Good Time".
@@ -77,7 +99,12 @@ public sealed class KeywordAffinityRule : IScoringRule
         ArgumentNullException.ThrowIfNull(context);
 
         // The theme the research named outranks any wording: it is the theme, by name and performer.
-        if (ComposerRule.NamedThemeSong(context.Identity.Theme, candidate) is { } song)
+        // Only when that name is a song's title, though. One that is just the work's name and
+        // "theme" -- Wikidata calls Game of Thrones' "Game of Thrones Theme" -- is matched by any
+        // upload of it, a concert band's arrangement included, and says nothing the wording below
+        // does not.
+        if (ComposerRule.NamedThemeSong(context.Identity.Theme, candidate) is { } song
+            && IsASongTitle(context.Identity.Theme!.Title, context.Identity.Title))
         {
             return new RuleVerdict(1.0, string.Format(CultureInfo.InvariantCulture, "is this title's theme song, {0}", song));
         }
@@ -105,11 +132,17 @@ public sealed class KeywordAffinityRule : IScoringRule
 
         if (strong.Count == 0 && namesItself is null)
         {
+            // Nothing says this is the title music. A piece by the work's own composer may still be
+            // -- "Hans Zimmer - Time" is what Inception is known by -- but anything else is offered
+            // for review rather than assigned.
+            var reviewOnly = ComposerRule.NamedComposer(context.Identity.Composers, candidate) is null;
+
             if (LaterTrack(candidate.Title, context.Identity.Title) is { } track)
             {
                 return new RuleVerdict(
                     -0.35,
-                    string.Format(CultureInfo.InvariantCulture, "track {0} of an album, and it does not call itself the theme", track));
+                    string.Format(CultureInfo.InvariantCulture, "track {0} of an album, and it does not call itself the theme", track),
+                    ReviewOnly: reviewOnly);
             }
 
             if (hits.Count > 0)
@@ -117,26 +150,55 @@ public sealed class KeywordAffinityRule : IScoringRule
                 // From the soundtrack, which is something, but so is every other song in the work.
                 return new RuleVerdict(
                     0.2,
-                    string.Format(CultureInfo.InvariantCulture, "only says it is from the soundtrack ({0})", Join(hits)));
+                    string.Format(CultureInfo.InvariantCulture, "only says it is from the soundtrack ({0}), not that it is the theme", Join(hits)),
+                    ReviewOnly: reviewOnly);
             }
 
             // Uploads of real themes almost always say "theme", "opening", "intro" or similar.
             // A title that says none of them is more likely a clip, a scene or a discussion, so
             // this counts mildly against rather than abstaining.
-            return new RuleVerdict(-0.35, "no theme-related words in the title");
+            return new RuleVerdict(-0.35, "no theme-related words in the title", ReviewOnly: reviewOnly);
         }
 
         // Diminishing returns: the first match is the evidence, further ones add little. Calling
-        // itself the main theme or main title in so many words is worth one step more.
+        // itself the main theme or main title in so many words is worth one step more, and so is
+        // saying it is the official upload.
         var raw = 0.6 + (0.2 * Math.Max(0, strong.Count - 1));
+        var also = new List<string>(2);
         if (namesItself is not null)
         {
             raw += 0.2;
+            also.Add(namesItself);
+        }
+
+        if (Official.IsMatch(candidate.Title))
+        {
+            raw += 0.2;
+            also.Add("official");
         }
 
         raw = Math.Min(1.0, raw);
-        var matched = namesItself is null ? Join(strong) : Join(new[] { namesItself }.Concat(strong).Distinct().ToList());
+        var matched = Join(also.Concat(strong).Distinct(StringComparer.OrdinalIgnoreCase).ToList());
         return new RuleVerdict(raw, string.Format(CultureInfo.InvariantCulture, "matched {0}", matched));
+    }
+
+    /// <summary>
+    /// Whether a theme's recorded name is a song's own title, rather than a description of it.
+    /// </summary>
+    /// <param name="themeTitle">The theme's name, as research recorded it.</param>
+    /// <param name="workTitle">The work's title.</param>
+    /// <returns><see langword="false"/> for "Game of Thrones Theme", "The X-Files" or "Main Title".</returns>
+    internal static bool IsASongTitle(string themeTitle, string? workTitle)
+    {
+        var name = themeTitle.ToLowerInvariant();
+
+        if (ThemeWords.Any(word => name.Contains(word, StringComparison.Ordinal)))
+        {
+            return false;
+        }
+
+        return string.IsNullOrWhiteSpace(workTitle)
+            || !name.Contains(workTitle.ToLowerInvariant(), StringComparison.Ordinal);
     }
 
     /// <summary>

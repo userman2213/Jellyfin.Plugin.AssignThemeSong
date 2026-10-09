@@ -209,7 +209,7 @@ public class AssignmentBenchmark
                     }
                 }
 
-                if (config.StopLadderOnConfidentHit && best.Values.Any(r => !r.IsVetoed && r.Total >= auto))
+                if (config.StopLadderOnConfidentHit && best.Values.Any(r => r.CanAutoAssign(auto)))
                 {
                     break;
                 }
@@ -238,6 +238,7 @@ public class AssignmentBenchmark
                 ["queries"] = ran,
                 ["outcome"] = decision.Outcome.ToString(),
                 ["reason"] = decision.Reason,
+                ["chosen"] = top?.Candidate.Title,
                 ["verdict"] = verdict,
                 ["top"] = ranked.Take(5).Select(r => new Dictionary<string, object?>
                 {
@@ -248,6 +249,7 @@ public class AssignmentBenchmark
                     ["url"] = r.Candidate.Url,
                     ["total"] = Math.Round(r.Total, 1),
                     ["vetoed"] = r.IsVetoed,
+                    ["reviewOnly"] = r.IsReviewOnly,
                     ["right"] = Grade(c, r.Candidate),
                     ["breakdown"] = r.Breakdown
                         .Where(s => Math.Abs(s.Contribution) > 0.01 || s.IsVeto)

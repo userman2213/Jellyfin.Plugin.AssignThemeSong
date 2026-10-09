@@ -25,6 +25,17 @@ public sealed class ScoreResult
     /// <summary>Gets the reason for disqualification, when vetoed.</summary>
     public string? VetoReason => Breakdown.FirstOrDefault(s => s.IsVeto)?.Reason;
 
+    /// <summary>Gets a value indicating whether a rule ruled out assigning this candidate unattended.</summary>
+    public bool IsReviewOnly => Breakdown.Any(s => s.ReviewOnly);
+
+    /// <summary>Gets why it may only be offered for review, when it may.</summary>
+    public string? ReviewOnlyReason => Breakdown.FirstOrDefault(s => s.ReviewOnly)?.Reason;
+
+    /// <summary>Gets a value indicating whether this candidate could be assigned unattended at this threshold.</summary>
+    /// <param name="threshold">The auto-assign threshold.</param>
+    /// <returns><see langword="true"/> when it is neither vetoed nor review-only, and scores at least the threshold.</returns>
+    public bool CanAutoAssign(double threshold) => !IsVetoed && !IsReviewOnly && Total >= threshold;
+
     /// <summary>
     /// Gets the signals that moved the needle most, strongest first. Used for the one-line
     /// summary in the review queue where the full breakdown would not fit.

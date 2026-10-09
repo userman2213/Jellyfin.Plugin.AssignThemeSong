@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using System.Linq;
 using Jellyfin.Plugin.ThemeForge.Configuration;
 using Jellyfin.Plugin.ThemeForge.Engines.Scoring;
 
@@ -22,7 +23,11 @@ public enum DecisionOutcome
 /// <param name="Outcome">What to do.</param>
 /// <param name="Best">The best-scoring candidate, or null when there was nothing to judge.</param>
 /// <param name="Reason">A sentence explaining the decision, recorded in the index.</param>
-public sealed record ThemeDecision(DecisionOutcome Outcome, ScoreResult? Best, string Reason);
+/// <param name="HeldBack">
+/// Whether the candidate scored enough to assign and is offered for review only because nothing
+/// says it is the theme.
+/// </param>
+public sealed record ThemeDecision(DecisionOutcome Outcome, ScoreResult? Best, string Reason, bool HeldBack = false);
 
 /// <summary>Turns a ranked candidate list into an action.</summary>
 public interface IDecisionPolicy
@@ -72,12 +77,25 @@ public sealed class DecisionPolicy : IDecisionPolicy
         var autoAssign = Math.Max(configuration.AutoAssignThreshold, configuration.ReviewThreshold);
         var review = Math.Min(configuration.AutoAssignThreshold, configuration.ReviewThreshold);
 
-        if (best.Total >= autoAssign)
+        // Usually the top of the list. A candidate a rule allows only to be offered -- one with
+        // nothing to say it is the theme rather than some other music from the work -- is passed
+        // over for the next one that is good enough and may be assigned, if there is one.
+        var assignable = ranked.FirstOrDefault(result => result.CanAutoAssign(autoAssign));
+        if (assignable is not null)
         {
             return new ThemeDecision(
                 DecisionOutcome.AutoAssign,
+                assignable,
+                string.Format(CultureInfo.InvariantCulture, "scored {0:0.0}, at or above the auto-assign threshold of {1:0.0}", assignable.Total, autoAssign));
+        }
+
+        if (best.Total >= autoAssign && best.IsReviewOnly)
+        {
+            return new ThemeDecision(
+                DecisionOutcome.Review,
                 best,
-                string.Format(CultureInfo.InvariantCulture, "scored {0:0.0}, at or above the auto-assign threshold of {1:0.0}", best.Total, autoAssign));
+                string.Format(CultureInfo.InvariantCulture, "scored {0:0.0}, enough to assign, but {1}, so it is offered for review instead", best.Total, best.ReviewOnlyReason),
+                HeldBack: true);
         }
 
         if (best.Total >= review)

@@ -1582,7 +1582,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
             }
 
             if (configuration.StopLadderOnConfidentHit
-                && best.Values.Any(result => !result.IsVetoed && result.Total >= autoAssign))
+                && best.Values.Any(result => result.CanAutoAssign(autoAssign)))
             {
                 _logger.LogDebug("ThemeForge: stopping the search for \"{Item}\" early after a confident match.", identity.Label);
                 break;
@@ -1660,7 +1660,9 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
 
         // A stale backoff on a review item skipped it before anyone looked at it again.
         entry.NextRetryUtc = null;
-        report.NoteReason("scored below the auto-assign threshold, so it needs review");
+        report.NoteReason(decision.HeldBack
+            ? "nothing in its title says it is the theme, so it needs review"
+            : "scored below the auto-assign threshold, so it needs review");
         _logger.LogDebug("ThemeForge: queued \"{Item}\" for review — {Reason}.", entry.Label, decision.Reason);
         return ItemOutcome.Queued;
     }

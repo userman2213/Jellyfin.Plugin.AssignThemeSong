@@ -132,6 +132,27 @@ public class ThemeSearchTests
         Assert.Equal(new[] { "{title} opening theme song", "{title} my own phrasing" }, configuration.SeriesQueryTemplates);
     }
 
+    [Fact]
+    public void UneditedDisqualifyingWordsGainTheArrangements()
+    {
+        var configuration = TestData.Config();
+        configuration.NegativeKeywords = ShippedKeywords.Negative.Where(word => !word.StartsWith("arr", StringComparison.Ordinal)).ToArray();
+
+        Assert.True(ShippedKeywords.Upgrade(configuration));
+        Assert.Contains("arr.", configuration.NegativeKeywords);
+        Assert.False(ShippedKeywords.Upgrade(configuration));
+    }
+
+    [Fact]
+    public void EditedDisqualifyingWordsAreLeftAlone()
+    {
+        var configuration = TestData.Config();
+        configuration.NegativeKeywords = new[] { "reaction", "my own word" };
+
+        Assert.False(ShippedKeywords.Upgrade(configuration));
+        Assert.Equal(new[] { "reaction", "my own word" }, configuration.NegativeKeywords);
+    }
+
     // ---- Recognising it ----
 
     [Fact]
