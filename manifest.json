@@ -9,6 +9,24 @@
         "description": "ThemeForge searches YouTube with yt-dlp, ranks every candidate with an explainable scoring engine, and writes the winner beside your media exactly as it was delivered. High-confidence matches are assigned automatically; anything less certain waits in a review queue. Audio processing -- raising quiet themes, normalising, fades, trimming -- is available but off until you turn it on, so nothing is ever made quieter without asking. All decisions are recorded in a persistent index, so re-runs are idempotent and manual choices are never overwritten.",
         "versions": [
             {
+                "version": "2.10.1.1",
+                "targetAbi": "12.0.0.0",
+                "framework": "net10.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_2.10.1.1.zip",
+                "checksum": "d93b087fe03542c3d291d413d9d96b7e",
+                "timestamp": "2026-10-09T19:02:58Z",
+                "changelog": "Build for Jellyfin 12.\n\n**Titles 2.9 gave up on are searched once more.** Under 2.9 a title whose ThemerrDB link was dead\nfailed on every run until it ran out of attempts, and 2.10 alone would not have looked at it again.\nNow everything an earlier version failed at, found nothing for or queued for review gets one more\nsearch on the next run, whatever its retry backoff. Themes it already assigned are kept; the status\npanel counts them, and **Start over** at the bottom of Settings has them chosen again with 2.10's\nmatcher.\n\nEverything else is as in 2.10.0: ThemerrDB links are checked before they are trusted, the named\ntheme song beats a generic upload, \"soundtrack\" alone no longer passes for \"theme\", music that\nnever says it is the theme waits for review instead of being assigned, arrangements and other\ncountries' versions are rejected, ties go to the more-watched upload, and every theme is written\nas `theme.mp3`."
+            },
+            {
+                "version": "2.10.1.0",
+                "targetAbi": "10.11.0.0",
+                "framework": "net9.0",
+                "sourceUrl": "https://github.com/userman2213/Jellyfin.Plugin.AssignThemeSong/raw/plugin-repo/dist/themeforge_2.10.1.0.zip",
+                "checksum": "a18a92367a2fe4a9ca7bf217e1ccaecc",
+                "timestamp": "2026-10-09T19:02:58Z",
+                "changelog": "Build for Jellyfin 10.11.\n\n**Titles 2.9 gave up on are searched once more.** Under 2.9 a title whose ThemerrDB link was dead\nfailed on every run until it ran out of attempts, and 2.10 alone would not have looked at it again.\nNow everything an earlier version failed at, found nothing for or queued for review gets one more\nsearch on the next run, whatever its retry backoff. Themes it already assigned are kept; the status\npanel counts them, and **Start over** at the bottom of Settings has them chosen again with 2.10's\nmatcher.\n\nEverything else is as in 2.10.0: ThemerrDB links are checked before they are trusted, the named\ntheme song beats a generic upload, \"soundtrack\" alone no longer passes for \"theme\", music that\nnever says it is the theme waits for review instead of being assigned, arrangements and other\ncountries' versions are rejected, ties go to the more-watched upload, and every theme is written\nas `theme.mp3`."
+            },
+            {
                 "version": "2.10.0.1",
                 "targetAbi": "12.0.0.0",
                 "framework": "net10.0",
