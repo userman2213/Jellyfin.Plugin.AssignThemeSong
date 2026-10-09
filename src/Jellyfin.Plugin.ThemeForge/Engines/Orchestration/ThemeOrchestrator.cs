@@ -744,7 +744,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         await _interactive.WaitAsync(TimeSpan.FromMilliseconds(ManualSearchSpacingMs), cancellationToken).ConfigureAwait(false);
         var hydrated = await _candidateSource.HydrateAsync(shortlist, cancellationToken).ConfigureAwait(false);
 
-        return Merge(ranked, _scoringEngine.Rank(hydrated, context));
+        return ScoringEngine.Order(Merge(ranked, _scoringEngine.Rank(hydrated, context)), context.Configuration);
     }
 
     /// <summary>
@@ -769,7 +769,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         var better = new Dictionary<string, ScoreResult>(StringComparer.Ordinal);
         foreach (var result in inspected)
         {
-            if (!better.TryGetValue(result.Candidate.Id, out var seen) || result.Total > seen.Total)
+            if (!better.TryGetValue(result.Candidate.Id, out var seen) || result.Earned > seen.Earned)
             {
                 better[result.Candidate.Id] = result;
             }
@@ -1575,21 +1575,23 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
 
             foreach (var result in _scoringEngine.Rank(hydrated, context))
             {
-                if (!best.TryGetValue(result.Candidate.Id, out var existing) || result.Total > existing.Total)
+                if (!best.TryGetValue(result.Candidate.Id, out var existing) || result.Earned > existing.Earned)
                 {
                     best[result.Candidate.Id] = result;
                 }
             }
 
+            // Only the main theme ends the search early. A soundtrack track good enough to assign is
+            // kept, and assigned if nothing better turns up, but the next query may find the theme.
             if (configuration.StopLadderOnConfidentHit
-                && best.Values.Any(result => result.CanAutoAssign(autoAssign)))
+                && best.Values.Any(result => result.IsMainTheme && result.CanAutoAssign(autoAssign)))
             {
-                _logger.LogDebug("ThemeForge: stopping the search for \"{Item}\" early after a confident match.", identity.Label);
+                _logger.LogDebug("ThemeForge: stopping the search for \"{Item}\" early after finding its main theme.", identity.Label);
                 break;
             }
         }
 
-        var ranked = best.Values.OrderByDescending(result => result.Total).ToList();
+        var ranked = ScoringEngine.Order(best.Values, configuration);
         var unseen = overlooked.Values.Where(result => !best.ContainsKey(result.Candidate.Id)).ToList();
         return (ranked, unseen);
     }

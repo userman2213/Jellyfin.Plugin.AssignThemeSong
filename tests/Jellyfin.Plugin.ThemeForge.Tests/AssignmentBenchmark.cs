@@ -203,19 +203,19 @@ public class AssignmentBenchmark
                 var hydrated = await search.HydrateAsync(shortlist, CancellationToken.None);
                 foreach (var r in engine.Rank(hydrated, context))
                 {
-                    if (!best.TryGetValue(r.Candidate.Id, out var had) || r.Total > had.Total)
+                    if (!best.TryGetValue(r.Candidate.Id, out var had) || r.Earned > had.Earned)
                     {
                         best[r.Candidate.Id] = r;
                     }
                 }
 
-                if (config.StopLadderOnConfidentHit && best.Values.Any(r => r.CanAutoAssign(auto)))
+                if (config.StopLadderOnConfidentHit && best.Values.Any(r => r.IsMainTheme && r.CanAutoAssign(auto)))
                 {
                     break;
                 }
             }
 
-            var ranked = best.Values.OrderByDescending(r => r.Total).ToList();
+            var ranked = ScoringEngine.Order(best.Values, config);
             var decision = policy.Decide(ranked, config);
             var top = decision.Best ?? ranked.FirstOrDefault(r => !r.IsVetoed);
             var verdict = top is null ? "none" : Grade(c, top.Candidate) ? "RIGHT" : "WRONG";
@@ -250,6 +250,8 @@ public class AssignmentBenchmark
                     ["total"] = Math.Round(r.Total, 1),
                     ["vetoed"] = r.IsVetoed,
                     ["reviewOnly"] = r.IsReviewOnly,
+                    ["mainTheme"] = r.IsMainTheme,
+                    ["heldFrom"] = r.HeldFrom,
                     ["right"] = Grade(c, r.Candidate),
                     ["breakdown"] = r.Breakdown
                         .Where(s => Math.Abs(s.Contribution) > 0.01 || s.IsVeto)

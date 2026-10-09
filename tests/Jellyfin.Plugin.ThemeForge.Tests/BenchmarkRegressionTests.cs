@@ -222,12 +222,141 @@ public class BenchmarkRegressionTests
         var rule = new KeywordAffinityRule();
 
         var fromTheSoundtrack = rule.Evaluate(TestData.Candidate("Gladiator Soundtrack - The Battle"), context);
-        var aTheme = rule.Evaluate(TestData.Candidate("Gladiator Theme"), context);
+        var aTheme = rule.Evaluate(TestData.Candidate("Gladiator Soundtrack - Victory Theme"), context);
         var theMainTheme = rule.Evaluate(TestData.Candidate("Gladiator Main Theme"), context);
 
         Assert.True(fromTheSoundtrack.Raw < aTheme.Raw);
         Assert.True(aTheme.Raw < theMainTheme.Raw);
+        Assert.False(aTheme.MainTheme);
+        Assert.True(theMainTheme.MainTheme);
     }
+
+    // ---- the main theme ranks first ----------------------------------------------------
+
+    [Fact]
+    public void TheMainThemeRanksAboveAnOfficialSoundtrackTrackThatOutscoresIt()
+    {
+        // The soundtrack track has everything but being the theme: the composer's own upload,
+        // official, millions of views, the right length. The main theme upload has fewer views
+        // and was found by a later query. The main theme still comes first, and the track is held
+        // a point below it.
+        var first = Query("Interstellar 2014 main theme soundtrack", 1, "{title} {year} main theme soundtrack");
+        var later = Query("Interstellar main title theme", 4, "{title} main title theme");
+        var identity = TestData.Movie("Interstellar", 2014, composers: new[] { "Hans Zimmer" });
+
+        var ranked = Rank(
+            identity,
+            Real("Hans Zimmer - Cornfield Chase (Official Soundtrack) | Interstellar", "Hans Zimmer", 126, 40_000_000, first),
+            Real("Interstellar Main Theme", "Film Themes", 240, 90_000, later));
+
+        Assert.Equal("Interstellar Main Theme", ranked[0].Candidate.Title);
+        Assert.True(ranked[0].IsMainTheme);
+        Assert.True(ranked[0].Total > ranked[1].Total, $"{ranked[0].Total:F1} against {ranked[1].Total:F1}");
+        Assert.NotNull(ranked[1].HeldFrom);
+        Assert.Contains(ranked[1].Breakdown, s => s.Rule == "MainTheme" && s.Reason.Contains("not the main theme", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void OfficialDoesNothingForATrackThatIsNotTheMainTheme()
+    {
+        var context = TestData.Context(TestData.Movie("Gladiator", 2000));
+        var rule = new KeywordAffinityRule();
+
+        var official = rule.Evaluate(TestData.Candidate("Gladiator Official Soundtrack - Victory Theme"), context);
+        var plain = rule.Evaluate(TestData.Candidate("Gladiator Soundtrack - Victory Theme"), context);
+
+        Assert.Equal(plain.Raw, official.Raw);
+    }
+
+    [Fact]
+    public void ACoverIsNotTheMainThemeWhateverItCallsItself()
+    {
+        var identity = TestData.Movie("Interstellar", 2014, composers: new[] { "Hans Zimmer" });
+        var query = Query("Interstellar 2014 main theme soundtrack", 1, "{title} {year} main theme soundtrack");
+
+        var ranked = Rank(
+            identity,
+            Real("Interstellar Main Theme (Piano Cover)", "Some Pianist", 240, 3_000_000, query),
+            Real("Hans Zimmer - Cornfield Chase (Official Soundtrack) | Interstellar", "Hans Zimmer", 126, 40_000_000, query));
+
+        Assert.False(ranked.Single(r => r.Candidate.Title.Contains("Cover", StringComparison.Ordinal)).IsMainTheme);
+        Assert.Equal("Hans Zimmer", ranked[0].Candidate.Channel);
+        Assert.Null(ranked[0].HeldFrom);
+    }
+
+    [Fact]
+    public void AMainThemeTooWeakToOfferHoldsNothingBack()
+    {
+        // Something calling itself the main theme that scores below the review threshold is not a
+        // reason to push a good candidate out.
+        var weak = new ScoreResult
+        {
+            Candidate = TestData.Candidate("Interstellar Main Theme"),
+            Total = 30,
+            Breakdown = new[] { new Signal("KeywordAffinity", 1, 18, "matched", MainTheme: true) },
+        };
+        var good = new ScoreResult
+        {
+            Candidate = TestData.Candidate("Hans Zimmer - Cornfield Chase"),
+            Total = 85,
+            Breakdown = new[] { new Signal("KeywordAffinity", 0, 18, "no theme words") },
+        };
+
+        var ordered = ScoringEngine.Order(new[] { weak, good }, TestData.Config());
+
+        Assert.Same(good, ordered[0]);
+        Assert.Equal(85, ordered[0].Total);
+    }
+
+    [Fact]
+    public void OrderingAgainReleasesWhatNoLongerNeedsHolding()
+    {
+        // A search merges what several queries found. A track held below a main theme that a
+        // later look disqualified gets its own score back.
+        var mainTheme = new ScoreResult
+        {
+            Candidate = TestData.Candidate("Interstellar Main Theme", id: "main"),
+            Total = 80,
+            Breakdown = new[] { new Signal("KeywordAffinity", 1, 18, "matched", MainTheme: true) },
+        };
+        var track = new ScoreResult
+        {
+            Candidate = TestData.Candidate("Hans Zimmer - Cornfield Chase", id: "track"),
+            Total = 85,
+            Breakdown = new[] { new Signal("KeywordAffinity", 0, 18, "no theme words") },
+        };
+
+        var held = ScoringEngine.Order(new[] { mainTheme, track }, TestData.Config()).Single(r => r.Candidate.Id == "track");
+        Assert.Equal(79, held.Total);
+
+        var released = ScoringEngine.Order(new[] { held }, TestData.Config()).Single();
+        Assert.Equal(85, released.Total);
+        Assert.Null(released.HeldFrom);
+        Assert.DoesNotContain(released.Breakdown, s => s.Rule == "MainTheme");
+    }
+
+    [Theory]
+    [InlineData("Interstellar Main Theme - Hans Zimmer", "Interstellar", true)]
+    [InlineData("Breaking Bad Intro", "Breaking Bad", true)]
+    [InlineData("Severance - Official Intro Title Sequence", "Severance", true)]
+    [InlineData("Back To The Future Theme by Alan Silvestri", "Back to the Future", true)]
+    [InlineData("Gladiator - Theme", "Gladiator", true)]
+    [InlineData("Game of Thrones (Theme) by Ramin Djawadi", "Game of Thrones", true)]
+    [InlineData("John Williams - Theme from Jurassic Park", "Jurassic Park", true)]
+    [InlineData("The X-Files Theme", "The X-Files", true)]
+    [InlineData("Drive (2011) title sequence", "Drive", true)]
+    [InlineData("Gladiator Soundtrack - Victory Theme", "Gladiator", false)]
+    [InlineData("Love Theme from The Godfather", "The Godfather", false)]
+    [InlineData("Thomas Newman - Shawshank Prison - Stoic Theme | The Shawshank Redemption", "The Shawshank Redemption", false)]
+    [InlineData("Game of Thrones S8 Official Soundtrack | A Song of Ice and Fire", "Game of Thrones", false)]
+    [InlineData("Hans Zimmer - Time (Inception)", "Inception", false)]
+    [InlineData("The Opening Act - End Credits", "The Opening Act", false)]
+    public void KnowsAMainThemeFromAnyOtherMusic(string upload, string work, bool isTheMainTheme)
+    {
+        var identity = TestData.Movie(work, 2000);
+        Assert.Equal(isTheMainTheme, KeywordAffinityRule.ClaimsToBeTheMainTheme(TestData.Candidate(upload), identity));
+    }
+
 
     [Fact]
     public void TheNamedThemeSongIsNeverMarkedDownForItsWording()

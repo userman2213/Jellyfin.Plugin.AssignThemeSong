@@ -446,12 +446,9 @@ public sealed class OrchestratorFallThroughTests : IDisposable
     /// <summary>Gives every candidate a score its title earns: assignable when it names a theme.</summary>
     private sealed class FixedScores : IScoringEngine
     {
-        public ScoreResult Score(Candidate candidate, ScoringContext context) => new()
-        {
-            Candidate = candidate,
-            Total = candidate.Title.Contains("Theme", StringComparison.Ordinal) ? 90 : 10,
-            Breakdown = Array.Empty<Signal>(),
-        };
+        public ScoreResult Score(Candidate candidate, ScoringContext context) => candidate.Title.Contains("Theme", StringComparison.Ordinal)
+            ? new() { Candidate = candidate, Total = 90, Breakdown = new[] { new Signal("Fixed", 1, 90, "a theme", MainTheme: true) } }
+            : new() { Candidate = candidate, Total = 10, Breakdown = Array.Empty<Signal>() };
 
         public IReadOnlyList<ScoreResult> Rank(IEnumerable<Candidate> candidates, ScoringContext context) =>
             candidates.Select(candidate => Score(candidate, context)).OrderByDescending(result => result.Total).ToList();

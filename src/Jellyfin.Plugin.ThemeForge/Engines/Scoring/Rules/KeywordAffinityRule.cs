@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using Jellyfin.Plugin.ThemeForge.Configuration;
 using Jellyfin.Plugin.ThemeForge.Engines.Discovery;
+using Jellyfin.Plugin.ThemeForge.Engines.Identity;
 
 namespace Jellyfin.Plugin.ThemeForge.Engines.Scoring.Rules;
 
@@ -43,9 +44,19 @@ namespace Jellyfin.Plugin.ThemeForge.Engines.Scoring.Rules;
 /// Spell" scored 73 on its title, its length and its views, and was assigned as Drive's theme.
 /// </para>
 /// <para>
-/// Among uploads that do say they are the theme, one that also says it is official earns a step
-/// more. Three Game of Thrones uploads of the main title tied, and the more-watched of the other two
-/// was an orchestra's concert performance rather than the soundtrack's own.
+/// This rule also says whether a candidate is the main theme: the theme song research named, or an
+/// upload that calls itself the main theme, the main title, the opening, the intro or the title
+/// sequence, or "Back to the Future Theme" -- the work's name and "theme" with nothing between. A
+/// "Victory Theme" or a "Love Theme from The Godfather" is one theme among several, and an upload
+/// with a disqualifying word -- a cover, an arrangement -- is not the main theme whatever it calls
+/// itself. The ranking puts every main theme above everything that is not; see
+/// <see cref="ScoringEngine.Order"/>.
+/// </para>
+/// <para>
+/// Among main themes, one that also says it is official earns a step more. Three Game of Thrones
+/// uploads of the main title tied, and the more-watched of the other two was an orchestra's concert
+/// performance rather than the soundtrack's own. "Official" does nothing for anything else: an
+/// official soundtrack's other tracks are still not the theme.
 /// </para>
 /// </remarks>
 public sealed class KeywordAffinityRule : IScoringRule
@@ -56,12 +67,20 @@ public sealed class KeywordAffinityRule : IScoringRule
         "ost", "soundtrack", "original soundtrack", "score", "original score",
     };
 
-    /// <summary>Phrases with which an upload names itself the title music in so many words.</summary>
-    private static readonly string[] NamesItselfTheTitleMusic =
-    {
-        "main theme", "main title", "opening theme", "theme song", "title theme", "opening credits",
-        "title sequence", "intro theme", "opening titles",
-    };
+    /// <summary>Phrases with which an upload says it is the title music, matched as whole words.</summary>
+    private static readonly Regex MainThemePhrase = new(
+        @"(?<![\p{L}\p{N}])(main theme|main titles?|opening theme|opening titles?|opening credits|opening sequence|"
+        + @"title sequence|title theme|title song|title track|theme song|intro|opening|generique|générique)(?![\p{L}\p{N}])",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    /// <summary>Words that may stand between "theme" and the work's name: "Theme from Jurassic Park".</summary>
+    private static readonly HashSet<string> ThemeOf = new(StringComparer.Ordinal) { "from", "to", "for", "of", "the" };
+
+    /// <summary>Splits a title into lowercase words, without accents, dropping punctuation and brackets.</summary>
+    private static readonly Regex NotAWord = new(@"[^\p{L}\p{N}]+", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    /// <summary>What separates the parts of an upload's title: "Composer - Theme from Film | Channel".</summary>
+    private static readonly Regex Separator = new(@"[\-–—|:•·()\[\]{}""“”/]+", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     /// <summary>The words with which an upload says it is the theme, which a song's own title never uses.</summary>
     private static readonly string[] ThemeWords =
@@ -98,6 +117,10 @@ public sealed class KeywordAffinityRule : IScoringRule
         ArgumentNullException.ThrowIfNull(candidate);
         ArgumentNullException.ThrowIfNull(context);
 
+        // A cover or an arrangement is not the main theme, whatever it calls itself.
+        var mainTheme = ClaimsToBeTheMainTheme(candidate, context.Identity)
+            && NegativeKeywordRule.Hits(candidate, context.Configuration).Count == 0;
+
         // The theme the research named outranks any wording: it is the theme, by name and performer.
         // Only when that name is a song's title, though. One that is just the work's name and
         // "theme" -- Wikidata calls Game of Thrones' "Game of Thrones Theme" -- is matched by any
@@ -106,13 +129,16 @@ public sealed class KeywordAffinityRule : IScoringRule
         if (ComposerRule.NamedThemeSong(context.Identity.Theme, candidate) is { } song
             && IsASongTitle(context.Identity.Theme!.Title, context.Identity.Title))
         {
-            return new RuleVerdict(1.0, string.Format(CultureInfo.InvariantCulture, "is this title's theme song, {0}", song));
+            return new RuleVerdict(
+                1.0,
+                string.Format(CultureInfo.InvariantCulture, "is this title's theme song, {0}", song),
+                MainTheme: mainTheme);
         }
 
         var keywords = context.Configuration.PositiveKeywords;
         if (keywords is null || keywords.Length == 0)
         {
-            return RuleVerdict.Abstain("no positive keywords are configured");
+            return RuleVerdict.Abstain("no positive keywords are configured") with { MainTheme = mainTheme };
         }
 
         // Only the title is considered. Descriptions routinely mention "theme" in passing,
@@ -127,10 +153,9 @@ public sealed class KeywordAffinityRule : IScoringRule
             .ToList();
 
         var strong = hits.Where(hit => !SoundtrackOnly.Contains(hit.Trim())).ToList();
-        var namesItself = NamesItselfTheTitleMusic.FirstOrDefault(
-            phrase => haystack.Contains(phrase, StringComparison.Ordinal));
+        var claimsMain = ClaimsToBeTheMainTheme(candidate, context.Identity);
 
-        if (strong.Count == 0 && namesItself is null)
+        if (strong.Count == 0 && !claimsMain)
         {
             // Nothing says this is the title music. A piece by the work's own composer may still be
             // -- "Hans Zimmer - Time" is what Inception is known by -- but anything else is offered
@@ -160,26 +185,97 @@ public sealed class KeywordAffinityRule : IScoringRule
             return new RuleVerdict(-0.35, "no theme-related words in the title", ReviewOnly: reviewOnly);
         }
 
-        // Diminishing returns: the first match is the evidence, further ones add little. Calling
-        // itself the main theme or main title in so many words is worth one step more, and so is
-        // saying it is the official upload.
+        // Diminishing returns: the first match is the evidence, further ones add little. Being the
+        // main theme is worth one step more, and among main themes so is saying it is the official
+        // upload -- but only among them: an official soundtrack's other tracks are not the theme.
         var raw = 0.6 + (0.2 * Math.Max(0, strong.Count - 1));
         var also = new List<string>(2);
-        if (namesItself is not null)
+        if (claimsMain)
         {
             raw += 0.2;
-            also.Add(namesItself);
-        }
+            also.Add("the main theme");
 
-        if (Official.IsMatch(candidate.Title))
-        {
-            raw += 0.2;
-            also.Add("official");
+            if (Official.IsMatch(candidate.Title))
+            {
+                raw += 0.2;
+                also.Add("official");
+            }
         }
 
         raw = Math.Min(1.0, raw);
         var matched = Join(also.Concat(strong).Distinct(StringComparer.OrdinalIgnoreCase).ToList());
-        return new RuleVerdict(raw, string.Format(CultureInfo.InvariantCulture, "matched {0}", matched));
+        return new RuleVerdict(raw, string.Format(CultureInfo.InvariantCulture, "matched {0}", matched), MainTheme: mainTheme);
+    }
+
+    /// <summary>
+    /// Whether an upload says it is the work's main theme, or is the theme song research named.
+    /// </summary>
+    /// <remarks>
+    /// Wording only: whether it is a cover is the negative keywords' business, and is checked
+    /// where this is used.
+    /// </remarks>
+    /// <param name="candidate">The upload.</param>
+    /// <param name="identity">The work.</param>
+    /// <returns><see langword="true"/> for "Interstellar Main Theme", "Breaking Bad Intro", "Back to the
+    /// Future Theme", "Theme from Jurassic Park" or Dick Dale's "Misirlou" for Pulp Fiction;
+    /// <see langword="false"/> for "Victory Theme", "Love Theme from The Godfather" or an official
+    /// soundtrack's "A Song of Ice and Fire".</returns>
+    internal static bool ClaimsToBeTheMainTheme(Candidate candidate, MediaIdentity identity)
+    {
+        ArgumentNullException.ThrowIfNull(candidate);
+        ArgumentNullException.ThrowIfNull(identity);
+
+        if (ComposerRule.NamedThemeSong(identity.Theme, candidate) is not null)
+        {
+            return true;
+        }
+
+        var titles = new[] { identity.Title, identity.OriginalTitle }
+            .Concat(identity.AlternateTitles)
+            .Where(title => !string.IsNullOrWhiteSpace(title))
+            .Select(title => title!)
+            .ToList();
+
+        // The work's own name is taken out first, so a film called "The Opening" is not every
+        // upload's claim to be the opening.
+        var wording = titles
+            .OrderByDescending(title => title.Length)
+            .Aggregate(candidate.Title, (text, title) => text.Replace(title, " ", StringComparison.OrdinalIgnoreCase));
+
+        if (MainThemePhrase.IsMatch(wording))
+        {
+            return true;
+        }
+
+        // "Back to the Future Theme", "Gladiator - Theme", "John Williams - Theme from Jurassic
+        // Park": "theme" right after the work's name, or opening a part of the title and followed
+        // by it. "Victory Theme" and "Love Theme from The Godfather" have a word of their own
+        // before "theme", and name one theme among several.
+        var words = new List<string>();
+        var opensPart = new List<bool>();
+        foreach (var part in Separator.Split(candidate.Title))
+        {
+            var partWords = Words(part);
+            for (var i = 0; i < partWords.Count; i++)
+            {
+                words.Add(partWords[i]);
+                opensPart.Add(i == 0);
+            }
+        }
+
+        foreach (var name in titles.Select(Words).Where(name => name.Count > 0))
+        {
+            for (var i = 0; i < words.Count; i++)
+            {
+                if (words[i] == "theme"
+                    && (EndsWith(words, i, name) || (opensPart[i] && StartsWith(words, i + 1, name))))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -222,6 +318,60 @@ public sealed class KeywordAffinityRule : IScoringRule
         }
 
         return track >= 2 ? track : null;
+    }
+
+    /// <summary>A title's words, lowercase and without accents or punctuation.</summary>
+    private static List<string> Words(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return new List<string>();
+        }
+
+        var folded = new string(text.ToLowerInvariant()
+            .Normalize(System.Text.NormalizationForm.FormD)
+            .Where(c => CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark)
+            .ToArray());
+
+        return NotAWord.Split(folded.Replace("&", " and ", StringComparison.Ordinal))
+            .Where(word => word.Length > 0)
+            .ToList();
+    }
+
+    /// <summary>Whether the words just before <paramref name="end"/> are the name, with or without a leading "the".</summary>
+    private static bool EndsWith(List<string> words, int end, List<string> name)
+    {
+        var bare = name.Count > 1 && name[0] == "the" ? name.Skip(1).ToList() : name;
+        foreach (var form in new[] { name, bare })
+        {
+            var start = end - form.Count;
+            if (start >= 0 && form.Select((word, i) => words[start + i] == word).All(match => match))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>Whether the name follows <paramref name="start"/>, after any of "from", "of" and the like.</summary>
+    private static bool StartsWith(List<string> words, int start, List<string> name)
+    {
+        while (start < words.Count && ThemeOf.Contains(words[start]))
+        {
+            start++;
+        }
+
+        var bare = name.Count > 1 && name[0] == "the" ? name.Skip(1).ToList() : name;
+        foreach (var form in new[] { name, bare })
+        {
+            if (start + form.Count <= words.Count && form.Select((word, i) => words[start + i] == word).All(match => match))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static string Join(IReadOnlyList<string> values) =>

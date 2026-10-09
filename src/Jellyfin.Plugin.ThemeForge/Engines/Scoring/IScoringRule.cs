@@ -15,7 +15,8 @@ namespace Jellyfin.Plugin.ThemeForge.Engines.Scoring;
 /// When true the candidate may be offered for review, but is never assigned without somebody
 /// looking at it, however well it scores.
 /// </param>
-public readonly record struct RuleVerdict(double Raw, string Reason, bool IsVeto = false, bool ReviewOnly = false)
+/// <param name="MainTheme">When true the candidate is the work's main theme, which ranks above anything that is not.</param>
+public readonly record struct RuleVerdict(double Raw, string Reason, bool IsVeto = false, bool ReviewOnly = false, bool MainTheme = false)
 {
     /// <summary>Expresses no opinion, so a missing input cannot drag a candidate down.</summary>
     /// <param name="reason">Why the rule had nothing to say.</param>

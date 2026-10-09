@@ -25,6 +25,15 @@ public sealed class ScoreResult
     /// <summary>Gets the reason for disqualification, when vetoed.</summary>
     public string? VetoReason => Breakdown.FirstOrDefault(s => s.IsVeto)?.Reason;
 
+    /// <summary>Gets what it scored before it was held below a main theme, or null when it was not.</summary>
+    public double? HeldFrom { get; init; }
+
+    /// <summary>Gets what it scored on its own merits, before any hold: what to compare two scorings of one candidate by.</summary>
+    public double Earned => HeldFrom ?? Total;
+
+    /// <summary>Gets a value indicating whether this is the work's main theme, which ranks above anything that is not.</summary>
+    public bool IsMainTheme => !IsVetoed && Breakdown.Any(s => s.MainTheme);
+
     /// <summary>Gets a value indicating whether a rule ruled out assigning this candidate unattended.</summary>
     public bool IsReviewOnly => Breakdown.Any(s => s.ReviewOnly);
 
