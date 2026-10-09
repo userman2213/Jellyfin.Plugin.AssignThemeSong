@@ -335,6 +335,50 @@ public class BenchmarkRegressionTests
         Assert.DoesNotContain(released.Breakdown, s => s.Rule == "MainTheme");
     }
 
+    [Fact]
+    public void TheXFilesCuesAreNotTheMainThemeForNamingTheShowAndItsComposer()
+    {
+        // Wikidata records the theme as "The X-Files" by Mark Snow -- the show's own name -- which
+        // every cue Mark Snow wrote for it matches. A score cue won the third benchmark run on it.
+        var query = Query("The X-Files Mark Snow", 0, "{title} {theme}");
+        var identity = TestData.Series("The X-Files", 1993, composers: new[] { "Mark Snow" }, theme: new ThemeSong("The X-Files", "Mark Snow"));
+
+        var ranked = Rank(
+            identity,
+            Real("Mark Snow - UFO Technology (The X-Files: Deep Throat - 01X01)", "The X-FILES Score", 141, 172_941, query),
+            Real("Mark Snow - Materia Primoris: The X-Files Theme (Main Title) (Official Audio)", "RHINO", 203, 1_801_329, query));
+
+        Assert.Equal("RHINO", ranked[0].Candidate.Channel);
+        Assert.False(ranked.Single(r => r.Candidate.Title.Contains("UFO", StringComparison.Ordinal)).IsMainTheme);
+    }
+
+    [Fact]
+    public void AnInstrumentalCoverCallingItselfTheThemeIsNotTheMainTheme()
+    {
+        var query = Query("Amélie theme song", 4, "{title} theme song");
+        var identity = TestData.Movie("Amélie", 2001, composers: new[] { "Yann Tiersen" });
+
+        var ranked = Rank(
+            identity,
+            Real("Amélie Theme - Comptine d'un autre été (PIANO) - Brooklyn Duo", "Brooklyn Duo", 194, 2_333_125, query));
+
+        Assert.False(ranked[0].IsMainTheme);
+        Assert.Contains(ranked[0].Breakdown, s => s.Rule == "NegativeKeywords" && s.Reason.Contains("piano", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void AWorksOwnTitleIsNotADisqualifyingWord()
+    {
+        // Every upload for The Piano says "piano", and for the series Episodes, "episode".
+        var query = Query("The Piano 1993 main theme soundtrack", 1, "{title} {year} main theme soundtrack");
+        var ranked = Rank(
+            TestData.Movie("The Piano", 1993, composers: new[] { "Michael Nyman" }),
+            Real("The Piano - Main Theme - Michael Nyman", "Some Channel", 180, 2_000_000, query));
+
+        Assert.DoesNotContain(ranked[0].Breakdown, s => s.Rule == "NegativeKeywords" && s.Contribution < 0);
+        Assert.True(ranked[0].IsMainTheme);
+    }
+
     [Theory]
     [InlineData("Interstellar Main Theme - Hans Zimmer", "Interstellar", true)]
     [InlineData("Breaking Bad Intro", "Breaking Bad", true)]

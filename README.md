@@ -333,7 +333,7 @@ queue shows you the whole breakdown, so a score is always something you can argu
 |---|---|
 | `TitleSimilarity` | Whether the media title genuinely appears in the candidate's title — or the theme's own song and performer do. Vetoes if neither, and vetoes another country's version of a show by the same name. |
 | `KeywordAffinity` | Words like *opening*, *main title*, *theme*; a step more for being the main theme, and another for *official* on a main theme only. *Soundtrack* or *OST* alone earns little, because every track of a soundtrack album says it, and a later numbered track (*8. He Had a Good Time*) is marked down. The named theme song earns full marks without saying any of it. |
-| `NegativeKeywords` | *reaction*, *cover*, *arr.*, *tutorial*, *1 hour*, *loop*, *AMV*, *full episode*… |
+| `NegativeKeywords` | *reaction*, *cover*, *arr.*, *piano*, *tutorial*, *1 hour*, *loop*, *AMV*, *full episode*… — never counting the title's own name, so *The Piano* is not marked down for it. |
 | `DurationPlausibility` | Whether it is the right length. Vetoes ten-hour loops and three-second clips. |
 | `ChannelReputation` | Trusts YouTube's auto-generated `- Topic` channels and your own allow list. |
 | `Popularity` | View count, log-scaled and capped so it can never outvote the title. |

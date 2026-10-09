@@ -35,7 +35,7 @@ public sealed class NegativeKeywordRule : IScoringRule
             return RuleVerdict.Abstain("no negative keywords are configured");
         }
 
-        var hits = Hits(candidate, context.Configuration);
+        var hits = Hits(candidate, context);
 
         if (hits.Count == 0)
         {
@@ -48,16 +48,27 @@ public sealed class NegativeKeywordRule : IScoringRule
     }
 
     /// <summary>The disqualifying words in a candidate's title.</summary>
+    /// <remarks>
+    /// The work's own names and its theme song's are taken out first: every upload for The Piano,
+    /// or for the series Episodes, would otherwise be disqualified by its own title.
+    /// </remarks>
     /// <param name="candidate">The candidate.</param>
-    /// <param name="configuration">The settings holding the words.</param>
-    /// <returns>Every configured word the title contains, which may be none.</returns>
-    internal static IReadOnlyList<string> Hits(Candidate candidate, PluginConfiguration configuration)
+    /// <param name="context">The work, and the settings holding the words.</param>
+    /// <returns>Every configured word the rest of the title contains, which may be none.</returns>
+    internal static IReadOnlyList<string> Hits(Candidate candidate, ScoringContext context)
     {
         ArgumentNullException.ThrowIfNull(candidate);
-        ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(context);
 
-        var haystack = candidate.Title.ToLowerInvariant();
-        return (configuration.NegativeKeywords ?? Array.Empty<string>())
+        var identity = context.Identity;
+        var haystack = new[] { identity.Title, identity.OriginalTitle, identity.Theme?.Title }
+            .Concat(identity.AlternateTitles)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .OrderByDescending(name => name!.Length)
+            .Aggregate(candidate.Title, (text, name) => text.Replace(name!, " ", StringComparison.OrdinalIgnoreCase))
+            .ToLowerInvariant();
+
+        return (context.Configuration.NegativeKeywords ?? Array.Empty<string>())
             .Where(keyword => !string.IsNullOrWhiteSpace(keyword)
                               && haystack.Contains(keyword.ToLowerInvariant(), StringComparison.Ordinal))
             .ToList();

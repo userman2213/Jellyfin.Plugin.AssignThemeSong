@@ -18,7 +18,9 @@ public static class ShippedKeywords
     /// <remarks>
     /// "arr.", "arranged by" and "arrangement" since 2.10: a concert band's "Game of Thrones (Theme)
     /// by Ramin Djawadi/arr. Brown" names the theme and its composer as well as the soundtrack's own
-    /// upload does, and is a cover.
+    /// upload does, and is a cover. "piano", "violin" and "cello" since 2.11, when the main theme
+    /// started to rank first: "Amélie Theme - Comptine d'un autre été (PIANO) - Brooklyn Duo" calls
+    /// itself the theme, and is a duo's cover of it.
     /// </remarks>
     public static readonly string[] Negative =
     {
@@ -29,12 +31,25 @@ public static class ShippedKeywords
         "nightcore", "slowed", "reverb", "fan made", "fanmade", "parody",
         "behind the scenes", "interview", "compilation", "every",
         "joke", "bloopers", "deleted scene", "best of", "funniest", "scene",
-        "arr.", "arranged by", "arrangement",
+        "arr.", "arranged by", "arrangement", "piano", "violin", "cello",
     };
 
     /// <summary>Every list of disqualifying words a previous release shipped.</summary>
     private static readonly string[][] PreviousNegative =
     {
+        // 2.10.
+        new[]
+        {
+            "reaction", "cover", "remix", "tutorial", "lesson", "how to play",
+            "1 hour", "10 hours", "hour loop", "loop", "extended", "amv",
+            "trailer", "review", "explained", "recap", "full episode", "episode",
+            "karaoke", "sheet music", "guitar", "piano tutorial", "8 bit", "8-bit",
+            "nightcore", "slowed", "reverb", "fan made", "fanmade", "parody",
+            "behind the scenes", "interview", "compilation", "every",
+            "joke", "bloopers", "deleted scene", "best of", "funniest", "scene",
+            "arr.", "arranged by", "arrangement",
+        },
+
         // Up to 2.9.
         new[]
         {

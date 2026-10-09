@@ -198,7 +198,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
             if (ShippedKeywords.Upgrade(Configuration))
             {
                 changed = true;
-                _logger.LogInformation("ThemeForge: the disqualifying words were still the previous defaults and now also catch arrangements.");
+                _logger.LogInformation("ThemeForge: the disqualifying words were still the previous defaults and now also catch arrangements and instrumental covers.");
             }
 
             if (AudioDefaults.Upgrade(Configuration))

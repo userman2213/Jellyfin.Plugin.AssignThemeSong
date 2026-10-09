@@ -132,14 +132,16 @@ public class ThemeSearchTests
         Assert.Equal(new[] { "{title} opening theme song", "{title} my own phrasing" }, configuration.SeriesQueryTemplates);
     }
 
-    [Fact]
-    public void UneditedDisqualifyingWordsGainTheArrangements()
+    [Theory]
+    [InlineData("2.9", new[] { "arr.", "arranged by", "arrangement", "piano", "violin", "cello" })]
+    [InlineData("2.10", new[] { "piano", "violin", "cello" })]
+    public void UneditedDisqualifyingWordsGainWhatWasAddedSince(string release, string[] addedSince)
     {
         var configuration = TestData.Config();
-        configuration.NegativeKeywords = ShippedKeywords.Negative.Where(word => !word.StartsWith("arr", StringComparison.Ordinal)).ToArray();
+        configuration.NegativeKeywords = ShippedKeywords.Negative.Where(word => !addedSince.Contains(word)).ToArray();
 
-        Assert.True(ShippedKeywords.Upgrade(configuration));
-        Assert.Contains("arr.", configuration.NegativeKeywords);
+        Assert.True(ShippedKeywords.Upgrade(configuration), $"the {release} list was not recognised");
+        Assert.Equal(ShippedKeywords.Negative, configuration.NegativeKeywords);
         Assert.False(ShippedKeywords.Upgrade(configuration));
     }
 

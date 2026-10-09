@@ -119,7 +119,7 @@ public sealed class KeywordAffinityRule : IScoringRule
 
         // A cover or an arrangement is not the main theme, whatever it calls itself.
         var mainTheme = ClaimsToBeTheMainTheme(candidate, context.Identity)
-            && NegativeKeywordRule.Hits(candidate, context.Configuration).Count == 0;
+            && NegativeKeywordRule.Hits(candidate, context).Count == 0;
 
         // The theme the research named outranks any wording: it is the theme, by name and performer.
         // Only when that name is a song's title, though. One that is just the work's name and
@@ -225,7 +225,12 @@ public sealed class KeywordAffinityRule : IScoringRule
         ArgumentNullException.ThrowIfNull(candidate);
         ArgumentNullException.ThrowIfNull(identity);
 
-        if (ComposerRule.NamedThemeSong(identity.Theme, candidate) is not null)
+        // The theme song research named -- but only by a song's own title. Wikidata records The
+        // X-Files' theme as "The X-Files" by Mark Snow, which every one of his cues for the show
+        // matches.
+        if (identity.Theme is { } theme
+            && IsASongTitle(theme.Title, identity.Title)
+            && ComposerRule.NamedThemeSong(theme, candidate) is not null)
         {
             return true;
         }
