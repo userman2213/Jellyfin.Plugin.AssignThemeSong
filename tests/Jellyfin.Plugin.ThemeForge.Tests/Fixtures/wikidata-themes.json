@@ -1,0 +1,1881 @@
+{
+  "head" : {
+    "vars" : [ "imdb", "tmdbFilm", "tmdbTv", "composerLabel", "performerLabel", "mbid", "themeLabel", "themePerformerLabel", "article" ]
+  },
+  "results" : {
+    "bindings" : [ {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Game_of_Thrones"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Game of Thrones Theme"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Ramin Djawadi"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0944947"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Ramin Djawadi"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/The_Simpsons"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "cf979e22-d016-35ab-af36-badcef12a69e"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "various artists"
+      },
+      "themeLabel" : {
+        "type" : "literal",
+        "value" : "Q115522708"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Danny Elfman"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0096697"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Alf Clausen"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/The_Simpsons"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "9814378b-56c7-37d1-80e7-4eecbe850a0b"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "various artists"
+      },
+      "themeLabel" : {
+        "type" : "literal",
+        "value" : "Q115522708"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Danny Elfman"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0096697"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Alf Clausen"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/The_Simpsons"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "3ad8468e-47c6-4f27-a05a-61d171926980"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "various artists"
+      },
+      "themeLabel" : {
+        "type" : "literal",
+        "value" : "Q115522708"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Danny Elfman"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0096697"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Alf Clausen"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Firefly_(TV_series)"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "8ebb38cc-5223-340c-a4a0-658075379d95"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Greg Edmonson"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0303461"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Greg Edmonson"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/The_X-Files"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "03331848-c231-3f92-86fc-4934838c9230"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "various artists"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "The X-Files"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Mark Snow"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0106179"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Mark Snow"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Skyfall"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "8a42702f-9573-4efd-9de7-fc8e8a80ba74"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Thomas Newman"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Skyfall"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Adele"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt1074638"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Thomas Newman"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Skyfall"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "4307ecf9-d0f2-4b95-b7ad-2f8cba84a5e9"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Adele"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Skyfall"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Adele"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt1074638"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Thomas Newman"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Friends"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "4092355f-40d8-3c2d-9592-79716b7ae379"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "various artists"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "I'll Be There for You"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "The Rembrandts"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0108778"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Friends"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "4092355f-40d8-3c2d-9592-79716b7ae379"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "various artists"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "I'll Be There for You"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "The Rembrandts"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0108778"
+      },
+      "tmdbTv" : {
+        "type" : "literal",
+        "value" : "1668"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Friends"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "be555dc4-e187-3c46-afbd-19fdd0c208f4"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "various artists"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "I'll Be There for You"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "The Rembrandts"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0108778"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Friends"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "be555dc4-e187-3c46-afbd-19fdd0c208f4"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "various artists"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "I'll Be There for You"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "The Rembrandts"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0108778"
+      },
+      "tmdbTv" : {
+        "type" : "literal",
+        "value" : "1668"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Friends"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "4092355f-40d8-3c2d-9592-79716b7ae379"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "various artists"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "I'll Be There for You"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "The Rembrandts"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0108778"
+      },
+      "tmdbTv" : {
+        "type" : "literal",
+        "value" : "1668"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Friends"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "4092355f-40d8-3c2d-9592-79716b7ae379"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "various artists"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "I'll Be There for You"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "The Rembrandts"
+      },
+      "tmdbTv" : {
+        "type" : "literal",
+        "value" : "1668"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Friends"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "be555dc4-e187-3c46-afbd-19fdd0c208f4"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "various artists"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "I'll Be There for You"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "The Rembrandts"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0108778"
+      },
+      "tmdbTv" : {
+        "type" : "literal",
+        "value" : "1668"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Friends"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "be555dc4-e187-3c46-afbd-19fdd0c208f4"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "various artists"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "I'll Be There for You"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "The Rembrandts"
+      },
+      "tmdbTv" : {
+        "type" : "literal",
+        "value" : "1668"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Alien_(film)"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "e15b15c1-97e6-3f22-a21f-ec7c2498f604"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Jerry Goldsmith"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0078748"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Jerry Goldsmith"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Alien_(film)"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "e15b15c1-97e6-3f22-a21f-ec7c2498f604"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Jerry Goldsmith"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0078748"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Jerry Goldsmith"
+      },
+      "tmdbFilm" : {
+        "type" : "literal",
+        "value" : "348"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Alien_(film)"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "e15b15c1-97e6-3f22-a21f-ec7c2498f604"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Jerry Goldsmith"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0078748"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Jerry Goldsmith"
+      },
+      "tmdbFilm" : {
+        "type" : "literal",
+        "value" : "348"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Alien_(film)"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "e15b15c1-97e6-3f22-a21f-ec7c2498f604"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Jerry Goldsmith"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Jerry Goldsmith"
+      },
+      "tmdbFilm" : {
+        "type" : "literal",
+        "value" : "348"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Battlestar_Galactica_(2004_TV_series)"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0407362"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Bear McCreary"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Battlestar_Galactica_(2004_TV_series)"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0407362"
+      },
+      "tmdbTv" : {
+        "type" : "literal",
+        "value" : "1972"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Bear McCreary"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Battlestar_Galactica_(2004_TV_series)"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0407362"
+      },
+      "tmdbTv" : {
+        "type" : "literal",
+        "value" : "1972"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Bear McCreary"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Battlestar_Galactica_(2004_TV_series)"
+      },
+      "tmdbTv" : {
+        "type" : "literal",
+        "value" : "1972"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Bear McCreary"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Blade_Runner_2049"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "22c73225-8a2e-4e92-a00e-68960dc1ff4a"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Hans Zimmer"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt1856101"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Benjamin Wallfisch"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Blade_Runner_2049"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "22c73225-8a2e-4e92-a00e-68960dc1ff4a"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Benjamin Wallfisch"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt1856101"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Benjamin Wallfisch"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Blade_Runner_2049"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "22c73225-8a2e-4e92-a00e-68960dc1ff4a"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Hans Zimmer"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt1856101"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Hans Zimmer"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Blade_Runner_2049"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "22c73225-8a2e-4e92-a00e-68960dc1ff4a"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Benjamin Wallfisch"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt1856101"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Hans Zimmer"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Dexter_(TV_series)"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0773262"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Daniel Licht"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/The_Sopranos"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0141842"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Titanic_(1997_film)"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "0d36a2f8-8af3-3155-bf23-c470f1d204e2"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "My Heart Will Go On"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Drifters"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0120338"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Titanic_(1997_film)"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "0d36a2f8-8af3-3155-bf23-c470f1d204e2"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "My Heart Will Go On"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Drifters"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0120338"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "tmdbFilm" : {
+        "type" : "literal",
+        "value" : "597"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Titanic_(1997_film)"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "0d36a2f8-8af3-3155-bf23-c470f1d204e2"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "My Heart Will Go On"
+      },
+      "themePerformerLabel" : {
+        "type" : "literal",
+        "value" : "Q4177928"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0120338"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Titanic_(1997_film)"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "0d36a2f8-8af3-3155-bf23-c470f1d204e2"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "My Heart Will Go On"
+      },
+      "themePerformerLabel" : {
+        "type" : "literal",
+        "value" : "Q4177928"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0120338"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "tmdbFilm" : {
+        "type" : "literal",
+        "value" : "597"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Titanic_(1997_film)"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "0d36a2f8-8af3-3155-bf23-c470f1d204e2"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "My Heart Will Go On"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Thorleifs"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0120338"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Titanic_(1997_film)"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "0d36a2f8-8af3-3155-bf23-c470f1d204e2"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "My Heart Will Go On"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Thorleifs"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0120338"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "tmdbFilm" : {
+        "type" : "literal",
+        "value" : "597"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Titanic_(1997_film)"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "0d36a2f8-8af3-3155-bf23-c470f1d204e2"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "My Heart Will Go On"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Céline Dion"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0120338"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Titanic_(1997_film)"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "0d36a2f8-8af3-3155-bf23-c470f1d204e2"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "My Heart Will Go On"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Céline Dion"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0120338"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "tmdbFilm" : {
+        "type" : "literal",
+        "value" : "597"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Titanic_(1997_film)"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "cfc7581a-385e-3933-93b7-432f16873cf3"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "My Heart Will Go On"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Drifters"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0120338"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Titanic_(1997_film)"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "cfc7581a-385e-3933-93b7-432f16873cf3"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "My Heart Will Go On"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Drifters"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0120338"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "tmdbFilm" : {
+        "type" : "literal",
+        "value" : "597"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Titanic_(1997_film)"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "cfc7581a-385e-3933-93b7-432f16873cf3"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "My Heart Will Go On"
+      },
+      "themePerformerLabel" : {
+        "type" : "literal",
+        "value" : "Q4177928"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0120338"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Titanic_(1997_film)"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "cfc7581a-385e-3933-93b7-432f16873cf3"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "My Heart Will Go On"
+      },
+      "themePerformerLabel" : {
+        "type" : "literal",
+        "value" : "Q4177928"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0120338"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "tmdbFilm" : {
+        "type" : "literal",
+        "value" : "597"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Titanic_(1997_film)"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "cfc7581a-385e-3933-93b7-432f16873cf3"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "My Heart Will Go On"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Thorleifs"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0120338"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Titanic_(1997_film)"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "cfc7581a-385e-3933-93b7-432f16873cf3"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "My Heart Will Go On"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Thorleifs"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0120338"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "tmdbFilm" : {
+        "type" : "literal",
+        "value" : "597"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Titanic_(1997_film)"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "cfc7581a-385e-3933-93b7-432f16873cf3"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "My Heart Will Go On"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Céline Dion"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0120338"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Titanic_(1997_film)"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "cfc7581a-385e-3933-93b7-432f16873cf3"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "My Heart Will Go On"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Céline Dion"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0120338"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "tmdbFilm" : {
+        "type" : "literal",
+        "value" : "597"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Titanic_(1997_film)"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "0d36a2f8-8af3-3155-bf23-c470f1d204e2"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "My Heart Will Go On"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Drifters"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0120338"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "tmdbFilm" : {
+        "type" : "literal",
+        "value" : "597"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Titanic_(1997_film)"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "0d36a2f8-8af3-3155-bf23-c470f1d204e2"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "My Heart Will Go On"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Drifters"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "tmdbFilm" : {
+        "type" : "literal",
+        "value" : "597"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Titanic_(1997_film)"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "0d36a2f8-8af3-3155-bf23-c470f1d204e2"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "My Heart Will Go On"
+      },
+      "themePerformerLabel" : {
+        "type" : "literal",
+        "value" : "Q4177928"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0120338"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "tmdbFilm" : {
+        "type" : "literal",
+        "value" : "597"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Titanic_(1997_film)"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "0d36a2f8-8af3-3155-bf23-c470f1d204e2"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "My Heart Will Go On"
+      },
+      "themePerformerLabel" : {
+        "type" : "literal",
+        "value" : "Q4177928"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "tmdbFilm" : {
+        "type" : "literal",
+        "value" : "597"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Titanic_(1997_film)"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "0d36a2f8-8af3-3155-bf23-c470f1d204e2"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "My Heart Will Go On"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Thorleifs"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0120338"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "tmdbFilm" : {
+        "type" : "literal",
+        "value" : "597"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Titanic_(1997_film)"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "0d36a2f8-8af3-3155-bf23-c470f1d204e2"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "My Heart Will Go On"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Thorleifs"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "tmdbFilm" : {
+        "type" : "literal",
+        "value" : "597"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Titanic_(1997_film)"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "0d36a2f8-8af3-3155-bf23-c470f1d204e2"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "My Heart Will Go On"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Céline Dion"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0120338"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "tmdbFilm" : {
+        "type" : "literal",
+        "value" : "597"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Titanic_(1997_film)"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "0d36a2f8-8af3-3155-bf23-c470f1d204e2"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "My Heart Will Go On"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Céline Dion"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "tmdbFilm" : {
+        "type" : "literal",
+        "value" : "597"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Titanic_(1997_film)"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "cfc7581a-385e-3933-93b7-432f16873cf3"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "My Heart Will Go On"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Drifters"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0120338"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "tmdbFilm" : {
+        "type" : "literal",
+        "value" : "597"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Titanic_(1997_film)"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "cfc7581a-385e-3933-93b7-432f16873cf3"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "My Heart Will Go On"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Drifters"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "tmdbFilm" : {
+        "type" : "literal",
+        "value" : "597"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Titanic_(1997_film)"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "cfc7581a-385e-3933-93b7-432f16873cf3"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "My Heart Will Go On"
+      },
+      "themePerformerLabel" : {
+        "type" : "literal",
+        "value" : "Q4177928"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0120338"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "tmdbFilm" : {
+        "type" : "literal",
+        "value" : "597"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Titanic_(1997_film)"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "cfc7581a-385e-3933-93b7-432f16873cf3"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "My Heart Will Go On"
+      },
+      "themePerformerLabel" : {
+        "type" : "literal",
+        "value" : "Q4177928"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "tmdbFilm" : {
+        "type" : "literal",
+        "value" : "597"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Titanic_(1997_film)"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "cfc7581a-385e-3933-93b7-432f16873cf3"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "My Heart Will Go On"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Thorleifs"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0120338"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "tmdbFilm" : {
+        "type" : "literal",
+        "value" : "597"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Titanic_(1997_film)"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "cfc7581a-385e-3933-93b7-432f16873cf3"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "My Heart Will Go On"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Thorleifs"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "tmdbFilm" : {
+        "type" : "literal",
+        "value" : "597"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Titanic_(1997_film)"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "cfc7581a-385e-3933-93b7-432f16873cf3"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "My Heart Will Go On"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Céline Dion"
+      },
+      "imdb" : {
+        "type" : "literal",
+        "value" : "tt0120338"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "tmdbFilm" : {
+        "type" : "literal",
+        "value" : "597"
+      }
+    }, {
+      "article" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Titanic_(1997_film)"
+      },
+      "mbid" : {
+        "type" : "literal",
+        "value" : "cfc7581a-385e-3933-93b7-432f16873cf3"
+      },
+      "performerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "themeLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "My Heart Will Go On"
+      },
+      "themePerformerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Céline Dion"
+      },
+      "composerLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "James Horner"
+      },
+      "tmdbFilm" : {
+        "type" : "literal",
+        "value" : "597"
+      }
+    } ]
+  }
+}
