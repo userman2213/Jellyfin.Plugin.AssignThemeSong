@@ -4,9 +4,10 @@ A Jellyfin plugin that finds theme songs for your movies and TV shows, scores ev
 finds, and assigns the confident ones automatically. Anything it is unsure about waits in a
 review queue instead of guessing.
 
-Requires **Jellyfin 10.11 or 12**. Every release ships one build for each, and the plugin
-catalogue picks the one your server can run. (The optional item-page button needs the File
-Transformation plugin's own build for your Jellyfin version.)
+Requires **Jellyfin 12 or later**. ThemeForge 2.11 was the last release with a build for
+Jellyfin 10.11; it stays in the catalogue for servers still on 10.11, but every release from 3.0
+is for Jellyfin 12 only. (The optional item-page button needs the File Transformation plugin's own
+build for Jellyfin 12.)
 
 ## What it does
 
@@ -395,15 +396,20 @@ it appears, builds, runs the tests, packages, computes the checksum, adds the en
 published manifest and fails if it does not match the package it just built.
 
 ```bash
-scripts/release.sh 1.2.0.0             # build and update the manifest locally
-scripts/release.sh 1.2.0.0 --publish   # ...and publish it to the channel
+scripts/release.sh 3.0.0.0             # build and update the manifest locally
+scripts/release.sh 3.0.0.0 --publish   # ...and publish it to the channel
 ```
 
 Put the release notes in `CHANGELOG_NEXT.md` first; the script uses that as the changelog for
 the entry.
 
-Tagging `v1.2.0.0` runs the same script through GitHub Actions, so a manual release and an
+Tagging `v3.0.0.0` runs the same script through GitHub Actions, so a manual release and an
 automated one cannot produce differently-built packages under the same version.
+
+A release is one package, for Jellyfin 12. The script refuses a version that is not above every
+Jellyfin 12 release already in the manifest — 2.11's Jellyfin 12 build was numbered 2.11.0.1 —
+because Jellyfin only ever offers the highest version a server can run, and a lower one would
+never appear as an update.
 
 Two things this exists to prevent, both of which fail in ways that are miserable to diagnose from
 the Jellyfin end: a checksum that does not match its package, which makes the install fail
@@ -411,6 +417,8 @@ verification with no useful message; and a three-part version number, which pars
 compares as newer, so the update simply never appears.
 
 ## Building from source
+
+Needs the .NET 10 SDK, which is what Jellyfin 12 runs on.
 
 ```bash
 dotnet build Jellyfin.Plugin.ThemeForge.sln -c Release
