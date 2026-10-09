@@ -45,19 +45,23 @@ public sealed class ThemerrDbSource : IThemeProvenanceSource
 {
     private readonly IThemerrDbCatalogue _catalogue;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly ILinkChecker _linkChecker;
     private readonly IThemeForgeLogger<ThemerrDbSource> _logger;
 
     /// <summary>Initializes a new instance of the <see cref="ThemerrDbSource"/> class.</summary>
     /// <param name="catalogue">The local copy of which works have a theme.</param>
     /// <param name="httpClientFactory">Supplies the HTTP client.</param>
+    /// <param name="linkChecker">Finds out whether a link still plays before it is handed on.</param>
     /// <param name="logger">Logger.</param>
     public ThemerrDbSource(
         IThemerrDbCatalogue catalogue,
         IHttpClientFactory httpClientFactory,
+        ILinkChecker linkChecker,
         IThemeForgeLogger<ThemerrDbSource> logger)
     {
         _catalogue = catalogue;
         _httpClientFactory = httpClientFactory;
+        _linkChecker = linkChecker;
         _logger = logger;
     }
 
@@ -189,11 +193,12 @@ public sealed class ThemerrDbSource : IThemeProvenanceSource
                 identity.Label,
                 collection.Title);
 
-            return Describe(
+            return await PlayableOrNullAsync(
                 identity,
                 collection.ThemeUrl,
                 $"{identity.Title} ({collection.Title}, ThemerrDB)",
-                $"Chosen for the collection \"{collection.Title}\", which this film belongs to.");
+                $"Chosen for the collection \"{collection.Title}\", which this film belongs to.",
+                cancellationToken).ConfigureAwait(false);
         }
 
         return null;
@@ -270,13 +275,48 @@ public sealed class ThemerrDbSource : IThemeProvenanceSource
                 identity.Label,
                 keyedOn);
 
-            return Describe(identity, themeUrl, $"{identity.Title} (ThemerrDB)", $"Chosen for {keyedOn}.");
+            return await PlayableOrNullAsync(
+                identity,
+                themeUrl,
+                $"{identity.Title} (ThemerrDB)",
+                $"Chosen for {keyedOn}.",
+                cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
         {
             _logger.LogDebug(ex, "ThemeForge: could not read {Url}.", url);
             return null;
         }
+    }
+
+    /// <summary>
+    /// Hands on a ThemerrDB link only if it still plays.
+    /// </summary>
+    /// <remarks>
+    /// A dead link answered here as "no theme" lets the orchestrator do what it does for any other
+    /// miss: ask the next catalogue, then search. Handed on instead, it failed the download, the
+    /// item was marked failed, and because the catalogue is consulted before the search and is never
+    /// behind a backoff, the next run met the same dead link -- so the item never got a theme.
+    /// </remarks>
+    private async Task<Candidate?> PlayableOrNullAsync(
+        MediaIdentity identity,
+        string themeUrl,
+        string title,
+        string description,
+        CancellationToken cancellationToken)
+    {
+        var state = await _linkChecker.CheckAsync(themeUrl, cancellationToken).ConfigureAwait(false);
+
+        if (state == LinkState.Dead)
+        {
+            _logger.LogInformation(
+                "ThemeForge: ThemerrDB's theme for \"{Item}\" is no longer on YouTube ({Url}); searching instead.",
+                identity.Label,
+                themeUrl);
+            return null;
+        }
+
+        return Describe(identity, themeUrl, title, description);
     }
 
     private Candidate Describe(MediaIdentity identity, string themeUrl, string title, string description) => new()

@@ -65,8 +65,14 @@ public sealed class TitleSimilarityRule : IScoringRule
     private const double AlbumFormPenalty = 0.9;
 
     /// <summary>What naming the theme song, and not the show, is worth.</summary>
-    /// <remarks>The same as a match on the album: strong, but one step removed from the title.</remarks>
-    private const double ThemeSongScore = 0.9;
+    /// <remarks>
+    /// As much as naming the work. It was one step below, as though naming the theme were weaker
+    /// evidence than naming the title; it is stronger. The song and its performer were found for
+    /// this work by its own database id, and an upload naming both is that theme -- where one naming
+    /// the work could be any clip, cover or scene from it. Dick Dale's "Misirlou" lost the Pulp
+    /// Fiction theme to a generic "Pulp Fiction - Opening Theme" upload on exactly this step.
+    /// </remarks>
+    private const double ThemeSongScore = 1.0;
 
     /// <inheritdoc />
     public string Name => "TitleSimilarity";
@@ -84,6 +90,16 @@ public sealed class TitleSimilarityRule : IScoringRule
         if (titles.Count == 0)
         {
             return RuleVerdict.Veto("this item has no title to match against");
+        }
+
+        // Another country's version of a show with the same name is another show, with another theme.
+        if (CountryEdition.Contradiction(candidate.Title, context.Identity) is { } otherVersion)
+        {
+            return RuleVerdict.Veto(string.Format(
+                CultureInfo.InvariantCulture,
+                "it is from {0} of a show by this name, and this one was made in {1}",
+                otherVersion,
+                string.Join(" and ", context.Identity.Countries)));
         }
 
         var (best, matchedOn) = Best(titles, candidate.Title, context.Identity.Year);

@@ -19,6 +19,13 @@ public enum CreditsQuestion
 
     /// <summary>What the theme is called, who performs it, and who wrote it.</summary>
     Theme = 2,
+
+    /// <summary>Which country the work was made in.</summary>
+    /// <remarks>
+    /// Not about the music, but it decides which music: the American Office and the British one
+    /// share a title and have different themes. Jellyfin records it for films and not for series.
+    /// </remarks>
+    Origin = 4,
 }
 
 /// <summary>One work to find the music credits for.</summary>

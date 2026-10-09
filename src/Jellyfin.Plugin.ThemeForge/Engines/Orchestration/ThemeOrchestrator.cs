@@ -875,6 +875,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
             // right". Scoring the first against the second's yardstick could only make it worse,
             // so a hit is applied on where it came from and nothing else runs.
             var known = await LookUpAsync(identity, configuration, cancellationToken).ConfigureAwait(false);
+            var attemptBegun = false;
             if (known is not null)
             {
                 var certain = new ThemeDecision(
@@ -888,8 +889,27 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
                 }
 
                 Begin(entry);
+                attemptBegun = true;
                 RecordCandidates(entry, new[] { certain.Best! }, certain, Array.Empty<ScoreResult>());
-                return await AssignAsync(item, identity, entry, certain, configuration, policy, report, cancellationToken).ConfigureAwait(false);
+
+                try
+                {
+                    return await AssignAsync(item, identity, entry, certain, configuration, policy, report, cancellationToken).ConfigureAwait(false);
+                }
+                catch (InvalidOperationException ex) when (eligibility.SearchAllowed)
+                {
+                    // A catalogue link that cannot be downloaded is not a theme, whatever the
+                    // catalogue says. Failing the item here meant the next run met the same link
+                    // first and failed again, so the item never reached the search. Dead links are
+                    // caught before this by the catalogue's own check; this is for the ones that
+                    // look alive and still will not play -- a private video answers the check the
+                    // same way as one that only has embedding switched off.
+                    _logger.LogInformation(
+                        "ThemeForge: {Source}'s theme for \"{Item}\" could not be downloaded ({Error}); searching instead.",
+                        known.Provenance,
+                        identity.Label,
+                        ex.Message);
+                }
             }
 
             // Gate three: only the search is subject to backoff and attempt limits.
@@ -901,10 +921,13 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
             entry.LastSkipReason = null;
             entry.LastSkipUtc = null;
 
-            if (!dryRun)
+            // One attempt per processed item, even when the catalogue's link failed first.
+            if (!dryRun && !attemptBegun)
             {
                 Begin(entry);
             }
+
+            identity = await ResearchBeforeSearchAsync(item, identity, configuration, cancellationToken).ConfigureAwait(false);
 
             var (ranked, overlooked) = await SearchAndRankAsync(identity, configuration, cancellationToken).ConfigureAwait(false);
             var decision = _decisionPolicy.Decide(ranked, configuration);
@@ -1295,6 +1318,72 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         }
 
         return works;
+    }
+
+    /// <summary>
+    /// Looks up a title's music just before it is searched for, if nobody has yet.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The daily research leaves out every title ThemerrDB has a theme for, since that theme is
+    /// taken outright and nothing is searched. But a ThemerrDB link can be dead, and then the title
+    /// is searched after all -- with no composer and no theme name, because they were never looked
+    /// up, so with the weakest queries the ladder has. A title added since the last research pass is
+    /// in the same position.
+    /// </para>
+    /// <para>
+    /// The catalogue asks only about what it does not already know, and remembers a miss, so for a
+    /// title that was researched this costs nothing; the work is done exactly for the titles that
+    /// were skipped and now need it.
+    /// </para>
+    /// </remarks>
+    private async Task<MediaIdentity> ResearchBeforeSearchAsync(
+        BaseItem item,
+        MediaIdentity identity,
+        PluginConfiguration configuration,
+        CancellationToken cancellationToken)
+    {
+        if (!configuration.ResearchComposers)
+        {
+            return identity;
+        }
+
+        var keys = CreditsKeys.For(identity.ImdbId, identity.TmdbId, identity.TvdbId, identity.IsSeries);
+        if (keys.Count == 0)
+        {
+            return identity;
+        }
+
+        try
+        {
+            // Read from memory first: a title that was researched is the common case, and asking
+            // the catalogue to sync it would wait behind a nightly pass and log that there was
+            // nothing to do, once for every title searched.
+            var known = await _composers.GetAsync(cancellationToken).ConfigureAwait(false);
+            if (!known.NeedsLookUp(keys, DateTime.UtcNow))
+            {
+                return identity;
+            }
+
+            var request = new CreditsRequest(
+                keys[0], keys, identity.ImdbId, identity.TmdbId, identity.IsSeries, identity.Label);
+
+            await _composers.SyncAsync(new[] { request }, null, cancellationToken).ConfigureAwait(false);
+
+            // The identity reads the cache when it is resolved, so resolving it again is what
+            // brings whatever was just found into the search.
+            return _identityResolver.Resolve(item) ?? identity;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // The search still works without the research; it is only less specific.
+            _logger.LogWarning(ex, "ThemeForge: could not look up the music for \"{Item}\" before searching.", identity.Label);
+            return identity;
+        }
     }
 
     /// <summary>Reports whether ThemerrDB has a theme for a title, by any id it is known by.</summary>

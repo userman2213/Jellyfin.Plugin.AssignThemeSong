@@ -28,6 +28,14 @@ public sealed class MediaIdentity
     /// <summary>Gets the production year, when known.</summary>
     public int? Year { get; init; }
 
+    /// <summary>Gets the countries the work was produced in, as Jellyfin records them.</summary>
+    /// <remarks>
+    /// What tells The Office apart from The Office: the 2005 American series and the 2001 British one
+    /// share a title, and their theme uploads say which they are -- "The Office (UK) Opening Theme".
+    /// Empty when the metadata does not say, and then nothing is concluded from it.
+    /// </remarks>
+    public IReadOnlyList<string> Countries { get; init; } = Array.Empty<string>();
+
     /// <summary>
     /// Gets the composers Jellyfin has on record for the item. Empty when it has none.
     /// </summary>

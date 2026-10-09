@@ -52,8 +52,8 @@ public interface IComposerCatalogue
 /// end, so a search reading the cache meanwhile never sees it half-changed.
 /// </para>
 /// <para>
-/// Two questions are asked -- who wrote the music, and what the theme is called -- and each is
-/// settled separately. A question is settled when a source answers it, or when every source that
+/// Three questions are asked -- who wrote the music, what the theme is called, and where the work
+/// was made -- and each is settled separately. A question is settled when a source answers it, or when every source that
 /// could answer it was asked and none did. A question some source could not ask about, because it
 /// was down or refused, is left open and asked again next time. Recording it as "nobody knows"
 /// instead would hide the work for a fortnight for a reason that had nothing to do with the work,
@@ -172,6 +172,11 @@ public sealed class ComposerCatalogue : IComposerCatalogue
                     needs |= CreditsQuestion.Theme;
                 }
 
+                if (snapshot.NeedsOrigin(work.Keys, now))
+                {
+                    needs |= CreditsQuestion.Origin;
+                }
+
                 if (needs == CreditsQuestion.None || findings.ContainsKey(work.Key))
                 {
                     continue;
@@ -265,6 +270,7 @@ public sealed class ComposerCatalogue : IComposerCatalogue
 
             var composers = 0;
             var themes = 0;
+            var origins = 0;
             var open = 0;
             var settledAnything = false;
 
@@ -303,6 +309,21 @@ public sealed class ComposerCatalogue : IComposerCatalogue
                     }
                 }
 
+                if (finding.Needs.HasFlag(CreditsQuestion.Origin))
+                {
+                    if (finding.Origin is { } credits)
+                    {
+                        snapshot.RecordOrigin(keys, leads.On(credits), now);
+                        origins++;
+                        settledAnything = true;
+                    }
+                    else if (!finding.Failed.HasFlag(CreditsQuestion.Origin))
+                    {
+                        snapshot.RecordOrigin(keys, leads.On(ResearchedCredits.None), now);
+                        settledAnything = true;
+                    }
+                }
+
                 if ((finding.Needs & finding.Failed & ~finding.Answered) != CreditsQuestion.None)
                 {
                     open++;
@@ -321,9 +342,10 @@ public sealed class ComposerCatalogue : IComposerCatalogue
             _snapshot = snapshot;
 
             _logger.LogInformation(
-                "ThemeForge: found who wrote the music for {Composers} titles and what the theme is called for {Themes}{Open}.",
+                "ThemeForge: found who wrote the music for {Composers} titles, what the theme is called for {Themes} and where it was made for {Origins}{Open}.",
                 composers,
                 themes,
+                origins,
                 open == 0 ? string.Empty : $"; {open} could not be looked up now and will be tried again");
 
             progress?.Report(100);
@@ -422,6 +444,8 @@ public sealed class ComposerCatalogue : IComposerCatalogue
 
         public string? ThemeSource { get; private set; }
 
+        public ResearchedCredits? Origin { get; private set; }
+
         public string? ReleaseGroupId { get; set; }
 
         public string? WikipediaTitle { get; set; }
@@ -429,7 +453,8 @@ public sealed class ComposerCatalogue : IComposerCatalogue
         /// <summary>Gets the questions answered so far.</summary>
         public CreditsQuestion Answered =>
             (Composers is null ? CreditsQuestion.None : CreditsQuestion.Composers)
-            | (Theme is null ? CreditsQuestion.None : CreditsQuestion.Theme);
+            | (Theme is null ? CreditsQuestion.None : CreditsQuestion.Theme)
+            | (Origin is null ? CreditsQuestion.None : CreditsQuestion.Origin);
 
         /// <summary>Gets the work as the next source should see it, carrying every lead found so far.</summary>
         public CreditsRequest Request => Work with { ReleaseGroupId = ReleaseGroupId, WikipediaTitle = WikipediaTitle };
@@ -447,6 +472,12 @@ public sealed class ComposerCatalogue : IComposerCatalogue
             (Needs & answers & ~Answered & ~Failed) != CreditsQuestion.None;
 
         /// <summary>Takes what a source found, keeping the first answer to each question.</summary>
+        /// <remarks>
+        /// A question an earlier source failed at is not taken from a later one, even when the
+        /// later one was asked about something else and answered it anyway: it stays open, to be
+        /// asked again in order next time. Wikidata is asked where a work was made even when IMDb
+        /// could not be reached, and its composers must not settle a question IMDb gets first.
+        /// </remarks>
         /// <returns><see langword="true"/> when this settled something.</returns>
         public bool Take(ICreditsSource source, ResearchedCredits credits)
         {
@@ -454,21 +485,30 @@ public sealed class ComposerCatalogue : IComposerCatalogue
             WikipediaTitle ??= credits.WikipediaTitle;
 
             var settled = false;
-            if (source.Answers.HasFlag(CreditsQuestion.Composers) && Composers is null && credits.Any)
+            if (Open(source, CreditsQuestion.Composers) && Composers is null && credits.Any)
             {
                 Composers = credits;
                 ComposerSource = source.Name;
                 settled |= Needs.HasFlag(CreditsQuestion.Composers);
             }
 
-            if (source.Answers.HasFlag(CreditsQuestion.Theme) && Theme is null && credits.KnowsTheme)
+            if (Open(source, CreditsQuestion.Theme) && Theme is null && credits.KnowsTheme)
             {
                 Theme = credits;
                 ThemeSource = source.Name;
                 settled |= Needs.HasFlag(CreditsQuestion.Theme);
             }
 
+            if (Open(source, CreditsQuestion.Origin) && Origin is null && credits.Countries.Count > 0)
+            {
+                Origin = credits;
+                settled |= Needs.HasFlag(CreditsQuestion.Origin);
+            }
+
             return settled;
         }
+
+        private bool Open(ICreditsSource source, CreditsQuestion question) =>
+            source.Answers.HasFlag(question) && !Failed.HasFlag(question);
     }
 }

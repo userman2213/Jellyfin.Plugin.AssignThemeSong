@@ -15,7 +15,7 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.ThemeForge.Engines.Credits;
 
 /// <summary>
-/// Asks Wikidata who wrote the music and what the theme is called, fifty works at a time.
+/// Asks Wikidata who wrote the music, what the theme is called and where the work was made, fifty works at a time.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -60,6 +60,9 @@ public sealed class WikidataCreditsSource : ICreditsSource
     /// <summary>What the label service returns for an entity with no English name: its bare id.</summary>
     private static readonly Regex BareId = new(@"^Q\d+$", RegexOptions.Compiled);
 
+    /// <summary>An ISO 3166-1 alpha-2 country code.</summary>
+    private static readonly Regex CountryCode = new(@"^[A-Za-z]{2}$", RegexOptions.Compiled);
+
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IThemeForgeLogger<WikidataCreditsSource> _logger;
 
@@ -79,7 +82,7 @@ public sealed class WikidataCreditsSource : ICreditsSource
     public int Order => 0;
 
     /// <inheritdoc />
-    public CreditsQuestion Answers => CreditsQuestion.Composers | CreditsQuestion.Theme;
+    public CreditsQuestion Answers => CreditsQuestion.Composers | CreditsQuestion.Theme | CreditsQuestion.Origin;
 
     /// <inheritdoc />
     public bool IsEnabled(PluginConfiguration configuration)
@@ -216,12 +219,14 @@ public sealed class WikidataCreditsSource : ICreditsSource
         // P86 is the composer of the work. P406 is its soundtrack release, which supplies a
         // performing artist when no composer is stated, and a MusicBrainz release group id that is
         // recorded but no longer followed up. P942 is its theme music, and P175 on that is who
-        // performs it. The sitelink is the English Wikipedia article, where a theme Wikidata lacks
-        // is often recorded. Seasons (Q3464665) and episodes (Q21191270) share their series' ids and
-        // are not the series. The label service resolves every name in the same request.
+        // performs it. P495 is the country of origin, read as its ISO 3166 code (P297) rather than
+        // its name, which Wikidata has renamed before. The sitelink is the English Wikipedia
+        // article, where a theme Wikidata lacks is often recorded. Seasons (Q3464665) and episodes
+        // (Q21191270) share their series' ids and are not the series. The label service resolves
+        // every name in the same request.
         return string.Create(
             CultureInfo.InvariantCulture,
-            $@"SELECT ?imdb ?tmdbFilm ?tmdbTv ?composerLabel ?performerLabel ?mbid ?themeLabel ?themePerformerLabel ?article WHERE {{
+            $@"SELECT ?imdb ?tmdbFilm ?tmdbTv ?composerLabel ?performerLabel ?mbid ?themeLabel ?themePerformerLabel ?origin ?article WHERE {{
   {string.Join("\n  UNION\n  ", branches)}
   MINUS {{ ?item wdt:P31 wd:Q3464665. }}
   MINUS {{ ?item wdt:P31 wd:Q21191270. }}
@@ -235,6 +240,7 @@ public sealed class WikidataCreditsSource : ICreditsSource
     ?item wdt:P942 ?theme.
     OPTIONAL {{ ?theme wdt:P175 ?themePerformer. }}
   }}
+  OPTIONAL {{ ?item wdt:P495 ?country. ?country wdt:P297 ?origin. }}
   OPTIONAL {{ ?article schema:about ?item; schema:isPartOf <https://en.wikipedia.org/>. }}
   SERVICE wikibase:label {{ bd:serviceParam wikibase:language ""en"". }}
 }}");
@@ -272,6 +278,8 @@ public sealed class WikidataCreditsSource : ICreditsSource
                 ReleaseGroupId = matches.Select(credits => credits.ReleaseGroupId).FirstOrDefault(id => id is not null),
                 Theme = matches.Select(credits => credits.Theme).FirstOrDefault(theme => theme is not null),
                 WikipediaTitle = matches.Select(credits => credits.WikipediaTitle).FirstOrDefault(title => title is not null),
+                Countries = matches.Select(credits => credits.Countries).FirstOrDefault(countries => countries.Count > 0)
+                    ?? Array.Empty<string>(),
             };
         }
 
@@ -340,6 +348,7 @@ public sealed class WikidataCreditsSource : ICreditsSource
             var mbid = Value(row, "mbid");
             var theme = Label(row, "themeLabel");
             var themePerformer = Label(row, "themePerformerLabel");
+            var origin = Value(row, "origin") is { } code && CountryCode.IsMatch(code) ? code.ToUpperInvariant() : null;
             var article = Article(Value(row, "article"));
 
             foreach (var key in keys)
@@ -361,6 +370,11 @@ public sealed class WikidataCreditsSource : ICreditsSource
                 {
                     work.ThemePerformers.Add(themePerformer);
                 }
+
+                if (origin is not null && !work.Countries.Contains(origin, StringComparer.Ordinal))
+                {
+                    work.Countries.Add(origin);
+                }
             }
         }
 
@@ -376,9 +390,11 @@ public sealed class WikidataCreditsSource : ICreditsSource
                     ? null
                     : new ThemeSong(work.Theme, work.ThemePerformers.Count == 1 ? work.ThemePerformers.Single() : null),
                 WikipediaTitle = work.Article,
+                Countries = work.Countries,
             };
 
-            if (credits.Any || credits.Theme is not null || credits.ReleaseGroupId is not null || credits.WikipediaTitle is not null)
+            if (credits.Any || credits.Theme is not null || credits.ReleaseGroupId is not null || credits.WikipediaTitle is not null
+                || credits.Countries.Count > 0)
             {
                 found[key] = credits;
             }
@@ -424,5 +440,7 @@ public sealed class WikidataCreditsSource : ICreditsSource
         public HashSet<string> ThemePerformers { get; } = new(StringComparer.OrdinalIgnoreCase);
 
         public string? Article { get; set; }
+
+        public List<string> Countries { get; } = new();
     }
 }

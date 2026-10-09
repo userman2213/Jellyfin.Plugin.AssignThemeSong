@@ -252,12 +252,13 @@
                     </div>
                     <label class="emby-checkbox-label">
                         <input is="emby-checkbox" type="checkbox" id="AlwaysConvertToMp3" />
-                        <span>Always convert to MP3</span>
+                        <span>Write every theme as theme.mp3</span>
                     </label>
                     <div class="fieldDescription" style="margin:.25em 0 1em 0;">
-                        Off, a theme keeps the codec it was delivered in and loses nothing; Jellyfin transcodes
-                        for the rare client that cannot play it. Turn this on if you would rather every theme
-                        were an MP3 to begin with.
+                        On by default. YouTube delivers Opus or AAC; written as it came, a theme would be
+                        <code>theme.opus</code> or <code>theme.m4a</code>, which not every Jellyfin client plays as
+                        theme music. Turn this off to keep the delivered codec instead. Themes already written keep
+                        their format until <strong>Re-download all themes</strong> redoes them.
                     </div>
                     <div class="inputContainer">
                         <input is="emby-input" type="number" id="AudioBitrate" min="64" max="320" step="8" label="MP3 bitrate (kbit/s), when a theme is re-encoded" />
@@ -339,6 +340,8 @@
                         and performer are searched for first &mdash; &ldquo;The Sopranos Woke Up This
                         Morning Alabama 3&rdquo; &mdash; and an upload titled by song and artist is
                         recognised as the show's theme instead of being rejected for not naming the show.
+                        It also asks where the work was made, which Jellyfin does not record for a series,
+                        so the American <em>Office</em> is not given the British one's theme.
                     </div>
                     <label class="emby-checkbox-label">
                         <input is="emby-checkbox" type="checkbox" id="SyncComposers" />

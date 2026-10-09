@@ -203,6 +203,14 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
                     "so themes are written as downloaded. \"Re-download all themes\" under Settings redoes the ones already written.");
             }
 
+            if (AudioDefaults.UpgradeToMp3(Configuration))
+            {
+                changed = true;
+                _logger.LogInformation(
+                    "ThemeForge: themes are now written as theme.mp3. Themes already written keep their format until "
+                    + "\"Re-download all themes\" under Settings redoes them.");
+            }
+
             if (changed)
             {
                 SaveConfiguration();

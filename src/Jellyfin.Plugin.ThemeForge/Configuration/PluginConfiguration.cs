@@ -404,11 +404,27 @@ public class PluginConfiguration : BasePluginConfiguration
     public double FadeOutSeconds { get; set; }
 
     /// <summary>
-    /// Gets or sets a value indicating whether every theme is re-encoded to MP3 even when nothing
-    /// else needs changing. Off, a theme keeps the codec it was delivered in (Opus, AAC, MP3) and
-    /// loses nothing; on, it becomes an MP3 at <see cref="AudioBitrate"/> for a client that needs one.
+    /// Gets or sets a value indicating whether every theme is written as <c>theme.mp3</c>.
     /// </summary>
-    public bool AlwaysConvertToMp3 { get; set; }
+    /// <remarks>
+    /// On by default. YouTube delivers Opus or AAC, and written as it came a theme is
+    /// <c>theme.opus</c> or <c>theme.m4a</c>: nothing is lost, but not every Jellyfin client plays
+    /// those as theme music, and <c>theme.mp3</c> is what people expect to find in the folder. Off,
+    /// a theme keeps the codec it was delivered in.
+    /// </remarks>
+    public bool AlwaysConvertToMp3 { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the switch to MP3 by default has been applied to
+    /// these settings once.
+    /// </summary>
+    /// <remarks>
+    /// Saved settings keep the value they were saved with, and an off saved before MP3 became the
+    /// default cannot be told apart from somebody switching it off. So it is switched on once, on
+    /// the first start after the upgrade, and this records that it was -- from then on, off stays
+    /// off.
+    /// </remarks>
+    public bool Mp3DefaultApplied { get; set; }
 
     // ---- Placement -----------------------------------------------------------------
 

@@ -78,6 +78,8 @@ public class ResearchedComposerTests
         public IReadOnlyList<string> MusicCredits(BaseItem item) => _crew;
 
         public ThemeSong? Theme(BaseItem item) => null;
+
+        public IReadOnlyList<string> Countries(BaseItem item) => Array.Empty<string>();
     }
 
     private static Series Battlestar()

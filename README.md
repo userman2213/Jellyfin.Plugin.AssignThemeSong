@@ -12,23 +12,33 @@ Transformation plugin's own build for your Jellyfin version.)
 
 Point it at your library and it will, for each movie and series:
 
-1. Work out what the item actually is — title, alternate titles, year, TVDB/TMDB/IMDb ids, who
-   wrote its music, and what its theme is called.
-2. Build an ordered list of searches, most specific first.
-3. Search YouTube with **yt-dlp** and collect candidates.
-4. Score every candidate against eleven independent rules, each of which explains itself.
-5. Assign the winner if it is confident, queue it for you if it is not, and record either way.
-6. Download the audio, verify it plays, and write it beside your media **exactly as it was
-   delivered** (`theme.opus`, `theme.m4a`, `theme.mp3`), unless you have asked for processing.
+1. Work out what the item actually is — title, alternate titles, year, where it was made,
+   TVDB/TMDB/IMDb ids, who wrote its music, and what its theme is called.
+2. Check **ThemerrDB**, the community-curated list of theme songs. If it has a theme for the item
+   **and that link still plays**, that is the theme and nothing else runs. A dead link — about one
+   in twenty film entries — is passed over, and so is one that will not download.
+3. Otherwise build an ordered list of searches, most specific first: the theme's own name and
+   performer when known, then the composer, then the original soundtrack.
+4. Search YouTube with **yt-dlp** and collect candidates.
+5. Score every candidate against eleven independent rules, each of which explains itself.
+6. Assign the winner if it is confident, queue it for you if it is not, and record either way.
+7. Download the audio with yt-dlp, verify it plays, and write it beside your media as
+   **`theme.mp3`**.
 
 Everything it decides is recorded, so re-running is cheap and safe: settled items are skipped,
 and anything you decided yourself is never touched again.
 
 ## What happens to the audio
 
-By default, **nothing**. The best audio stream yt-dlp can get is written beside your media exactly
-as it was delivered — the same stream at the same volume, in the container it arrived in
-(`theme.opus`, `theme.m4a`, `theme.mp3`). It is not re-encoded, not faded and not made quieter.
+By default it becomes **`theme.mp3`**, at the configured bitrate (192 kbit/s) and otherwise
+untouched: the same volume, not faded, not cut. YouTube delivers Opus or AAC, and written as it came
+a theme would be `theme.opus` or `theme.m4a` — which loses nothing, but not every Jellyfin client
+plays those as theme music, and `theme.mp3` is what people expect to find in the folder. Switch
+**Write every theme as theme.mp3** off to keep the delivered codec instead.
+
+Installs that saved their settings before 2.10, when the delivered codec was kept, are switched to
+MP3 once on the first start after upgrading. Themes already written keep their format until
+**Settings → Themes already written → Re-download all themes** redoes them.
 
 Jellyfin has no theme volume control of its own — [jellyfin-web#3086](https://github.com/jellyfin/jellyfin-web/issues/3086)
 is still open and Jellyfin 12 did not change that — so the level you hear is the level of the
@@ -42,10 +52,9 @@ one of them off until you turn it on:
 | **Cut silence from the start and the end** | Removes dead air around the music. |
 | **Fade in / fade out** | A length in seconds; `0` means no fade. |
 | **Cut to a maximum length** | `0` keeps the whole theme. |
-| **Always convert to MP3** | For a client that cannot play Opus or AAC and cannot let Jellyfin transcode for it. |
 
-A theme is only re-encoded — to MP3, at the configured bitrate — when one of these actually has
-to change it. Themes written by versions before 2.3 were normalised and faded; **Settings →
+With MP3 output switched off, a theme is only re-encoded when one of these actually has to change
+it. Themes written by versions before 2.3 were normalised and faded; **Settings →
 Themes already written → Re-download all themes** fetches each of them again and writes it with
 your current settings, without touching a single decision.
 
@@ -70,7 +79,7 @@ So ThemeForge looks both up, **by the title's own database id and never by name*
 | Asked | Source | Keyed on | What it gives | Cost |
 |---|---|---|---|---|
 | 1st | [IMDb](https://www.imdb.com) | the IMDb id | the theme, who performs it, and who wrote the score | one request per title, 1 per 2 seconds |
-| 2nd | [Wikidata](https://www.wikidata.org) | IMDb (P345), TMDB (P4947/P4983) | composer; theme music (P942) for famous shows | one query per 50 titles |
+| 2nd | [Wikidata](https://www.wikidata.org) | IMDb (P345), TMDB (P4947/P4983) | composer; theme music (P942) for famous shows; the country it was made in (P495) | one query per 50 titles |
 | 3rd | [Wikipedia](https://en.wikipedia.org) | the article Wikidata links to | a show's opening theme and who wrote it | one request per 5 shows |
 
 **Nothing is looked up for a title ThemerrDB already has a theme for.** That theme is taken
@@ -104,6 +113,14 @@ The scheduled task **Look up who wrote the music** runs daily at 02:00 UTC, an h
 discovery run. **Diagnostics** shows how many of your titles somebody is known for, and how many
 series have a theme song known by name; a title with no IMDb or TMDB id cannot be looked up at all,
 so adding a metadata provider is what helps there.
+
+**Where it was made** is asked as well, because it decides which theme is right. The Office,
+Shameless, Skins, House of Cards and Being Human are each two shows of one name with different
+themes, and their uploads say which they are — *The Office (UK) Opening Theme and Closing Credits*.
+Jellyfin records the production countries of a film but not of a series, so Wikidata's country of
+origin fills that in, and an upload that names another country's version is rejected. Only an
+explicit marker counts — *(UK)*, *US version*, *American intro* — the show's own title is taken out
+first, so *American Horror Story* is not one, and a co-production rejects neither.
 
 Lyricists, conductors and arrangers Jellyfin already knows about are scored at half what the
 composer is worth, and are never searched for: a conductor records dozens of scores, and a query
@@ -309,8 +326,8 @@ queue shows you the whole breakdown, so a score is always something you can argu
 
 | Rule | What it looks at |
 |---|---|
-| `TitleSimilarity` | Whether the media title genuinely appears in the candidate's title. Vetoes if not. |
-| `KeywordAffinity` | Words like *opening*, *main title*, *theme*, *OST*. |
+| `TitleSimilarity` | Whether the media title genuinely appears in the candidate's title — or the theme's own song and performer do. Vetoes if neither, and vetoes another country's version of a show by the same name. |
+| `KeywordAffinity` | Words like *opening*, *main title*, *theme*. *Soundtrack* or *OST* alone earns little, because every track of a soundtrack album says it, and a later numbered track (*8. He Had a Good Time*) is marked down. The named theme song earns full marks without saying any of it. |
 | `NegativeKeywords` | *reaction*, *cover*, *tutorial*, *1 hour*, *loop*, *AMV*, *full episode*… |
 | `DurationPlausibility` | Whether it is the right length. Vetoes ten-hour loops and three-second clips. |
 | `ChannelReputation` | Trusts YouTube's auto-generated `- Topic` channels and your own allow list. |
@@ -322,6 +339,10 @@ queue shows you the whole breakdown, so a score is always something you can argu
 | `Composer` | Whether the candidate names the theme song and its performer, the composer, or somebody else credited on the music. A bonus, never a penalty. |
 
 Every weight, keyword list and threshold is editable in the settings — no rebuild needed.
+
+When two candidates score the same, the one more people have watched wins. (Until 2.10 the tie went
+to whichever title came first in the alphabet, which is how Interstellar was given *Hans Zimmer -
+Mountains* over its main theme.)
 
 Two thresholds decide what happens:
 

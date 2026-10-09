@@ -101,9 +101,15 @@ public sealed class ScoringEngine : IScoringEngine
     {
         ArgumentNullException.ThrowIfNull(candidates);
 
+        // Ties are common: most signals saturate, so several good uploads can land on exactly the
+        // same score. They were broken alphabetically, which is no reason at all -- three of
+        // Interstellar's candidates tied at 90.6 and "Hans Zimmer - Mountains" beat "Interstellar
+        // Main Theme" for starting with an H. Among equals the more watched upload is the better
+        // bet; the title stays as the last step only so the order is stable.
         return candidates
             .Select(candidate => Score(candidate, context))
             .OrderByDescending(result => result.Total)
+            .ThenByDescending(result => result.Candidate.ViewCount ?? 0)
             .ThenBy(result => result.Candidate.Title, StringComparer.Ordinal)
             .ToList();
     }

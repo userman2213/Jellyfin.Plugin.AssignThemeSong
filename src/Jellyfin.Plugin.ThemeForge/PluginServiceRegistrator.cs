@@ -68,6 +68,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         // decides for itself whether the user has enabled it, and the order they are asked in is
         // their own Order property rather than the order of these lines.
         serviceCollection.AddSingleton<IThemerrDbCatalogue, ThemerrDbCatalogue>();
+        serviceCollection.AddSingleton<ILinkChecker, LinkChecker>();
         serviceCollection.AddSingleton<IThemeProvenanceSource, ThemerrDbSource>();
         serviceCollection.AddSingleton<IThemeProvenanceSource, PlexTvThemeSource>();
         serviceCollection.AddSingleton<IDecisionPolicy, DecisionPolicy>();

@@ -43,6 +43,15 @@ public interface IPeopleLookup
     /// <param name="item">The library item.</param>
     /// <returns>The theme, or null when nothing is known.</returns>
     ThemeSong? Theme(BaseItem item);
+
+    /// <summary>Gets the countries the item was made in.</summary>
+    /// <remarks>
+    /// Not a person either, and asked here for the same reason: it is what tells the American
+    /// Office's theme from the British one's, and for a series only research knows it.
+    /// </remarks>
+    /// <param name="item">The library item.</param>
+    /// <returns>Country names or ISO 3166 codes, or an empty list when nothing is known.</returns>
+    IReadOnlyList<string> Countries(BaseItem item);
 }
 
 /// <summary>Reads composers out of Jellyfin's people table.</summary>
@@ -82,6 +91,22 @@ public sealed class JellyfinPeopleLookup : IPeopleLookup
     /// <inheritdoc />
     /// <remarks>Jellyfin has nowhere to record a theme song's title, so it never knows one.</remarks>
     public ThemeSong? Theme(BaseItem item) => null;
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Jellyfin's production locations: TMDB's production countries for a film, or whatever an NFO
+    /// file names. Its TMDB provider records none for a series.
+    /// </remarks>
+    public IReadOnlyList<string> Countries(BaseItem item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+
+        return item.ProductionLocations?
+            .Where(country => !string.IsNullOrWhiteSpace(country))
+            .Select(country => country.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList() ?? (IReadOnlyList<string>)Array.Empty<string>();
+    }
 
     private IReadOnlyList<string> Credited(BaseItem item, Func<PersonKind, bool> wanted)
     {
@@ -174,6 +199,18 @@ public sealed class ResearchedPeopleLookup : IPeopleLookup
             ?? (Plugin.Config.ResearchComposers ? _catalogue.Known(KeysFor(item)).Theme : null);
     }
 
+    /// <inheritdoc />
+    /// <remarks>Jellyfin's own, when it has any, as with composers.</remarks>
+    public IReadOnlyList<string> Countries(BaseItem item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+
+        var recorded = _inner.Countries(item);
+        return recorded.Count > 0 || !Plugin.Config.ResearchComposers
+            ? recorded
+            : _catalogue.Known(KeysFor(item)).Countries;
+    }
+
     /// <summary>Builds the cache keys for a library item from the ids it carries.</summary>
     /// <param name="item">The library item.</param>
     /// <returns>The keys, which may be empty for an item with no provider ids.</returns>
@@ -203,4 +240,7 @@ public sealed class NoPeopleLookup : IPeopleLookup
 
     /// <inheritdoc />
     public ThemeSong? Theme(BaseItem item) => null;
+
+    /// <inheritdoc />
+    public IReadOnlyList<string> Countries(BaseItem item) => Array.Empty<string>();
 }

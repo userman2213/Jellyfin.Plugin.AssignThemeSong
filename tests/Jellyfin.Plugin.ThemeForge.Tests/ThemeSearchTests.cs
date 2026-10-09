@@ -142,7 +142,7 @@ public class ThemeSearchTests
             TestData.Context(TestData.Series("The Sopranos", 1999, theme: WokeUp)));
 
         Assert.False(verdict.IsVeto);
-        Assert.Equal(0.9, verdict.Raw);
+        Assert.Equal(1.0, verdict.Raw);
         Assert.Contains("Woke Up This Morning", verdict.Reason, StringComparison.Ordinal);
     }
 
@@ -242,6 +242,8 @@ public class ThemeSearchTests
         public IReadOnlyList<string> MusicCredits(BaseItem item) => Array.Empty<string>();
 
         public ThemeSong? Theme(BaseItem item) => null;
+
+        public IReadOnlyList<string> Countries(BaseItem item) => Array.Empty<string>();
     }
 
     private static Series Dexter()
