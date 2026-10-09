@@ -286,6 +286,11 @@ Replaced themes are copied aside first as `theme.<ext>.themeforge-backup-<timest
 turn backups off, and a theme assigned by hand or locked from the Library tab is never touched by
 any of these settings.
 
+After an upgrade that changes how themes are chosen — 2.10 is one — anything the previous version
+failed at, found nothing for or queued for review is searched once more on the next run, whatever
+its retry backoff. What it assigned is kept, and the status panel says how many; **Start over**, at
+the bottom of Settings, discards those decisions so the library is chosen again.
+
 ## Logging
 
 ThemeForge keeps its own log at `<jellyfin-data>/themeforge/logs/themeforge.log`, viewable under

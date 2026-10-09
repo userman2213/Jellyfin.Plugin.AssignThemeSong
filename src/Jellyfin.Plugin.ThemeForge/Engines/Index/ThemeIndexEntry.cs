@@ -40,9 +40,11 @@ public sealed class ThemeIndexEntry
     /// Generation 2 replaced a title matcher that scored any substring of a candidate's title as
     /// a perfect match, so everything it chose has to be looked at again. Generation 3 taught the
     /// matcher what a season number and a year are, and gave soundtrack uploads a hearing, so
-    /// everything generation 2 gave up on is worth one more look.
+    /// everything generation 2 gave up on is worth one more look. Generation 4 (2.10) stopped
+    /// handing on dead ThemerrDB links, which had failed those titles on every run until they ran
+    /// out of attempts, and stopped taking any track of a soundtrack album for the theme.
     /// </remarks>
-    public const int CurrentMatcher = 3;
+    public const int CurrentMatcher = 4;
 
     /// <summary>Gets or sets the Jellyfin item id.</summary>
     public Guid ItemId { get; set; }
