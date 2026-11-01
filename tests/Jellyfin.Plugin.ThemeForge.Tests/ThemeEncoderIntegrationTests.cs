@@ -109,13 +109,21 @@ public class ThemeEncoderIntegrationTests : IDisposable
             CancellationToken.None).ConfigureAwait(false);
     }
 
+    /// <summary>Settings with MP3 conversion off, which since 2.10 has to be asked for.</summary>
+    private static PluginConfiguration AsDelivered()
+    {
+        var configuration = TestData.Config();
+        configuration.AlwaysConvertToMp3 = false;
+        return configuration;
+    }
+
     [FfmpegFact]
-    public async Task ByDefaultTheAudioIsCopiedExactlyAsDelivered()
+    public async Task WithConversionOffTheAudioIsCopiedExactlyAsDelivered()
     {
         var source = await MakeToneAsync("source.wav", amplitude: 0.5, seconds: 10);
         var before = await MeasureLoudnessAsync(source);
 
-        var encoded = await EncodeAsync(source, TestData.Config(), "copy");
+        var encoded = await EncodeAsync(source, AsDelivered(), "copy");
 
         Assert.Equal("theme.wav", Path.GetFileName(encoded.Path));
         Assert.Contains("copied as delivered", encoded.Treatment, StringComparison.Ordinal);
@@ -132,12 +140,12 @@ public class ThemeEncoderIntegrationTests : IDisposable
     }
 
     [FfmpegFact]
-    public async Task AnOpusDownloadStaysOpus()
+    public async Task WithConversionOffAnOpusDownloadStaysOpus()
     {
         // What yt-dlp delivers from YouTube most of the time.
         var source = await MakeToneAsync("source.webm", amplitude: 0.5, seconds: 10, codec: new[] { "-c:a", "libopus", "-b:a", "96k" });
 
-        var encoded = await EncodeAsync(source, TestData.Config(), "opus");
+        var encoded = await EncodeAsync(source, AsDelivered(), "opus");
 
         Assert.Equal("theme.opus", Path.GetFileName(encoded.Path));
         var probe = await ProbeAsync(encoded.Path);
@@ -149,7 +157,8 @@ public class ThemeEncoderIntegrationTests : IDisposable
     [FfmpegFact]
     public async Task RaisingBringsAQuietThemeUpAndLeavesALoudOneAlone()
     {
-        var configuration = TestData.Config();
+        // Conversion off, so "left alone" can be checked as "not re-encoded at all".
+        var configuration = AsDelivered();
         configuration.RaiseQuietThemes = true;
 
         // ffmpeg's sine source sits near -22 LUFS at unity, so these land at about -42 and about
