@@ -168,7 +168,16 @@ public sealed class JsonThemeIndex : IThemeIndex, IDisposable
 
             var repaired = RepairScannerLatches();
             var dryRunArtefacts = ClearDryRunArtefacts();
+            var attributed = AttributeAssignments();
             _logger.LogInformation("ThemeForge: loaded {Count} index entries.", _entries.Count);
+
+            if (attributed > 0)
+            {
+                _logger.LogInformation(
+                    "ThemeForge: worked out who chose {Count} themes recorded before that was kept, so the ones a search guessed can be replaced when ThemerrDB lists a theme for them.",
+                    attributed);
+                MarkDirty();
+            }
 
             if (repaired > 0)
             {
@@ -272,6 +281,25 @@ public sealed class JsonThemeIndex : IThemeIndex, IDisposable
     /// apart. Everything else about the entry is preserved.
     /// </remarks>
     /// <returns>How many entries were released.</returns>
+    /// <summary>Records who chose each theme written before that was recorded.</summary>
+    private int AttributeAssignments()
+    {
+        var attributed = 0;
+
+        foreach (var entry in _entries.Values)
+        {
+            if (entry.AssignedBy is not null || ThemeIndexEntry.InferAssignedBy(entry) is not { } who)
+            {
+                continue;
+            }
+
+            entry.AssignedBy = who;
+            attributed++;
+        }
+
+        return attributed;
+    }
+
     private int RepairScannerLatches()
     {
         var repaired = 0;

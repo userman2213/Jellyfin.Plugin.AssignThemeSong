@@ -132,6 +132,66 @@ public sealed class ThemeIndexEntry
     /// </remarks>
     public int DecidedByMatcher { get; set; }
 
+    /// <summary>What <see cref="AssignedBy"/> holds for a theme a search chose.</summary>
+    public const string BySearch = "search";
+
+    /// <summary>What <see cref="AssignedBy"/> holds for a theme a person chose or approved.</summary>
+    public const string ByYou = "you";
+
+    /// <summary>
+    /// Gets or sets who chose the theme: a catalogue's name such as <c>ThemerrDB</c>,
+    /// <see cref="BySearch"/>, or <see cref="ByYou"/>. Null when no theme was written.
+    /// </summary>
+    /// <remarks>
+    /// The difference decides what may replace it. A theme a search picked is a best guess, and
+    /// is replaced the moment ThemerrDB lists one for the title, even in a library set never to
+    /// replace a theme; one a catalogue or a person chose is not. Without this, nothing could tell
+    /// the two apart, so a search's guess stayed for good once made.
+    /// </remarks>
+    public string? AssignedBy { get; set; }
+
+    /// <summary>Gets a value indicating whether this is a theme a search chose, and nothing better has replaced.</summary>
+    public bool IsSearchPick =>
+        State == ThemeItemState.AutoAssigned
+        && ThemePath is not null
+        && string.Equals(AssignedBy, BySearch, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Works out who chose a theme recorded before <see cref="AssignedBy"/> existed.
+    /// </summary>
+    /// <remarks>
+    /// A catalogue's choice was always recorded with one breakdown line naming it -- "Provenance:
+    /// ... (listed in ThemerrDB against this title's own database id ...)" -- and a search's never
+    /// was, so the breakdown answers the question for every entry already written.
+    /// </remarks>
+    /// <param name="entry">The entry.</param>
+    /// <returns>Who chose its theme, or null when it has none.</returns>
+    public static string? InferAssignedBy(ThemeIndexEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+
+        if (entry.ThemePath is null)
+        {
+            return null;
+        }
+
+        if (entry.State is ThemeItemState.ManualOverride or ThemeItemState.Approved)
+        {
+            return ByYou;
+        }
+
+        var provenance = entry.ScoreBreakdown.Find(line => line.StartsWith("Provenance:", StringComparison.Ordinal));
+        if (provenance is not null)
+        {
+            const string Listed = "listed in ";
+            var start = provenance.IndexOf(Listed, StringComparison.Ordinal);
+            var end = start < 0 ? -1 : provenance.IndexOf(" against ", start, StringComparison.Ordinal);
+            return end > start ? provenance[(start + Listed.Length)..end] : "a catalogue";
+        }
+
+        return entry.State == ThemeItemState.AutoAssigned ? BySearch : null;
+    }
+
     /// <summary>
     /// Gets a value indicating whether this decision was made by a matcher no longer in use.
     /// </summary>

@@ -2,6 +2,7 @@ using Jellyfin.Plugin.ThemeForge.Logging;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -875,6 +876,16 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
             // right". Scoring the first against the second's yardstick could only make it worse,
             // so a hit is applied on where it came from and nothing else runs.
             var known = await LookUpAsync(identity, configuration, cancellationToken).ConfigureAwait(false);
+
+            // An item that already has ThemeForge's theme -- a search's guess, or a catalogue's
+            // answer in a library allowed to replace its own -- is updated from the catalogue
+            // without risking what it has: if the catalogue's theme cannot be fetched or written,
+            // the current one stays exactly as it was.
+            if (known is not null && entry.State == ThemeItemState.AutoAssigned && entry.ThemePath is not null)
+            {
+                return await ReplaceFromCatalogueAsync(item, identity, entry, known, configuration, policy, report, dryRun, cancellationToken).ConfigureAwait(false);
+            }
+
             var attemptBegun = false;
             if (known is not null)
             {
@@ -1077,6 +1088,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
                 SettleScoreForNewChoice(entry, candidate.Id, DateTime.UtcNow);
 
                 entry.State = state;
+                entry.AssignedBy = ThemeIndexEntry.ByYou;
                 entry.ChosenId = candidate.Id;
                 entry.ChosenTitle = candidate.Title;
                 entry.ChosenUrl = candidate.Url;
@@ -1596,6 +1608,156 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         return (ranked, unseen);
     }
 
+    /// <summary>
+    /// Replaces the theme ThemeForge wrote for an item with the one a catalogue lists for it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The way a search's guess gives way to ThemerrDB: the daily sync adds entries, and the next
+    /// run finds one for a title a search had already filled. It also stops a library allowed to
+    /// replace its own themes from fetching the same catalogue theme again every night, since a
+    /// theme that is already the catalogue's is left as it is.
+    /// </para>
+    /// <para>
+    /// Nothing the item has is put at risk. Only the file ThemeForge wrote is replaced, and only
+    /// while it is still byte for byte what was written and nothing else sits beside it; a theme
+    /// someone changed or added is left alone. If the catalogue's theme cannot be fetched, sounds
+    /// wrong or cannot be written, the current one stays and the reason is recorded.
+    /// </para>
+    /// </remarks>
+    private async Task<ItemOutcome> ReplaceFromCatalogueAsync(
+        BaseItem item,
+        MediaIdentity identity,
+        ThemeIndexEntry entry,
+        Candidate known,
+        PluginConfiguration configuration,
+        ResolvedThemePolicy policy,
+        RunReport report,
+        bool dryRun,
+        CancellationToken cancellationToken)
+    {
+        var source = known.Provenance ?? "a catalogue";
+
+        if (string.Equals(entry.ChosenId, known.Id, StringComparison.Ordinal))
+        {
+            // Already that theme, whoever found it first. Nothing to fetch; only the record of who
+            // chose it changes, so it is no longer treated as a guess.
+            if (!dryRun && !string.Equals(entry.AssignedBy, source, StringComparison.Ordinal))
+            {
+                entry.AssignedBy = source;
+            }
+
+            return ItemOutcome.Skipped;
+        }
+
+        var certain = new ThemeDecision(
+            DecisionOutcome.AutoAssign,
+            Certain(known),
+            $"listed in {source} against this title's own database id, replacing the theme ThemeForge had chosen before");
+
+        if (dryRun)
+        {
+            return WouldAssign(identity, certain);
+        }
+
+        if (!await IsStillOursAsync(entry, cancellationToken).ConfigureAwait(false))
+        {
+            return Skip(entry, identity, $"{source} lists a theme for it, but its theme file was changed or joined by another since ThemeForge wrote it, so it is left alone", dryRun);
+        }
+
+        AcquiredAudio audio;
+        try
+        {
+            audio = await _acquisitionEngine.AcquireAsync(known, configuration, cancellationToken).ConfigureAwait(false);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Skip(entry, identity, $"{source}'s theme could not be downloaded ({ex.Message}); the current theme stays", dryRun);
+        }
+
+        try
+        {
+            if (audio.NeedsReview)
+            {
+                return Skip(entry, identity, $"{source}'s theme did not sound like music ({audio.Assessment!.Reason}); the current theme stays", dryRun);
+            }
+
+            // The file being replaced is ThemeForge's own, checked above, whatever this library's
+            // rule for themes it did not write.
+            var placement = await _placementEngine.PlaceAsync(
+                item,
+                audio,
+                configuration,
+                policy with { Overwrite = ThemeOverwritePolicy.ReplaceOwn },
+                cancellationToken).ConfigureAwait(false);
+
+            if (!placement.Success)
+            {
+                return Skip(entry, identity, $"{source}'s theme could not be written ({placement.Reason}); the current theme stays", dryRun);
+            }
+
+            var replaced = entry.ChosenTitle;
+            RecordCandidates(entry, new[] { certain.Best! }, certain, Array.Empty<ScoreResult>());
+            entry.State = ThemeItemState.AutoAssigned;
+            entry.AssignedBy = source;
+            entry.ThemePath = placement.Path;
+            entry.Sha256 = audio.Sha256;
+            entry.LoudnessLufs = audio.MeasuredLoudnessLufs;
+            entry.DurationSeconds = audio.DurationSeconds;
+            entry.BandDiffStd = audio.Assessment?.BandDiffStd;
+            entry.LastError = null;
+            entry.NextRetryUtc = null;
+            entry.LastSkipReason = null;
+            entry.LastSkipUtc = null;
+
+            report.NoteAssignedBy(source);
+            _logger.LogInformation(
+                "ThemeForge: replaced \"{Previous}\" for \"{Item}\" with the theme {Source} lists for it.",
+                replaced,
+                identity.Label,
+                source);
+            return ItemOutcome.Assigned;
+        }
+        finally
+        {
+            CleanUpStaging(audio);
+        }
+    }
+
+    /// <summary>
+    /// Reports whether the theme on disk is still exactly the one ThemeForge wrote, with nothing
+    /// beside it.
+    /// </summary>
+    private static async Task<bool> IsStillOursAsync(ThemeIndexEntry entry, CancellationToken cancellationToken)
+    {
+        if (entry.ThemePath is not { } path || entry.Sha256 is null || !File.Exists(path))
+        {
+            return false;
+        }
+
+        var directory = Path.GetDirectoryName(path);
+        if (directory is null)
+        {
+            return false;
+        }
+
+        var themes = ThemePlacementEngine.ExistingThemeFiles(directory);
+        if (themes.Count != 1 || !string.Equals(themes[0], path, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        try
+        {
+            var actual = await FileHash.ComputeSha256Async(path, cancellationToken).ConfigureAwait(false);
+            return string.Equals(actual, entry.Sha256, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+    }
+
     private async Task<ItemOutcome> AssignAsync(
         BaseItem item,
         MediaIdentity identity,
@@ -1639,6 +1801,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
             }
 
             entry.State = ThemeItemState.AutoAssigned;
+            entry.AssignedBy = best.Candidate.Provenance ?? ThemeIndexEntry.BySearch;
             entry.ThemePath = placement.Path;
             entry.Sha256 = audio.Sha256;
             entry.LoudnessLufs = audio.MeasuredLoudnessLufs;
@@ -1646,7 +1809,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
             entry.LastError = null;
             entry.NextRetryUtc = null;
 
-            report.NoteAssignedBy(best.Candidate.Provenance ?? "search");
+            report.NoteAssignedBy(entry.AssignedBy);
             return ItemOutcome.Assigned;
         }
         finally
