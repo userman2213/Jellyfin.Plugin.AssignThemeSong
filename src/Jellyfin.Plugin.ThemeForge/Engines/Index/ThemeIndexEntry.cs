@@ -43,8 +43,11 @@ public sealed class ThemeIndexEntry
     /// everything generation 2 gave up on is worth one more look. Generation 4 (2.10) stopped
     /// handing on dead ThemerrDB links, which had failed those titles on every run until they ran
     /// out of attempts, and stopped taking any track of a soundtrack album for the theme.
+    /// Generation 5 (3.1) searches only for who made the music, never a title on its own, rejects
+    /// AI-generated uploads, and no longer takes a film's song for its theme for sharing the film's
+    /// name; what earlier generations queued, failed or gave up on gets one more search, by credits.
     /// </remarks>
-    public const int CurrentMatcher = 4;
+    public const int CurrentMatcher = 5;
 
     /// <summary>Gets or sets the Jellyfin item id.</summary>
     public Guid ItemId { get; set; }
@@ -149,6 +152,17 @@ public sealed class ThemeIndexEntry
     /// the two apart, so a search's guess stayed for good once made.
     /// </remarks>
     public string? AssignedBy { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the last pass found nobody to search for, and so
+    /// searched for nothing.
+    /// </summary>
+    /// <remarks>
+    /// An unattended run searches only for who made a title's music. When nobody is credited, no
+    /// search is made and no attempt is used; the title is looked at again twice a day, which costs
+    /// nothing until research or IMDb's crew data names somebody. Diagnostics counts these titles.
+    /// </remarks>
+    public bool NothingToSearchFor { get; set; }
 
     /// <summary>Gets a value indicating whether this is a theme a search chose, and nothing better has replaced.</summary>
     public bool IsSearchPick =>

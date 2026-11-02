@@ -526,6 +526,112 @@ public class ThemeForgeController : ControllerBase
     }
 
     /// <summary>
+    /// Deletes every theme a search chose, so the next run looks at those titles again.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// For a library whose themes were chosen by a version that searched for titles on their own:
+    /// those searches assigned AI-generated "theme songs", and songs that merely share a film's
+    /// name. The next run takes each title through ThemerrDB and the Plex archive first, then
+    /// searches for who made its music, and leaves it without a theme rather than guess.
+    /// </para>
+    /// <para>
+    /// Only a theme a search chose is touched. One from ThemerrDB or the Plex archive, and one a
+    /// person chose, approved or locked, is left exactly as it is. A file is deleted only while it
+    /// is still byte for byte what ThemeForge wrote; one changed by hand is kept.
+    /// </para>
+    /// </remarks>
+    /// <param name="confirm">Must be true. Present so this cannot be triggered by accident.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Counts of what was deleted, kept and already missing.</returns>
+    [HttpPost("Themes/RedoSearchPicks")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<ThemeRemovalResult>> RedoSearchPicks(
+        [FromQuery] bool confirm,
+        CancellationToken cancellationToken)
+    {
+        if (!confirm)
+        {
+            return BadRequest("This deletes the theme files a search chose. Pass confirm=true to proceed.");
+        }
+
+        if (_orchestrator.IsRunning)
+        {
+            return Conflict(new OperationResult(false, "A run is in progress. Try again when it has finished."));
+        }
+
+        await _index.LoadAsync(cancellationToken).ConfigureAwait(false);
+        var result = new ThemeRemovalResult();
+
+        foreach (var entry in _index.All().Where(entry => entry.IsSearchPick).ToList())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var path = entry.ThemePath!;
+
+            try
+            {
+                if (!System.IO.File.Exists(path))
+                {
+                    result.AlreadyMissing++;
+                }
+                else
+                {
+                    var actual = entry.Sha256 is null
+                        ? null
+                        : await FileHash.ComputeSha256Async(path, cancellationToken).ConfigureAwait(false);
+
+                    if (actual is null || !string.Equals(actual, entry.Sha256, StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Changed by hand since, or never recorded: either way not provably ours.
+                        result.SkippedModified++;
+                        continue;
+                    }
+
+                    System.IO.File.Delete(path);
+                    result.Deleted++;
+                }
+
+                Forget(entry);
+                _index.Put(entry);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                result.Failures.Add($"{entry.Label}: {ex.Message}");
+            }
+        }
+
+        await _index.FlushAsync(cancellationToken).ConfigureAwait(false);
+        _logger.LogInformation("ThemeForge: redoing the themes a search chose — {Summary}", result.Summary);
+        return result;
+    }
+
+    /// <summary>Returns an entry to the state of a title never looked at.</summary>
+    private static void Forget(ThemeIndexEntry entry)
+    {
+        entry.State = ThemeItemState.Unprocessed;
+        entry.ThemePath = null;
+        entry.Sha256 = null;
+        entry.AssignedBy = null;
+        entry.ChosenId = null;
+        entry.ChosenTitle = null;
+        entry.ChosenUrl = null;
+        entry.ChosenChannel = null;
+        entry.Score = null;
+        entry.ScoreBreakdown = new List<string>();
+        entry.Rejected = new List<RejectedCandidateRecord>();
+        entry.LoudnessLufs = null;
+        entry.DurationSeconds = null;
+        entry.BandDiffStd = null;
+        entry.Attempts = 0;
+        entry.LastError = null;
+        entry.NextRetryUtc = null;
+        entry.LastSkipReason = null;
+        entry.LastSkipUtc = null;
+        entry.NothingToSearchFor = false;
+    }
+
+    /// <summary>
     /// Deletes the theme files ThemeForge wrote, leaving anything changed since alone.
     /// </summary>
     /// <remarks>

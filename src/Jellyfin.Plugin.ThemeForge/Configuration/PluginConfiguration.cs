@@ -140,12 +140,31 @@ public class PluginConfiguration : BasePluginConfiguration
     /// asked afterwards, about whatever it could not name.
     /// </para>
     /// <para>
-    /// An entry is taken only when the listing names it as the title music, or names it after the
-    /// work, or the work is a series -- for a film the listing is the licensed songs in playback
-    /// order, and its first entry is whatever plays first rather than the theme.
+    /// For a film an entry is taken only when the listing names it as the title music: the listing
+    /// is the licensed songs in playback order, and one sharing the film's name is far more often a
+    /// song that happens to. For a series, also one named after the show, or failing that its first.
     /// </para>
     /// </remarks>
     public bool UseImdbSoundtrack { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether IMDb's own crew data is downloaded and used for who
+    /// composed each title's music.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// IMDb publishes its credits as dataset files, for personal and non-commercial use. They name
+    /// the composer of half of all feature films since 2010 and of every mainstream film checked,
+    /// where the soundtrack listing only lists songs. Looked up by the title's IMDb id, so nothing
+    /// is matched by name; for a series, the composer credited on most of its episodes.
+    /// </para>
+    /// <para>
+    /// The files are large: about 1.2 GB is downloaded, at most once a week and normally once a
+    /// month. They are read as they arrive and never stored; only the composer credits are kept, in
+    /// a file of about 20 MB that is read from disk rather than held in memory.
+    /// </para>
+    /// </remarks>
+    public bool UseImdbCrewData { get; set; } = true;
 
     /// <summary>
     /// Gets or sets a value indicating whether IMDb's page may be rendered in headless Chrome when

@@ -54,12 +54,14 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<IHeadlessBrowser, HeadlessBrowser>();
         serviceCollection.AddSingleton<ICreditsSource, ImdbSoundtrackSource>();
         serviceCollection.AddSingleton<IComposerCatalogue, ComposerCatalogue>();
+        serviceCollection.AddSingleton<IImdbCrewData, ImdbCrewData>();
 
         // Pipeline engines
         serviceCollection.AddSingleton<JellyfinPeopleLookup>();
         serviceCollection.AddSingleton<IPeopleLookup>(services => new ResearchedPeopleLookup(
             services.GetRequiredService<JellyfinPeopleLookup>(),
-            services.GetRequiredService<IComposerCatalogue>()));
+            services.GetRequiredService<IComposerCatalogue>(),
+            services.GetRequiredService<IImdbCrewData>()));
         serviceCollection.AddSingleton<IMediaIdentityResolver, MediaIdentityResolver>();
         serviceCollection.AddSingleton<IQueryPlanner, QueryPlanner>();
         serviceCollection.AddSingleton<ICandidateSource, YtDlpCandidateSource>();

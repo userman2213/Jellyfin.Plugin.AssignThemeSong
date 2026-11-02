@@ -146,6 +146,36 @@ public class EligibilityTests
     }
 
     [Fact]
+    public void ATitleNobodyIsCreditedWithIsNotHeldBackByTheAttemptLimit()
+    {
+        // It was not searched for, so it has used no attempt worth counting; once research or
+        // IMDb's crew data names somebody, it must still be searched for.
+        var entry = Entry(ThemeItemState.NoCandidate, attempts: TestData.Config().MaxAttempts + 2);
+        entry.NothingToSearchFor = true;
+
+        Assert.True(Decide(entry).SearchAllowed);
+    }
+
+    [Fact]
+    public void ATitleNobodyIsCreditedWithStillWaitsOutItsRecheck()
+    {
+        var entry = Entry(ThemeItemState.NoCandidate, retryAt: Now.AddHours(6));
+        entry.NothingToSearchFor = true;
+
+        Assert.False(Decide(entry).SearchAllowed);
+    }
+
+    [Fact]
+    public void AFailureIsStillHeldBackByTheAttemptLimit()
+    {
+        // Only "nothing to search for" is exempt; a download that keeps failing is not.
+        var entry = Entry(ThemeItemState.Failed, attempts: TestData.Config().MaxAttempts);
+        entry.NothingToSearchFor = true;
+
+        Assert.False(Decide(entry).SearchAllowed);
+    }
+
+    [Fact]
     public void AFreshItemGetsEverything()
     {
         var decision = Decide(Entry(ThemeItemState.Unprocessed));

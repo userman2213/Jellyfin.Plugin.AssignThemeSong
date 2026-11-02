@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Jellyfin.Data.Enums;
+using Jellyfin.Plugin.ThemeForge.Configuration;
 using Jellyfin.Plugin.ThemeForge.Engines.Credits;
 using Jellyfin.Plugin.ThemeForge.Logging;
 using MediaBrowser.Controller.Entities;
@@ -132,55 +133,64 @@ public sealed class JellyfinPeopleLookup : IPeopleLookup
 }
 
 /// <summary>
-/// Falls back to the researched credits when Jellyfin has none of its own.
+/// Falls back to IMDb's crew credits, then to the researched credits, when Jellyfin has none of
+/// its own.
 /// </summary>
 /// <remarks>
 /// <para>
 /// This one decorator is the whole of the wiring. Identity resolution asks for an item's composers
 /// synchronously, and three separate things downstream go quiet when the answer is empty: the
-/// search ladder drops its composer rung, the scoring bonus abstains, and an ordinary title loses
-/// its only item-side corroborator. Answering from the cache lights up all three without any of
-/// them knowing where the name came from.
+/// search ladder has nobody to search for, the scoring bonus abstains, and an ordinary title loses
+/// its only item-side corroborator. Answering from here lights up all three without any of them
+/// knowing where the name came from.
 /// </para>
 /// <para>
 /// Jellyfin's own credits always win. They were entered or fetched for this library and can be
-/// corrected by its owner; the cache is a guess made from public databases about a work that may
-/// have been identified imperfectly, and it is only ever consulted when there is nothing to lose.
+/// corrected by its owner. Next is IMDb's crew data, which is IMDb itself crediting the composer,
+/// by the title's IMDb id. Last is what research found: the writer IMDb's soundtrack listing
+/// credits most often, which is a count rather than a credit, then Wikidata's composer.
 /// </para>
 /// </remarks>
 public sealed class ResearchedPeopleLookup : IPeopleLookup
 {
     private readonly IPeopleLookup _inner;
     private readonly IComposerCatalogue _catalogue;
+    private readonly IImdbCrewData? _crew;
 
     /// <summary>Initializes a new instance of the <see cref="ResearchedPeopleLookup"/> class.</summary>
     /// <param name="inner">Jellyfin's own people, asked first.</param>
     /// <param name="catalogue">What research has established.</param>
-    public ResearchedPeopleLookup(IPeopleLookup inner, IComposerCatalogue catalogue)
+    /// <param name="crew">IMDb's crew data, or null for none.</param>
+    public ResearchedPeopleLookup(IPeopleLookup inner, IComposerCatalogue catalogue, IImdbCrewData? crew = null)
     {
         _inner = inner;
         _catalogue = catalogue;
+        _crew = crew;
     }
 
     /// <inheritdoc />
     /// <remarks>
     /// Whoever wrote the theme goes first, because a theme is being searched for. Jellyfin's own
-    /// composers follow and are never replaced; the researched ones stand in only when Jellyfin
-    /// has none. The theme's composer is added even when Jellyfin has credits, because it answers
-    /// a question Jellyfin never records: Dexter's composer is Daniel Licht, its theme Rolfe Kent's.
+    /// composers follow and are never replaced; IMDb's crew credits stand in when Jellyfin has none,
+    /// and the researched ones when IMDb's crew data has none either. The theme's composer is added
+    /// even when Jellyfin has credits, because it answers a question Jellyfin never records:
+    /// Dexter's composer is Daniel Licht, its theme Rolfe Kent's.
     /// </remarks>
     public IReadOnlyList<string> Composers(BaseItem item)
     {
         ArgumentNullException.ThrowIfNull(item);
 
         var credited = _inner.Composers(item);
-        if (!Plugin.Config.ResearchComposers)
+        var configuration = Plugin.Config;
+        if (!configuration.ResearchComposers)
         {
             return credited;
         }
 
         var known = _catalogue.Known(KeysFor(item));
-        var composers = credited.Count > 0 ? credited : known.Names;
+        var composers = credited.Count > 0 ? credited
+            : CrewComposers(item, configuration) is { Count: > 0 } crew ? crew
+            : known.Names;
 
         return known.ThemeComposers.Count == 0
             ? composers
@@ -210,6 +220,12 @@ public sealed class ResearchedPeopleLookup : IPeopleLookup
             ? recorded
             : _catalogue.Known(KeysFor(item)).Countries;
     }
+
+    /// <summary>Asks IMDb's crew data, when it is switched on, by the item's IMDb id.</summary>
+    private IReadOnlyList<string> CrewComposers(BaseItem item, PluginConfiguration configuration) =>
+        _crew is null || !configuration.UseImdbCrewData
+            ? Array.Empty<string>()
+            : _crew.Composers(item.GetProviderId(MetadataProvider.Imdb));
 
     /// <summary>Builds the cache keys for a library item from the ids it carries.</summary>
     /// <param name="item">The library item.</param>

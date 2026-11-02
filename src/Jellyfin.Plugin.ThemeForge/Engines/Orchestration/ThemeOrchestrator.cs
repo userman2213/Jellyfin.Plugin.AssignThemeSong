@@ -152,6 +152,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
     private readonly IThemeIndex _index;
     private readonly ILibraryPolicyResolver _policyResolver;
     private readonly IThemeForgeLogger<ThemeOrchestrator> _logger;
+    private readonly IImdbCrewData? _crew;
     private readonly RequestThrottle _throttle = new();
 
     /// <summary>Paces searches somebody is waiting for, separately from the run's.</summary>
@@ -209,6 +210,9 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
     /// <summary>Ends every reason a title was not searched for.</summary>
     private const string NoTitleSearches = "a title alone is never searched for unattended";
 
+    /// <summary>How soon a title with nobody to search for is looked at again; it costs nothing.</summary>
+    private static readonly TimeSpan NothingToSearchRecheck = TimeSpan.FromHours(12);
+
     private int _running;
 
     /// <summary>Initializes a new instance of the <see cref="ThemeOrchestrator"/> class.</summary>
@@ -226,6 +230,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
     /// <param name="index">Records decisions.</param>
     /// <param name="policyResolver">Resolves per-library overwrite rules.</param>
     /// <param name="logger">Logger.</param>
+    /// <param name="crew">IMDb's crew data, named when a title is not searched for; null for none.</param>
     public ThemeOrchestrator(
         ILibraryManager libraryManager,
         IMediaIdentityResolver identityResolver,
@@ -240,7 +245,8 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         IThemePlacementEngine placementEngine,
         IThemeIndex index,
         ILibraryPolicyResolver policyResolver,
-        IThemeForgeLogger<ThemeOrchestrator> logger)
+        IThemeForgeLogger<ThemeOrchestrator> logger,
+        IImdbCrewData? crew = null)
     {
         _libraryManager = libraryManager;
         _identityResolver = identityResolver;
@@ -257,6 +263,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         _index = index;
         _policyResolver = policyResolver;
         _logger = logger;
+        _crew = crew;
     }
 
     /// <inheritdoc />
@@ -941,16 +948,12 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
             entry.LastSkipReason = null;
             entry.LastSkipUtc = null;
 
-            // One attempt per processed item, even when the catalogue's link failed first.
-            if (!dryRun && !attemptBegun)
-            {
-                Begin(entry);
-            }
-
             identity = await ResearchBeforeSearchAsync(item, identity, configuration, cancellationToken).ConfigureAwait(false);
 
             // An unattended run searches only for who made the music. With nobody credited there
-            // is nothing to search for, and saying "the search found nothing" would be untrue.
+            // is nothing to search for, and saying "the search found nothing" would be untrue. Nor
+            // is it an attempt: the attempts limit searches, and a title that has used them up is
+            // never searched again, even once somebody is credited with its music.
             var plan = _queryPlanner.Plan(identity, configuration);
             if (plan.Count == 0)
             {
@@ -965,7 +968,18 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
                 }
 
                 RecordCandidates(entry, Array.Empty<ScoreResult>(), nothing, Array.Empty<ScoreResult>());
-                return NoCandidate(entry, nothing, configuration, report);
+                var outcome = NoCandidate(entry, nothing, configuration, report);
+                entry.NothingToSearchFor = true;
+                entry.NextRetryUtc = DateTime.UtcNow.Add(NothingToSearchRecheck);
+                return outcome;
+            }
+
+            entry.NothingToSearchFor = false;
+
+            // One attempt per processed item, even when the catalogue's link failed first.
+            if (!dryRun && !attemptBegun)
+            {
+                Begin(entry);
             }
 
             var (ranked, overlooked) = await SearchAndRankAsync(identity, plan, configuration, cancellationToken).ConfigureAwait(false);
@@ -1459,12 +1473,26 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         }
 
         var asked = new List<string> { "Jellyfin's metadata" };
+        var crewMissing = false;
+        if (_crew is not null && configuration.UseImdbCrewData)
+        {
+            if (_crew.Status(configuration).Available)
+            {
+                asked.Add("IMDb's crew data");
+            }
+            else
+            {
+                crewMissing = true;
+            }
+        }
+
         asked.AddRange(_composers.SourcesAsked(configuration));
         return string.Format(
             CultureInfo.InvariantCulture,
-            "{0} or named as its theme in {1}, so it was not searched for: {2}",
+            "{0} or named as its theme in {1}{2}, so it was not searched for: {3}",
             NobodyCredited,
             JoinOr(asked),
+            crewMissing ? " (IMDb's crew data is not downloaded yet; it is asked once it is)" : string.Empty,
             NoTitleSearches);
     }
 
@@ -1776,6 +1804,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
             var replaced = entry.ChosenTitle;
             RecordCandidates(entry, new[] { certain.Best! }, certain, Array.Empty<ScoreResult>());
             entry.State = ThemeItemState.AutoAssigned;
+            entry.NothingToSearchFor = false;
             entry.AssignedBy = source;
             entry.ThemePath = placement.Path;
             entry.Sha256 = audio.Sha256;
@@ -1878,6 +1907,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
             }
 
             entry.State = ThemeItemState.AutoAssigned;
+            entry.NothingToSearchFor = false;
             entry.AssignedBy = best.Candidate.Provenance ?? ThemeIndexEntry.BySearch;
             entry.ThemePath = placement.Path;
             entry.Sha256 = audio.Sha256;

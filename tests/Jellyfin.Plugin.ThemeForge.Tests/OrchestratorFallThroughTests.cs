@@ -227,10 +227,7 @@ public sealed class OrchestratorFallThroughTests : IDisposable
         // for, the title was searched on its own. Now nothing is searched, and the reason says
         // exactly that rather than "the search found nothing".
         var world = new World(_root) { Search = { Results = { Searched() } } };
-        var keys = CreditsKeys.For(_identity.ImdbId, _identity.TmdbId, _identity.TvdbId, _identity.IsSeries);
-        world.Composers.Cache.RecordComposers(keys, ResearchedCredits.None, "nobody", DateTime.UtcNow);
-        world.Composers.Cache.RecordTheme(keys, ResearchedCredits.None, "nobody", DateTime.UtcNow);
-        world.Composers.Cache.RecordOrigin(keys, ResearchedCredits.None with { Countries = new[] { "US" } }, DateTime.UtcNow);
+        NobodyKnows(world);
 
         var outcome = await world.Orchestrator(_identity).ProcessItemAsync(_item, new RunReport(), Config(), CancellationToken.None);
 
@@ -243,6 +240,84 @@ public sealed class OrchestratorFallThroughTests : IDisposable
         Assert.StartsWith(ThemeOrchestrator.NobodyCredited, entry.LastError, StringComparison.Ordinal);
         Assert.Contains("Jellyfin's metadata, IMDb, Wikidata or Wikipedia", entry.LastError, StringComparison.Ordinal);
         Assert.Contains("never searched for unattended", entry.LastError, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ATitleWithNothingToSearchForUsesNoAttempt()
+    {
+        // The attempts limit searches. A title that used them up was never looked at again, so one
+        // nobody had credited yet would have stayed without a theme after IMDb's crew data named
+        // its composer.
+        var world = new World(_root);
+        NobodyKnows(world);
+        var configuration = Config();
+
+        for (var pass = 0; pass < configuration.MaxAttempts + 2; pass++)
+        {
+            await world.Orchestrator(_identity).ProcessItemAsync(_item, new RunReport(), configuration, CancellationToken.None);
+            world.Index.Get(_item.Id)!.NextRetryUtc = null;
+        }
+
+        var entry = world.Index.Get(_item.Id)!;
+        Assert.Equal(0, entry.Attempts);
+        Assert.True(entry.NothingToSearchFor);
+        Assert.Equal(0, world.Search.Asked);
+    }
+
+    [Fact]
+    public async Task ATitleWithNothingToSearchForIsLookedAtAgainWithinTheDay()
+    {
+        var world = new World(_root);
+        NobodyKnows(world);
+
+        await world.Orchestrator(_identity).ProcessItemAsync(_item, new RunReport(), Config(), CancellationToken.None);
+
+        var retry = world.Index.Get(_item.Id)!.NextRetryUtc!.Value;
+        Assert.InRange(retry, DateTime.UtcNow.AddHours(11), DateTime.UtcNow.AddHours(13));
+    }
+
+    [Fact]
+    public async Task OnceSomebodyIsCreditedTheSearchRunsAndCountsAsAnAttempt()
+    {
+        var world = new World(_root) { Search = { Results = { Searched() } } };
+        NobodyKnows(world);
+        await world.Orchestrator(_identity).ProcessItemAsync(_item, new RunReport(), Config(), CancellationToken.None);
+        world.Index.Get(_item.Id)!.NextRetryUtc = null;
+
+        // IMDb's crew data has since named the composer.
+        var outcome = await world.Orchestrator(Credited()).ProcessItemAsync(_item, new RunReport(), Config(), CancellationToken.None);
+
+        Assert.Equal(ItemOutcome.Assigned, outcome);
+        var entry = world.Index.Get(_item.Id)!;
+        Assert.Equal(1, entry.Attempts);
+        Assert.False(entry.NothingToSearchFor);
+    }
+
+    [Fact]
+    public async Task TheReasonNamesImdbsCrewDataWhenItWasAsked()
+    {
+        var world = new World(_root) { Crew = new SilentCrew(downloaded: true) };
+        NobodyKnows(world);
+
+        await world.Orchestrator(_identity).ProcessItemAsync(_item, new RunReport(), Config(), CancellationToken.None);
+
+        Assert.Contains(
+            "Jellyfin's metadata, IMDb's crew data, IMDb, Wikidata or Wikipedia, so it was not searched for",
+            world.Index.Get(_item.Id)!.LastError,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheReasonSaysWhenImdbsCrewDataIsNotDownloadedYet()
+    {
+        var world = new World(_root) { Crew = new SilentCrew(downloaded: false) };
+        NobodyKnows(world);
+
+        await world.Orchestrator(_identity).ProcessItemAsync(_item, new RunReport(), Config(), CancellationToken.None);
+
+        var reason = world.Index.Get(_item.Id)!.LastError!;
+        Assert.DoesNotContain("IMDb's crew data,", reason, StringComparison.Ordinal);
+        Assert.Contains("IMDb's crew data is not downloaded yet", reason, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -287,6 +362,15 @@ public sealed class OrchestratorFallThroughTests : IDisposable
         configuration.StopLadderOnConfidentHit = true;
         configuration.RequestDelayMs = 0;
         return configuration;
+    }
+
+    /// <summary>Settles every question about the film's music as answered by nobody.</summary>
+    private void NobodyKnows(World world)
+    {
+        var keys = CreditsKeys.For(_identity.ImdbId, _identity.TmdbId, _identity.TvdbId, _identity.IsSeries);
+        world.Composers.Cache.RecordComposers(keys, ResearchedCredits.None, "nobody", DateTime.UtcNow);
+        world.Composers.Cache.RecordTheme(keys, ResearchedCredits.None, "nobody", DateTime.UtcNow);
+        world.Composers.Cache.RecordOrigin(keys, ResearchedCredits.None with { Countries = new[] { "US" } }, DateTime.UtcNow);
     }
 
     /// <summary>The same film, with its composer known.</summary>
@@ -349,6 +433,8 @@ public sealed class OrchestratorFallThroughTests : IDisposable
 
         public MemoryIndex Index { get; } = new();
 
+        public IImdbCrewData? Crew { get; set; }
+
         public ThemeOrchestrator Orchestrator(MediaIdentity identity)
         {
             Identities.Initial = identity;
@@ -366,8 +452,30 @@ public sealed class OrchestratorFallThroughTests : IDisposable
                 new FakePlacement(_root),
                 Index,
                 new AlwaysEnabled(),
-                new NullThemeForgeLogger<ThemeOrchestrator>());
+                new NullThemeForgeLogger<ThemeOrchestrator>(),
+                Crew);
         }
+    }
+
+    /// <summary>IMDb's crew data with nothing to say, downloaded or not.</summary>
+    private sealed class SilentCrew : IImdbCrewData
+    {
+        public SilentCrew(bool downloaded) => Downloaded = downloaded;
+
+        public bool Downloaded { get; }
+
+        public IReadOnlyList<string> Composers(string? imdbId) => Array.Empty<string>();
+
+        public ImdbCrewStatus Status(PluginConfiguration configuration) =>
+            new(true, Downloaded, Downloaded ? null : "it has not been downloaded", null, null, 0, 0, 0, false, null);
+
+        public bool IsDue(PluginConfiguration configuration, DateTime nowUtc, out string reason)
+        {
+            reason = "never, in a test";
+            return false;
+        }
+
+        public Task<bool> RefreshAsync(IProgress<double>? progress, CancellationToken cancellationToken) => Task.FromResult(false);
     }
 
     private sealed class FakeIdentities : IMediaIdentityResolver

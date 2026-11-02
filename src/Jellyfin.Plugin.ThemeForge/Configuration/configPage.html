@@ -354,16 +354,17 @@
                     </div>
                     <label class="emby-checkbox-label">
                         <input is="emby-checkbox" type="checkbox" id="UseWikipediaForThemes" />
-                        <span>Read a show's Wikipedia article for its theme when Wikidata does not say</span>
+                        <span>Read the Wikipedia article for the theme and the composer when Wikidata does not say</span>
                     </label>
                     <div class="fieldDescription" style="margin:.25em 0 1em 0;">
                         Wikidata records the theme of only the most famous shows. The article's infobox
                         records it for far more &mdash; The Sopranos, Firefly, House, Mad Men &mdash; and
                         often names who wrote the theme, which is not always who scored the show: Dexter's
-                        theme is Rolfe Kent's, its score Daniel Licht's. Series only, five articles to a
-                        request, reached through the Wikidata record rather than searched for by name.
-                        Wikipedia does limit how fast it is asked; anything it turns away is asked about on
-                        the next run.
+                        theme is Rolfe Kent's, its score Daniel Licht's. A show's article is read for its theme
+                        and composer; a film's only for its composer (the infobox's music field), and only when
+                        nothing else named one. Five articles to a request, reached through the Wikidata record
+                        rather than searched for by name. Wikipedia does limit how fast it is asked; anything it
+                        turns away is asked about on the next run.
                     </div>
                     <label class="emby-checkbox-label">
                         <input is="emby-checkbox" type="checkbox" id="UseImdbSoundtrack" />
@@ -372,13 +373,33 @@
                     <div class="fieldDescription" style="margin:.25em 0 1em 0;">
                         Asked first, for everything ThemerrDB has no theme for &mdash; one page names the theme,
                         who performs it and who wrote the score, and Wikidata and Wikipedia are asked afterwards
-                        about whatever it could not name. By IMDb id, never by name. An entry is taken only when
-                        the listing calls it the title music or
-                        names it after the work &mdash; for a film the listing is the licensed songs in the order
-                        they play, so its first entry is whatever plays first rather than the theme, and taking it
-                        would assign the wrong music. Series listings do open with the theme.
+                        about whatever it could not name. By IMDb id, never by name. For a film, an entry is taken
+                        only when the listing calls it the title music: a film's listing is the licensed songs in the
+                        order they play, and one that shares the film's name is far more often a song that happens to
+                        &mdash; that is how the 2026 war film <em>Lucky Strike</em> was once given a western song
+                        called &ldquo;Lucky Strike&rdquo;. For a series, also an entry named after the show, or its
+                        first entry, since series listings do open with the theme.
                         <strong>Test the IMDb lookup</strong> below shows it working on one title.
                     </div>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="UseImdbCrewData" />
+                        <span>Use IMDb's crew data for who composed each film and series</span>
+                    </label>
+                    <div class="fieldDescription" style="margin:.25em 0 1em 0;">
+                        IMDb publishes its credits as dataset files, for personal and non-commercial use. They name
+                        the composer of nearly a million titles &mdash; every mainstream film checked, including
+                        <em>Lucky Strike</em> (Larry Groupé), whose soundtrack listing names only songs &mdash; and,
+                        through their episodes, of 53,000 series (Breaking Bad: Dave Porter). Looked up by the
+                        title's IMDb id, so nothing is matched by name. Your library's own credits still come first.
+                        <br /><br />
+                        <strong>About 1.2 GB is downloaded</strong>, at most once a week and normally once a month:
+                        when there is no copy, when the copy is a month old, or when your library has a title added
+                        to IMDb after the copy was made. The files are read as they arrive and never stored; what is
+                        kept is about 20 MB, read from disk rather than held in memory. Building it takes under a
+                        minute and about 170 MB of memory while it runs.
+                    </div>
+                    <div id="tfImdbCrewStatus" class="fieldDescription" style="margin:0 0 .75em 0;"></div>
+                    <button is="emby-button" type="button" id="tfImdbCrewRefresh" class="raised block" style="margin-bottom:1.5em;"><span>Download IMDb's crew data now</span></button>
                     <label class="emby-checkbox-label">
                         <input is="emby-checkbox" type="checkbox" id="UseImdbBrowser" />
                         <span>Render IMDb's page in headless Chrome when a plain request is refused</span>
@@ -576,6 +597,18 @@
                     </div>
                     <button is="emby-button" type="button" id="tfRemoveAll" class="raised block"><span>Remove all ThemeForge themes</span></button>
 
+                    <h3 class="checkboxListLabel" style="margin-top:2em;">Themes a search chose</h3>
+                    <div class="fieldDescription" style="margin-bottom:1em;">
+                        Versions before 3.1 also searched for a title on its own &mdash; &ldquo;Lucky Strike theme
+                        song&rdquo; &mdash; and those searches assigned AI-generated &ldquo;theme songs&rdquo; and songs
+                        that merely share a film's name. This deletes every theme a search chose and has the next run
+                        look at those titles again: ThemerrDB and the Plex archive first, then a search for who made
+                        the music, and no theme at all rather than a guess. Themes from ThemerrDB or the Plex archive,
+                        and every theme you chose, approved or locked, are left exactly as they are. A theme file you
+                        have changed by hand is kept.
+                    </div>
+                    <button is="emby-button" type="button" id="tfRedoSearchPicks" class="raised block"><span>Redo every theme a search chose</span></button>
+
                     <h3 class="checkboxListLabel" style="color:#e8a33d;margin-top:2em;">Starting over</h3>
                     <div class="fieldDescription" style="margin-bottom:1em;">
                         Throws away every decision ThemeForge has recorded, so your library is looked at again
@@ -613,7 +646,7 @@
                 'EnableFileLogging', 'UseThemerrDb', 'UsePlexThemeArchive', 'RejectNonMusic',
                 'SyncThemerrDb',
                 'ResearchComposers', 'SyncComposers', 'UseWikipediaForThemes',
-                'UseImdbSoundtrack', 'UseImdbBrowser', 'ImdbDownloadBrowser', 'ImdbBrowserNoSandbox'
+                'UseImdbSoundtrack', 'UseImdbCrewData', 'UseImdbBrowser', 'ImdbDownloadBrowser', 'ImdbBrowserNoSandbox'
             ];
             var NUMBERS = [
                 'AutoAssignThreshold', 'ReviewThreshold', 'MinimumTitleSimilarity', 'AudioBitrate',
@@ -978,6 +1011,72 @@
                 }, function () {
                     Dashboard.hideLoadingMsg();
                     Dashboard.alert('That did not work. Check the log.');
+                });
+            });
+
+            el('tfRedoSearchPicks').addEventListener('click', function () {
+                var question = 'Delete every theme a search chose, and look at those titles again on the next run?\n\n' +
+                               'Themes from ThemerrDB or the Plex archive, and themes you chose, approved or locked, are kept. ' +
+                               'So is any theme file you changed by hand. This cannot be undone.';
+
+                if (!window.confirm(question)) {
+                    return;
+                }
+
+                Dashboard.showLoadingMsg();
+                api('POST', 'Themes/RedoSearchPicks?confirm=true').then(function (result) {
+                    Dashboard.hideLoadingMsg();
+                    var message = result.Summary + '\n\nThe next run looks at those titles again.';
+                    if (result.Failures && result.Failures.length) {
+                        message += '\n\nCould not delete:\n' + result.Failures.join('\n');
+                    }
+                    Dashboard.alert(message);
+                    loadStatus();
+                }, function (response) {
+                    Dashboard.hideLoadingMsg();
+                    Dashboard.alert(response && response.status === 409
+                        ? 'A run is in progress. Try again when it has finished.'
+                        : 'That did not work. Check the log.');
+                });
+            });
+
+            function showImdbCrewStatus() {
+                api('GET', 'ImdbCrew').then(function (s) {
+                    var text;
+                    if (!s.Enabled) {
+                        text = 'Switched off.';
+                    } else if (s.Refreshing) {
+                        text = 'Downloading now&hellip; this takes a few minutes.';
+                    } else if (s.Available) {
+                        text = 'Copy published by IMDb ' + esc(new Date(s.PublishedUtc).toLocaleDateString()) +
+                               ', downloaded ' + esc(new Date(s.DownloadedUtc).toLocaleString()) + ': composers of ' +
+                               s.Titles.toLocaleString() + ' titles, ' + s.Series.toLocaleString() + ' of them series (' +
+                               (s.FileBytes / 1048576).toFixed(1) + ' MB).';
+                    } else {
+                        text = '<span style="color:#e8a33d;">No copy yet' + (s.Problem ? ' (' + esc(s.Problem) + ')' : '') +
+                               '.</span> It is downloaded when the server starts and every night at 01:30 UTC until there is one.';
+                    }
+                    if (s.LastError) {
+                        text += '<br /><span style="color:#ff5f56;">The last download failed: ' + esc(s.LastError) + '</span>';
+                    }
+                    el('tfImdbCrewStatus').innerHTML = text;
+                    if (s.Refreshing) {
+                        setTimeout(showImdbCrewStatus, 10000);
+                    }
+                });
+            }
+
+            el('tfImdbCrewRefresh').addEventListener('click', function () {
+                if (!window.confirm('Download IMDb\'s crew data now? It is about 1.2 GB and takes a few minutes.')) {
+                    return;
+                }
+
+                api('POST', 'ImdbCrew/Refresh').then(function (result) {
+                    Dashboard.alert(result.Message);
+                    showImdbCrewStatus();
+                }, function () {
+                    Dashboard.alert('A download is already running, or IMDb\'s crew data is switched off.');
+                    showImdbCrewStatus();
                 });
             });
 
@@ -1388,6 +1487,11 @@
                               d.Themerr.Collections + ' collections, read ' +
                               esc(new Date(d.Themerr.UpdatedUtc).toLocaleString())
                             : ' <span style="color:#e8a33d;">(never read)</span>') + '<br />' +
+                        'IMDb crew data: ' + esc(d.ImdbCrewPath || '') +
+                        (d.ImdbCrew && d.ImdbCrew.Available
+                            ? ' &mdash; composers of ' + d.ImdbCrew.Titles.toLocaleString() + ' titles, published ' +
+                              esc(new Date(d.ImdbCrew.PublishedUtc).toLocaleDateString())
+                            : ' <span style="color:#e8a33d;">(' + (d.ImdbCrew && !d.ImdbCrew.Enabled ? 'switched off' : 'not downloaded') + ')</span>') + '<br />' +
                         'Index: ' + esc(d.IndexPath) + '<br />' +
                         'Log: ' + esc(d.LogPath) + '<br />' +
                         'Data: ' + esc(d.DataPath) +
@@ -1402,6 +1506,11 @@
                         (titles ? ' (' + Math.round(100 * (d.TitlesWithComposer || 0) / titles) + '%)' : '') + '<br />' +
                         'Theme song known for: ' + (d.SeriesWithThemeSong || 0) + ' of ' + (d.Series || 0) + ' series' +
                         ((d.MoviesWithThemeSong || 0) ? ', and ' + d.MoviesWithThemeSong + ' films' : '') + '<br />' +
+                        'Nothing to search for (nobody credited, no theme named): ' + (d.MoviesWithNothingToSearchFor || 0) +
+                        ' films, ' + (d.SeriesWithNothingToSearchFor || 0) + ' series' +
+                        ((d.NothingToSearchForExamples || []).length
+                            ? ' &mdash; for example ' + d.NothingToSearchForExamples.map(esc).join(', ')
+                            : '') + '<br />' +
                         'Music credits cache: ' + esc(d.ComposersPath || '') +
                         (d.ComposersUpdatedUtc
                             ? ' &mdash; ' + (d.ComposersKnown || 0) + ' answers, filled ' +
@@ -1486,6 +1595,7 @@
                     el('DefaultOverwritePolicy').value = config.DefaultOverwritePolicy || 1;
                     Dashboard.hideLoadingMsg();
                     loadStatus();
+                    showImdbCrewStatus();
                 });
             }
 

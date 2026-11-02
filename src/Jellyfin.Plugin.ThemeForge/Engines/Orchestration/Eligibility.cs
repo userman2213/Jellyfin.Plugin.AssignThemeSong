@@ -111,8 +111,11 @@ public static class Eligibility
             return Defer(string.Format(CultureInfo.InvariantCulture, "the retry backoff runs until {0:u}", retryAt));
         }
 
+        // A title nobody is credited with the music of was not searched for, and stays worth a
+        // look: research or IMDb's crew data may name somebody tomorrow.
         if (entry.Attempts >= configuration.MaxAttempts
-            && entry.State is ThemeItemState.Failed or ThemeItemState.NoCandidate)
+            && entry.State is ThemeItemState.Failed or ThemeItemState.NoCandidate
+            && !(entry.State == ThemeItemState.NoCandidate && entry.NothingToSearchFor))
         {
             return Defer(string.Format(CultureInfo.InvariantCulture, "it has been tried {0} times", entry.Attempts));
         }

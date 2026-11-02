@@ -118,6 +118,25 @@ public sealed class DiagnosticsDto
 
     /// <summary>Gets or sets how many works the music credits cache holds an answer for.</summary>
     public int ComposersKnown { get; set; }
+
+    /// <summary>Gets or sets the state of the local copy of IMDb's crew data.</summary>
+    public ImdbCrewStatus? ImdbCrew { get; set; }
+
+    /// <summary>Gets or sets where the copy of IMDb's crew data is kept.</summary>
+    public string ImdbCrewPath { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets how many films nobody is credited with the music of, and no theme is named for.</summary>
+    /// <remarks>
+    /// These are not searched for at all: an unattended run searches only for who made the music.
+    /// The count, and the titles, are the measured basis for whatever is tried next.
+    /// </remarks>
+    public int MoviesWithNothingToSearchFor { get; set; }
+
+    /// <summary>Gets or sets how many series nobody is credited with the music of, and no theme is named for.</summary>
+    public int SeriesWithNothingToSearchFor { get; set; }
+
+    /// <summary>Gets or sets some of the titles with nothing to search for, films first.</summary>
+    public IReadOnlyList<string> NothingToSearchForExamples { get; set; } = Array.Empty<string>();
 }
 
 /// <summary>
@@ -139,12 +158,16 @@ public class DiagnosticsController : ControllerBase
 {
     private const int MaxExamplesPerReason = 5;
 
+    /// <summary>How many films, and how many series, with nothing to search for are named.</summary>
+    private const int MaxNothingExamples = 10;
+
     private readonly IThemeIndex _index;
     private readonly ILibraryPolicyResolver _policyResolver;
     private readonly IThemerrDbCatalogue _themerrDb;
     private readonly IComposerCatalogue _composers;
     private readonly ILibraryManager _libraryManager;
     private readonly IMediaIdentityResolver _identityResolver;
+    private readonly IImdbCrewData? _crew;
 
     /// <summary>Initializes a new instance of the <see cref="DiagnosticsController"/> class.</summary>
     /// <param name="index">The decision index, for recorded skip reasons.</param>
@@ -153,13 +176,15 @@ public class DiagnosticsController : ControllerBase
     /// <param name="composers">The music credits cache.</param>
     /// <param name="libraryManager">The library, to count items and their ids.</param>
     /// <param name="identityResolver">Reads provider ids off items.</param>
+    /// <param name="crew">IMDb's crew data, or null for none.</param>
     public DiagnosticsController(
         IThemeIndex index,
         ILibraryPolicyResolver policyResolver,
         IThemerrDbCatalogue themerrDb,
         IComposerCatalogue composers,
         ILibraryManager libraryManager,
-        IMediaIdentityResolver identityResolver)
+        IMediaIdentityResolver identityResolver,
+        IImdbCrewData? crew = null)
     {
         _index = index;
         _policyResolver = policyResolver;
@@ -167,6 +192,7 @@ public class DiagnosticsController : ControllerBase
         _composers = composers;
         _libraryManager = libraryManager;
         _identityResolver = identityResolver;
+        _crew = crew;
     }
 
     /// <summary>Reports the configuration in force, the resolved library rules and why items were skipped.</summary>
@@ -211,17 +237,29 @@ public class DiagnosticsController : ControllerBase
 
         var composers = await _composers.GetAsync(cancellationToken).ConfigureAwait(false);
         var ids = CountProviderIds();
+        var crew = _crew?.Status(inUse);
 
-        var titles = ids.WithComposer + ids.WithoutComposer;
-        if (inUse.ResearchComposers && titles > 0 && ids.WithoutComposer * 2 > titles)
+        if (crew is { Enabled: true, Available: false })
         {
             problems.Add(
-                $"Nobody is known to have written the music for {ids.WithoutComposer} of {titles} titles. Each of those is "
-                + "searched for with one fewer phrasing, cannot earn the bonus for an upload that names the composer, and, if "
-                + "its title is an ordinary word, is held below the auto-assign score for want of anything to corroborate it. "
-                + (composers.IsUsable
-                    ? "Titles with no IMDb or TMDB id cannot be looked up at all, so adding a metadata provider is what helps here."
-                    : "Run the \"Look up who wrote the music\" scheduled task."));
+                "IMDb's crew data has not been downloaded"
+                + (crew.Refreshing ? " yet; it is being downloaded now." : string.IsNullOrEmpty(crew.LastError)
+                    ? ", so most films have nobody to search for. Run the \"Update IMDb crew data\" scheduled task."
+                    : $": the last attempt failed ({crew.LastError}). Run the \"Update IMDb crew data\" scheduled task to try again."));
+        }
+
+        var nothing = ids.MoviesWithNothing + ids.SeriesWithNothing;
+        if (nothing > 0)
+        {
+            problems.Add(
+                $"{ids.MoviesWithNothing} films and {ids.SeriesWithNothing} series have nobody credited with their music and no "
+                + "theme named for them, so they are not searched for: an unattended run searches only for who made the music, "
+                + "never a title on its own. They are looked at again twice a day, and searched for as soon as somebody is credited. "
+                + (!inUse.ResearchComposers
+                    ? "Looking up who made the music is switched off, which leaves only Jellyfin's own credits."
+                    : composers.IsUsable
+                        ? "A title with no IMDb, TMDB or TVDB id cannot be looked up at all, so a metadata provider is what helps those."
+                        : "Run the \"Look up who wrote the music\" scheduled task."));
         }
 
         if (ids.SeriesWithoutTmdb > 0)
@@ -257,6 +295,11 @@ public class DiagnosticsController : ControllerBase
             ComposersPath = ComposerCatalogue.SnapshotPath,
             ComposersUpdatedUtc = composers.IsUsable ? composers.UpdatedUtc : null,
             ComposersKnown = composers.Known,
+            ImdbCrew = crew,
+            ImdbCrewPath = ImdbCrewData.DefaultPath,
+            MoviesWithNothingToSearchFor = ids.MoviesWithNothing,
+            SeriesWithNothingToSearchFor = ids.SeriesWithNothing,
+            NothingToSearchForExamples = ids.NothingExamples,
             Themerr = new CatalogueStatus
             {
                 Movies = themerr.MovieTmdbIds.Count,
@@ -276,7 +319,7 @@ public class DiagnosticsController : ControllerBase
     /// recorded the id the database is keyed on. Invisible from the settings page and from the
     /// run summary, which just says "nothing found".
     /// </remarks>
-    private (int Movies, int MoviesWithoutTmdb, int Series, int SeriesWithoutTmdb, int WithComposer, int WithoutComposer, int SeriesWithTheme, int MoviesWithTheme) CountProviderIds()
+    private LibraryCounts CountProviderIds()
     {
         try
         {
@@ -288,7 +331,9 @@ public class DiagnosticsController : ControllerBase
             });
 
             int movies = 0, moviesWithout = 0, series = 0, seriesWithout = 0, composed = 0, uncomposed = 0;
-            int seriesThemed = 0, moviesThemed = 0;
+            int seriesThemed = 0, moviesThemed = 0, moviesNothing = 0, seriesNothing = 0;
+            var filmExamples = new List<string>();
+            var seriesExamples = new List<string>();
 
             foreach (var item in items)
             {
@@ -313,8 +358,8 @@ public class DiagnosticsController : ControllerBase
                     moviesThemed += themed;
                 }
 
-                // Resolving already consults the research cache, so this counts what the pipeline
-                // will actually see rather than what Jellyfin alone holds.
+                // Resolving already consults IMDb's crew data and the research cache, so this counts
+                // what the pipeline will actually see rather than what Jellyfin alone holds.
                 if (identity.Composers.Count > 0)
                 {
                     composed++;
@@ -323,15 +368,57 @@ public class DiagnosticsController : ControllerBase
                 {
                     uncomposed++;
                 }
+
+                // Nothing to search for: the same test the search planner applies.
+                if (identity.Composers.Count == 0 && identity.Theme is null)
+                {
+                    var examples = identity.IsSeries ? seriesExamples : filmExamples;
+                    if (identity.IsSeries)
+                    {
+                        seriesNothing++;
+                    }
+                    else
+                    {
+                        moviesNothing++;
+                    }
+
+                    if (examples.Count < MaxNothingExamples)
+                    {
+                        examples.Add(identity.Label);
+                    }
+                }
             }
 
-            return (movies, moviesWithout, series, seriesWithout, composed, uncomposed, seriesThemed, moviesThemed);
+            return new LibraryCounts(movies, moviesWithout, series, seriesWithout, composed, uncomposed, seriesThemed, moviesThemed)
+            {
+                MoviesWithNothing = moviesNothing,
+                SeriesWithNothing = seriesNothing,
+                NothingExamples = filmExamples.Concat(seriesExamples).ToList(),
+            };
         }
         catch (Exception)
         {
             // The library being unavailable is reported elsewhere; the counts are just zero here.
-            return (0, 0, 0, 0, 0, 0, 0, 0);
+            return new LibraryCounts(0, 0, 0, 0, 0, 0, 0, 0);
         }
+    }
+
+    /// <summary>What the library holds, as the pipeline sees it.</summary>
+    private sealed record LibraryCounts(
+        int Movies,
+        int MoviesWithoutTmdb,
+        int Series,
+        int SeriesWithoutTmdb,
+        int WithComposer,
+        int WithoutComposer,
+        int SeriesWithTheme,
+        int MoviesWithTheme)
+    {
+        public int MoviesWithNothing { get; init; }
+
+        public int SeriesWithNothing { get; init; }
+
+        public IReadOnlyList<string> NothingExamples { get; init; } = Array.Empty<string>();
     }
 
     private static DateTime? LastWritten(string? path)

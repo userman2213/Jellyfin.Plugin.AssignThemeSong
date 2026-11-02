@@ -151,10 +151,69 @@ public class ThemeResearchTests
     }
 
     [Fact]
-    public void AnArticleWithoutATelevisionInfoboxYieldsNothing()
+    public void AnArticleWithoutAnInfoboxYieldsNothing()
     {
-        Assert.Empty(WikipediaInfobox.Read("{{Infobox film\n| name = Alien\n| music = [[Jerry Goldsmith]]\n}}\n'''Alien''' is a film."));
+        Assert.Empty(WikipediaInfobox.Read("'''Alien''' is a film."));
         Assert.Null(WikipediaInfobox.Theme("Just prose."));
+        Assert.Empty(WikipediaInfobox.Composers("Just prose."));
+    }
+
+    [Fact]
+    public void AFilmsInfoboxNamesItsComposerAndNoTheme()
+    {
+        const string Alien = "{{Infobox film\n| name = Alien\n| music = [[Jerry Goldsmith]]\n| cinematography = Derek Vanlint\n}}\n'''Alien''' is a film.";
+
+        Assert.Equal(new[] { "Jerry Goldsmith" }, WikipediaInfobox.Composers(Alien));
+        Assert.Null(WikipediaInfobox.Theme(Alien));
+        Assert.Empty(WikipediaInfobox.ThemeComposers(Alien));
+    }
+
+    [Theory]
+    [InlineData("{{Infobox film\n| music = {{Plainlist|\n* [[John Powell (composer)|John Powell]]\n* [[Harry Gregson-Williams]]\n}}\n}}", new[] { "John Powell", "Harry Gregson-Williams" })]
+    [InlineData("{{Infobox film\n| music = [[Hans Zimmer]]<br />[[Benjamin Wallfisch]]\n}}", new[] { "Hans Zimmer", "Benjamin Wallfisch" })]
+    [InlineData("{{Infobox film\n| music = {{ubl|[[Nino Rota]]|[[Carmine Coppola]]}}\n}}", new[] { "Nino Rota", "Carmine Coppola" })]
+    [InlineData("{{Infobox film\n| music = Larry Groupé<ref>{{cite web|title=x}}</ref>\n}}", new[] { "Larry Groupé" })]
+    public void AFilmsComposerIsReadInTheFormsEditorsWriteIt(string article, string[] names) =>
+        Assert.Equal(names, WikipediaInfobox.Composers(article));
+
+    [Theory]
+    [InlineData("Breaking Bad", new[] { "Dave Porter" })]                    // a link with the text shown
+    [InlineData("Firefly (TV series)", new[] { "Greg Edmonson" })]
+    [InlineData("Game of Thrones", new[] { "Ramin Djawadi" })]                // plain text
+    [InlineData("Dexter (TV series)", new[] { "Daniel Licht" })]              // a one-item plainlist
+    [InlineData("Friends", new[] { "Michael Skloff", "Ian Christian Nickus" })] // a line break and a season note
+    public void AShowsComposerIsRead(string article, string[] names) =>
+        Assert.Equal(names, WikipediaInfobox.Composers(Article(article)));
+
+    [Fact]
+    public void AShowsComposerIsNotItsThemesComposer()
+    {
+        Assert.Equal(new[] { "Daniel Licht" }, WikipediaInfobox.Composers(Article("Dexter (TV series)")));
+        Assert.Equal(new[] { "Rolfe Kent" }, WikipediaInfobox.ThemeComposers(Article("Dexter (TV series)")));
+    }
+
+    // ---- which works Wikipedia is asked about ----
+
+    [Fact]
+    public void AFilmIsAskedAboutOnlyWhileItsComposerIsUnknown()
+    {
+        // A film whose theme is unknown -- most of them -- has nothing a film's infobox can add.
+        var film = new CreditsRequest("imdb:tt0078748", new[] { "imdb:tt0078748" }, "tt0078748", "348", false, "Alien") { WikipediaTitle = "Alien (film)" };
+
+        Assert.True(WikipediaThemeSource.IsWorthAsking(film with { Needs = CreditsQuestion.Composers | CreditsQuestion.Theme }));
+        Assert.False(WikipediaThemeSource.IsWorthAsking(film with { Needs = CreditsQuestion.Theme }));
+        Assert.False(WikipediaThemeSource.IsWorthAsking(film with { Needs = CreditsQuestion.Theme | CreditsQuestion.Origin }));
+    }
+
+    [Fact]
+    public void AShowIsAskedAboutForItsThemeOrItsComposer()
+    {
+        var show = new CreditsRequest("imdb:tt0903747", new[] { "imdb:tt0903747" }, "tt0903747", "1396", true, "Breaking Bad") { WikipediaTitle = "Breaking Bad" };
+
+        Assert.True(WikipediaThemeSource.IsWorthAsking(show with { Needs = CreditsQuestion.Theme }));
+        Assert.True(WikipediaThemeSource.IsWorthAsking(show with { Needs = CreditsQuestion.Composers }));
+        Assert.False(WikipediaThemeSource.IsWorthAsking(show with { Needs = CreditsQuestion.Origin }));
+        Assert.False(WikipediaThemeSource.IsWorthAsking(show with { WikipediaTitle = null }));
     }
 
     [Theory]

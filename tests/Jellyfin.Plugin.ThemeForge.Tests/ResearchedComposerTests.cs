@@ -90,6 +90,81 @@ public class ResearchedComposerTests
         return series;
     }
 
+    /// <summary>IMDb's crew data, answering for the ids it is given.</summary>
+    private sealed class Crew : IImdbCrewData
+    {
+        private readonly Dictionary<string, string[]> _credits;
+
+        public Crew(Dictionary<string, string[]> credits) => _credits = credits;
+
+        public List<string?> Asked { get; } = new();
+
+        public IReadOnlyList<string> Composers(string? imdbId)
+        {
+            Asked.Add(imdbId);
+            return imdbId is not null && _credits.TryGetValue(imdbId, out var names) ? names : Array.Empty<string>();
+        }
+
+        public ImdbCrewStatus Status(Configuration.PluginConfiguration configuration) =>
+            new(true, true, null, null, null, _credits.Count, 0, 1, false, null);
+
+        public bool IsDue(Configuration.PluginConfiguration configuration, DateTime nowUtc, out string reason)
+        {
+            reason = "never, in a test";
+            return false;
+        }
+
+        public Task<bool> RefreshAsync(IProgress<double>? progress, CancellationToken cancellationToken) => Task.FromResult(false);
+    }
+
+    private static Movie LuckyStrike()
+    {
+        var film = new Movie { Name = "Lucky Strike" };
+        film.SetProviderId(MetadataProvider.Imdb, "tt19035928");
+        film.SetProviderId(MetadataProvider.Tmdb, "1234567");
+        return film;
+    }
+
+    [Fact]
+    public void ImdbsCrewCreditStandsInWhenJellyfinHasNobody()
+    {
+        var crew = new Crew(new() { ["tt19035928"] = new[] { "Larry Groupé" } });
+        var lookup = new ResearchedPeopleLookup(new Credits(), new KnowsNobody(), crew);
+
+        Assert.Equal(new[] { "Larry Groupé" }, lookup.Composers(LuckyStrike()));
+        Assert.Equal(new string?[] { "tt19035928" }, crew.Asked);
+    }
+
+    [Fact]
+    public void ImdbsCrewCreditComesBeforeTheListingsGuess()
+    {
+        // The soundtrack listing's composer is whoever wrote the most songs on it: a count, not a
+        // credit. A songwriter with two songs in Lucky Strike would otherwise be searched for as
+        // its composer.
+        var crew = new Crew(new() { ["tt19035928"] = new[] { "Larry Groupé" } });
+        var lookup = new ResearchedPeopleLookup(new Credits(), new Knows("A Songwriter"), crew);
+
+        Assert.Equal(new[] { "Larry Groupé" }, lookup.Composers(LuckyStrike()));
+    }
+
+    [Fact]
+    public void JellyfinsOwnCreditsComeBeforeImdbsCrew()
+    {
+        var crew = new Crew(new() { ["tt19035928"] = new[] { "Larry Groupé" } });
+        var lookup = new ResearchedPeopleLookup(new Credits(new[] { "Somebody Jellyfin Knows" }), new KnowsNobody(), crew);
+
+        Assert.Equal(new[] { "Somebody Jellyfin Knows" }, lookup.Composers(LuckyStrike()));
+    }
+
+    [Fact]
+    public void TheResearchStillAnswersWhenImdbsCrewHasNobody()
+    {
+        var crew = new Crew(new());
+        var lookup = new ResearchedPeopleLookup(new Credits(), new Knows("Bear McCreary"), crew);
+
+        Assert.Equal(new[] { "Bear McCreary" }, lookup.Composers(Battlestar()));
+    }
+
     [Fact]
     public void TheCacheAnswersWhenJellyfinHasNobody()
     {

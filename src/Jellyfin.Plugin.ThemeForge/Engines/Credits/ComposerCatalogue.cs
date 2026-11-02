@@ -469,7 +469,12 @@ public sealed class ComposerCatalogue : IComposerCatalogue
             | (Origin is null ? CreditsQuestion.None : CreditsQuestion.Origin);
 
         /// <summary>Gets the work as the next source should see it, carrying every lead found so far.</summary>
-        public CreditsRequest Request => Work with { ReleaseGroupId = ReleaseGroupId, WikipediaTitle = WikipediaTitle };
+        public CreditsRequest Request => Work with
+        {
+            ReleaseGroupId = ReleaseGroupId,
+            WikipediaTitle = WikipediaTitle,
+            Needs = Needs & ~Answered & ~Failed,
+        };
 
         /// <summary>
         /// Reports whether a source answering these questions should be asked about this work:
