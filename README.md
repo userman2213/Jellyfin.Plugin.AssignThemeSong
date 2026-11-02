@@ -17,11 +17,18 @@ Point it at your library and it will, for each movie and series:
    TVDB/TMDB/IMDb ids, who wrote its music, and what its theme is called.
 2. Check **ThemerrDB**, the community-curated list of theme songs. If it has a theme for the item
    **and that link still plays**, that is the theme and nothing else runs. A dead link — about one
-   in twenty film entries — is passed over, and so is one that will not download.
-3. Otherwise build an ordered list of searches, most specific first: the theme's own name and
-   performer when known, then the composer, then the original soundtrack.
-4. Search YouTube with **yt-dlp** and collect candidates.
-5. Score every candidate against eleven independent rules, each of which explains itself.
+   in twenty film entries — is passed over, and so is one that will not download. ThemerrDB is
+   re-read every day, and a theme a search chose earlier is **replaced** as soon as ThemerrDB lists
+   one for the title — under any library rule, and only while the file is still the one ThemeForge
+   wrote.
+3. Otherwise find out **who made the music**, by the title's IMDb id: IMDb's soundtrack listing,
+   then IMDb's own crew credits, then Wikidata and Wikipedia.
+4. Search YouTube with **yt-dlp** for exactly that — the theme's own name and performer, or the
+   title with its composer. **A title is never searched for on its own**: those searches are what
+   turned up AI-generated "theme songs" and songs that merely share a film's name. A title nobody
+   is credited with the music of is not searched at all, and Diagnostics lists it.
+5. Score every candidate against twelve independent rules, each of which explains itself.
+   Music a generator made is rejected outright.
 6. Assign the winner if it is confident, queue it for you if it is not, and record either way.
 7. Download the audio with yt-dlp, verify it plays, and write it beside your media as
    **`theme.mp3`**.
@@ -70,30 +77,38 @@ sometimes does. Short of that, the composer's name: *Firefly Main Title — Greg
 about any other Firefly, and on a distributor's `- Topic` upload — the best-sourced recordings on
 YouTube — the composer's name is the artist credit.
 
-Jellyfin records neither the theme's name nor, for most items, the composer. Without the composer
-three things quietly stop working: the search ladder drops its composer rung, an upload that names
-the composer earns no bonus, and a title that is an ordinary word — *Lost*, *Alien* — has nothing to
-corroborate it and is held below the auto-assign score.
+Jellyfin records neither the theme's name nor, for most items, the composer. And since 3.1 an
+unattended run searches for nothing else: **a title with neither is not searched for at all**,
+because a search by the title alone — *Lucky Strike theme song* — is answered with AI-generated
+"theme songs" and with any song that shares the name. So finding out who made the music is what
+decides whether a title gets a theme.
 
 So ThemeForge looks both up, **by the title's own database id and never by name**:
 
 | Asked | Source | Keyed on | What it gives | Cost |
 |---|---|---|---|---|
-| 1st | [IMDb](https://www.imdb.com) | the IMDb id | the theme, who performs it, and who wrote the score | one request per title, 1 per 2 seconds |
-| 2nd | [Wikidata](https://www.wikidata.org) | IMDb (P345), TMDB (P4947/P4983) | composer; theme music (P942) for famous shows; the country it was made in (P495) | one query per 50 titles |
-| 3rd | [Wikipedia](https://en.wikipedia.org) | the article Wikidata links to | a show's opening theme and who wrote it | one request per 5 shows |
+| 1st | [IMDb](https://www.imdb.com) soundtrack listing | the IMDb id | the theme, who performs it, and who wrote it | one request per title, 1 per 2 seconds |
+| 2nd | [IMDb's crew data](https://developer.imdb.com/non-commercial-datasets/) | the IMDb id | who IMDb credits as the composer of a film, or of most of a series' episodes | a 1.2 GB download a month, kept as 17 MB |
+| 3rd | [Wikidata](https://www.wikidata.org) | IMDb (P345), TMDB (P4947/P4983) | composer; theme music (P942) for famous shows; the country it was made in (P495) | one query per 50 titles |
+| 4th | [Wikipedia](https://en.wikipedia.org) | the article Wikidata links to | a show's opening theme, who wrote it and its composer; a film's composer | one request per 5 titles |
 
 **Nothing is looked up for a title ThemerrDB already has a theme for.** That theme is taken
 outright, so there is no search to sharpen and nothing worth asking about; on a library ThemerrDB
 covers well that is most of it, and each one costs nothing.
 
-For the rest, IMDb is asked first: one page names the theme, who performs it and who wrote the
-score, where the other two each answer part of that for part of a library. Wikidata follows, about
-whatever IMDb could not name, and answers a great many titles in a handful of requests; Wikipedia's
-infobox is asked last and names the theme for far more shows than Wikidata does — The Sopranos,
-Firefly, House, Mad Men, True Detective, Scrubs — and often who wrote it, which is not always who
-scored the show: Dexter's theme is Rolfe Kent's, its score Daniel Licht's. Only the song's title and
-the names are kept.
+For the rest, IMDb's soundtrack listing is asked first: it names the theme and who wrote it, when
+it names one at all. Who composed the title comes from **IMDb's crew credits** — IMDb itself
+crediting the composer, by the same IMDb id — which is what names Larry Groupé for the 2026 war film
+*Lucky Strike*, whose listing names only songs. Wikidata follows, about whatever IMDb could not name,
+and answers a great many titles in a handful of requests; Wikipedia's infobox is asked last and names
+the theme for far more shows than Wikidata does — The Sopranos, Firefly, House, Mad Men, True
+Detective, Scrubs — and often who wrote it, which is not always who scored the show: Dexter's theme
+is Rolfe Kent's, its score Daniel Licht's. For a film it is asked only for the composer, and only
+when nothing else named one. Only the song's title and the names are kept.
+
+When more than one names a composer, the first of these wins: **your library's own credits**, then
+**IMDb's crew credits**, then the writer IMDb's soundtrack listing credits most often (a count, not a
+credit), then Wikidata.
 
 Answers are kept for two months and misses for a fortnight, so a whole library costs a few requests
 once and nothing thereafter. A service that is down or asks ThemeForge to slow down is not a miss:
@@ -111,9 +126,12 @@ Battlestar Galactica for the 2004 one. A wrong composer is worse than no compose
 be searched for and believed.
 
 The scheduled task **Look up who wrote the music** runs daily at 02:00 UTC, an hour before the
-discovery run. **Diagnostics** shows how many of your titles somebody is known for, and how many
-series have a theme song known by name; a title with no IMDb or TMDB id cannot be looked up at all,
-so adding a metadata provider is what helps there.
+discovery run. **Diagnostics** shows how many of your titles somebody is known for, how many series
+have a theme song known by name, and — counted and named — the films and series with **nothing to
+search for**, which is the list to work from when a title gets no theme. A title with no IMDb or
+TMDB id cannot be looked up at all, so adding a metadata provider is what helps there. A title with
+nothing to search for uses none of its attempts; it is looked at again twice a day, and searched
+for as soon as anybody is credited.
 
 **Where it was made** is asked as well, because it decides which theme is right. The Office,
 Shameless, Skins, House of Cards and Being Human are each two shows of one name with different
@@ -138,13 +156,16 @@ never by name. On by default.
 
 **For a film, the listing is usually not the theme.** It is the licensed songs in the order they
 play: the first entry for Fight Club is a Rolfe Kent cue and for The Godfather a wedding sequence.
-A wrong theme is worse than none, so an entry is taken only when the listing calls it the title
-music — "Main Title", "Opening Theme", "Love Theme from The Godfather" — or names it after the work,
-or the title is a series, where the listing does open with the theme: The Sopranos gives "Woke Up
-This Morning" and Firefly "The Ballad of Serenity". A film whose listing names no theme yields
-**nothing**, which is the right answer. The rule is deliberately not fooled by a song with "theme"
-in its name: Fight Club's listing contains "Theme from Valley of the Dolls" and "KDFW News Theme",
-and neither is the film's theme.
+A wrong theme is worse than none, so a film's entry is taken only when the listing calls it the
+title music — "Main Title", "Opening Theme", "Love Theme from The Godfather". **Never for sharing the
+film's name**: until 3.1 it was, which is how *Lucky Strike* (2026), a war film, was given a western
+song called "Lucky Strike". For a series an entry is also taken when it is named after the show —
+"Hawaii Five-O", "Theme from The Sopranos", but not "Lucky Strike Blues" — or failing that its first
+entry, since a series' listing does open with the theme: The Sopranos gives "Woke Up This Morning"
+and Firefly "The Ballad of Serenity". A film whose listing names no theme yields **nothing**, which
+is the right answer. The rule is deliberately not fooled by a song with "theme" in its name: Fight
+Club's listing contains "Theme from Valley of the Dolls" and "KDFW News Theme", and neither is the
+film's theme.
 
 **It names the composer too.** The listing credits who wrote each entry, and a film's score cues
 are credited to one person over and over while its licensed songs have a different writer each: a
@@ -157,8 +178,8 @@ nothing.
 
 Requests are spaced two seconds apart. A title IMDb does not answer about is **not** recorded as
 having no theme; it is asked again on the next run, like any other service that was unreachable.
-IMDb's own downloadable datasets have no soundtrack data, so there is no bulk alternative to reading
-the page.
+IMDb's downloadable datasets have no soundtrack listing, so there is no bulk alternative to reading
+the page for the theme; for the composer there is, below.
 
 **Test the IMDb lookup** in the settings runs the real path against one title and reports each stage
 — the request, whether a browser was used, and which entry it took — so you can see it working
@@ -192,6 +213,29 @@ Whatever clearance a render earns is kept in a profile beside the browser, so a 
 rather than per lookup: a cold render has been measured at over a minute and a warm one at a few
 seconds. Chrome's own headless user agent says "HeadlessChrome", which IMDb refuses, so the user
 agent is replaced; **User agent sent to IMDb** overrides it if the built-in one ever goes stale.
+
+### IMDb's crew data
+
+IMDb publishes its credits as [dataset files](https://developer.imdb.com/non-commercial-datasets/),
+refreshed daily, for personal and non-commercial use. They name who composed nearly a million
+titles: every mainstream film checked — Alien, Titanic, Skyfall, Blade Runner 2049, Return of the
+Jedi, *Lucky Strike* — and half of all feature films since 2010. IMDb credits a series' composer on
+each episode rather than on the series, so a series' composer is whoever is credited on at least two
+of its episodes and a quarter of those crediting anybody: Breaking Bad gives Dave Porter, Lost
+Michael Giacchino, Game of Thrones Ramin Djawadi. The Sopranos, which credits a composer on one
+episode of 86, gives nobody, which is right.
+
+Three files are downloaded — `title.principals` (790 MB), `title.episode` (55 MB) and `name.basics`
+(310 MB) — and read as they arrive; they are never stored. What is kept is the composer credits
+alone, in `imdb-composers.bin` (17 MB) beside the index, read a few bytes at a time rather than held
+in memory. Building it takes under a minute and about 170 MB of memory while it runs.
+
+The scheduled task **Update IMDb crew data** checks when the server starts and daily at 01:30 UTC,
+and downloads only when there is no copy, when the copy is a month old, or after a week when your
+library has a title added to IMDb after the copy was made. A download that fails or is cancelled
+keeps the previous copy, and is not tried again for 20 hours. **Download IMDb's crew data now** in
+the settings does it on demand, and the settings page shows what the copy holds. Switch **Use IMDb's
+crew data** off to go without it.
 
 ## Installing
 
@@ -242,9 +286,12 @@ in three places and behaves the same in all of them:
 - on the plugin page under **Library**, the **Change theme** button on any row;
 - under **Review queue**, **Search for a different one** on any item waiting for a decision.
 
-It searches as soon as it opens, and **it does what an unattended run does**: it asks the
-catalogues first and pins a ThemerrDB entry for this exact title at the top, then runs every
-phrasing of the item's search ladder rather than one query. The results of all the phrasings are
+It searches as soon as it opens, and **it does what an unattended run does, and more**: it asks
+the catalogues first and pins a ThemerrDB entry for this exact title at the top, then runs every
+phrasing of the item's search ladder rather than one query — and, unlike an unattended run, it also
+searches by the title on its own (*{title} {year} theme*, *{title} soundtrack*), because nothing it
+finds is assigned unless you pick it. That is how a title nobody is credited with the music of can
+still be given a theme. The results of all the phrasings are
 pooled before it decides what is worth a closer look, which is something a run does not do — a run
 takes the best few of each phrasing separately, so a video that comes sixth on two of them is never
 examined. A line above the results says how many phrasings were tried and how many results came
@@ -287,10 +334,22 @@ Replaced themes are copied aside first as `theme.<ext>.themeforge-backup-<timest
 turn backups off, and a theme assigned by hand or locked from the Library tab is never touched by
 any of these settings.
 
-After an upgrade that changes how themes are chosen — 2.10 is one — anything the previous version
-failed at, found nothing for or queued for review is searched once more on the next run, whatever
-its retry backoff. What it assigned is kept, and the status panel says how many; **Start over**, at
-the bottom of Settings, discards those decisions so the library is chosen again.
+After an upgrade that changes how themes are chosen — 2.10 and 3.1 are two — anything the previous
+version failed at, found nothing for or queued for review is searched once more on the next run,
+whatever its retry backoff. What it assigned is kept, and the status panel says how many.
+
+**A theme a search chose is replaced by ThemerrDB's** as soon as ThemerrDB lists one for the title,
+under every library rule including *Never replace*: it was ThemeForge's best guess, and the
+curated theme is better. It happens only while the file is still byte for byte what ThemeForge
+wrote and nothing else sits beside it; if ThemerrDB's link will not download, the current theme
+stays. Themes from ThemerrDB or the Plex archive and anything you chose, approved or locked are
+never replaced this way.
+
+**Redo every theme a search chose**, in Settings, is for a library whose themes were chosen before
+3.1, when titles were also searched for on their own. It deletes every theme a search chose — only
+while the file is unchanged — and the next run looks at those titles again: catalogues first, then a
+search for who made the music, and no theme rather than a guess. **Start over**, at the bottom of
+Settings, discards every decision so the whole library is chosen again.
 
 ## Logging
 
@@ -327,7 +386,7 @@ Transformation plugin, in memory, per request.
 
 ## How scoring works
 
-Each candidate is judged by eleven rules. Each returns a named signal with a reason, and the review
+Each candidate is judged by twelve rules. Each returns a named signal with a reason, and the review
 queue shows you the whole breakdown, so a score is always something you can argue with.
 
 | Rule | What it looks at |
@@ -340,6 +399,7 @@ queue shows you the whole breakdown, so a score is always something you can argu
 | `Popularity` | View count, log-scaled and capped so it can never outvote the title. |
 | `Recency` | Penalises uploads from years before the release date. |
 | `Availability` | Rejects live, private and blocked videos outright. |
+| `AiGenerated` | Rejects music a generator made: *AI* as a word in capitals, *A.I.*, *AI generated*, *AI cover*, *made with AI*, Suno or Udio in the title or channel, and those phrases in the description unless denied (*not AI generated*). Not tripped by *Ai no Uta*, *Hawaii*, the Hindi word *suno*, or the film *A.I. Artificial Intelligence*. Built in, so it cannot be edited away. |
 | `Duplicate` | Penalises a video already used as another item's theme. |
 | `QuerySpecificity` | Prefers hits from a narrower search. |
 | `Composer` | Whether the candidate names the theme song and its performer, the composer, or somebody else credited on the music. A bonus, never a penalty. |
