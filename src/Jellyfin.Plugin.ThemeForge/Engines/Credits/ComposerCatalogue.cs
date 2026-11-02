@@ -39,6 +39,11 @@ public interface IComposerCatalogue
     /// <param name="keys">The provider keys for the work.</param>
     /// <returns>What is known, or nothing.</returns>
     ResearchedCredits Known(IReadOnlyList<string> keys);
+
+    /// <summary>Names the places asked about a work's music, in the order they are asked.</summary>
+    /// <param name="configuration">Settings deciding which are switched on.</param>
+    /// <returns>The names of the sources asked, or nothing when none are on.</returns>
+    IReadOnlyList<string> SourcesAsked(PluginConfiguration configuration) => Array.Empty<string>();
 }
 
 /// <summary>
@@ -124,6 +129,13 @@ public sealed class ComposerCatalogue : IComposerCatalogue
 
         var found = Loaded().Find(keys);
         return found?.AsCredits() ?? ResearchedCredits.None;
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<string> SourcesAsked(PluginConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        return _sources.Where(source => source.IsEnabled(configuration)).Select(source => source.Name).ToList();
     }
 
     /// <summary>Returns the cache, reading it from disk the first time anybody asks.</summary>

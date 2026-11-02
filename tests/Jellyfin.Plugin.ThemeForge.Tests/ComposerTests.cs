@@ -70,21 +70,26 @@ public class ComposerTests
             TestData.Series("Firefly", 2002, composers: new[] { "Greg Edmonson", "Someone Else" }),
             configuration);
 
+        // The title search after it is never run unattended.
         Assert.Equal(
-            new[] { "Firefly Greg Edmonson theme", "Firefly Someone Else theme", "Firefly theme" },
+            new[] { "Firefly Greg Edmonson theme", "Firefly Someone Else theme" },
             queries.Select(query => query.Text).ToArray());
     }
 
     [Fact]
     public void AComposerTemplateIsSkippedWhenThereIsNoComposer()
     {
-        // Collapsing the placeholder would only repeat a generic search the ladder already runs.
+        // Collapsing the placeholder would turn it into a title search. Searching by hand, that is
+        // what is left; unattended, nothing is.
         var configuration = TestData.Config();
         configuration.SeriesQueryTemplates = new[] { "{title} {composer} theme", "{title} theme" };
 
-        var queries = new QueryPlanner().Plan(TestData.Series("Firefly", 2002), configuration);
+        var unattended = new QueryPlanner().Plan(TestData.Series("Firefly", 2002), configuration);
+        var byHand = new QueryPlanner().Plan(TestData.Series("Firefly", 2002), configuration, includeTitleSearches: true);
 
-        Assert.Equal(new[] { "Firefly theme" }, queries.Select(query => query.Text).ToArray());
+        Assert.Empty(unattended);
+        Assert.Equal("Firefly theme", byHand[0].Text);
+        Assert.DoesNotContain(byHand, query => query.Text.Contains("{composer}", System.StringComparison.Ordinal));
     }
 
     [Fact]

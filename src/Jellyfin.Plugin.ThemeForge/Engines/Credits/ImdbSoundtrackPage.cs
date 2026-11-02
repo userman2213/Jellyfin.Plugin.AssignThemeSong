@@ -29,7 +29,8 @@ public sealed record SoundtrackEntry(string Title, string? Performer, string? Wr
 /// songs in playback order: the first entry for Fight Club is a Rolfe Kent cue, and for The
 /// Godfather a wedding sequence, neither of which is the theme anybody means. So an entry is
 /// accepted only when it says it is a theme -- "Main Title", "Opening Theme", "Love Theme from
-/// The Godfather" -- or when the work is a series, where the first entry is a reasonable guess.
+/// The Godfather" -- or, for a series, when it is named after the show or comes first, where the
+/// first entry is a reasonable guess. A film's entry is never taken for sharing the film's name.
 /// A film whose listing names no theme yields nothing, which is the right answer: no theme found
 /// is recoverable, and the wrong song assigned as a theme is not.
 /// </para>
@@ -127,10 +128,13 @@ public static class ImdbSoundtrackPage
             return named;
         }
 
-        // Failing that, one named after the work: "The Sopranos Theme", "Hawaii Five-O".
-        if (!string.IsNullOrWhiteSpace(title))
+        // Failing that, for a series, one that is named after it: "Hawaii Five-O", "The Sopranos
+        // Theme". Never for a film. A film's listing is the songs licensed into it, and one that
+        // shares the film's name is far more often a song that happens to -- which is how a 2026
+        // war film called Lucky Strike was given a western song called "Lucky Strike" as its theme.
+        if (isSeries && !string.IsNullOrWhiteSpace(title))
         {
-            var afterTheWork = entries.FirstOrDefault(entry => SharesName(entry.Title, title!));
+            var afterTheWork = entries.FirstOrDefault(entry => IsNamedAfter(entry.Title, title!));
             if (afterTheWork is not null)
             {
                 return afterTheWork;
@@ -234,8 +238,22 @@ public static class ImdbSoundtrackPage
         return ThemeWords.Any(word => entryTitle.Contains(word, StringComparison.OrdinalIgnoreCase));
     }
 
-    /// <summary>Reports whether an entry is named after the work itself.</summary>
-    private static bool SharesName(string entryTitle, string workTitle)
+    /// <summary>Words that may sit beside a show's name in its theme's title and still be its theme.</summary>
+    private static readonly HashSet<string> NamedAfterWords = new(StringComparer.Ordinal)
+    {
+        "theme", "main", "title", "titles", "opening", "intro", "from", "the", "of", "song", "tv", "series", "music",
+    };
+
+    /// <summary>
+    /// Reports whether an entry is named after the work: its name alone, or its name with nothing
+    /// beside it but words like "theme" -- "Hawaii Five-O", "The Sopranos Theme", "Theme from
+    /// The Sopranos".
+    /// </summary>
+    /// <remarks>
+    /// Containing the name is not enough. This used to accept any entry with the name somewhere in
+    /// it, so "Lucky Strike Blues" was the theme of anything called Lucky Strike.
+    /// </remarks>
+    private static bool IsNamedAfter(string entryTitle, string workTitle)
     {
         var work = TitleNormalizer.Normalize(workTitle);
         if (work.Length < 4)
@@ -245,7 +263,21 @@ public static class ImdbSoundtrackPage
         }
 
         var entry = TitleNormalizer.Normalize(entryTitle);
-        return entry.Contains(work, StringComparison.Ordinal);
+        if (string.Equals(entry, work, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        var at = entry.IndexOf(work, StringComparison.Ordinal);
+        if (at < 0)
+        {
+            return false;
+        }
+
+        var beside = (entry[..at] + " " + entry[(at + work.Length)..])
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        return beside.All(NamedAfterWords.Contains);
     }
 
     /// <summary>Reads the entries out of the JSON the current pages embed.</summary>

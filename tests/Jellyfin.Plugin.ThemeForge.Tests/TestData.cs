@@ -95,6 +95,7 @@ internal static class TestData
         new Engines.Scoring.Rules.PopularityRule(),
         new Engines.Scoring.Rules.RecencyRule(),
         new Engines.Scoring.Rules.AvailabilityRule(),
+        new Engines.Scoring.Rules.AiGeneratedRule(),
         new Engines.Scoring.Rules.DuplicateRule(),
         new Engines.Scoring.Rules.QuerySpecificityRule(),
         new Engines.Scoring.Rules.ComposerRule(),

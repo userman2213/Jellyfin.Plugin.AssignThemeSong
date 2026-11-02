@@ -48,11 +48,11 @@ public class ThemeSearchTests
     public void TheRungIsSkippedWhenTheThemeIsNotKnown()
     {
         var configuration = TestData.Config();
-        var plan = _planner.Plan(TestData.Series("Lost", 2004), configuration);
+        var plan = _planner.Plan(TestData.Series("Lost", 2004, composers: new[] { "Michael Giacchino" }), configuration);
 
-        // Exactly the ladder as it was, and no query with the placeholder collapsed to nothing.
+        // The composer's rungs run, and no query has the placeholder collapsed to nothing.
         Assert.DoesNotContain(plan, query => query.Template.Contains(QueryPlanner.ThemePlaceholder, StringComparison.Ordinal));
-        Assert.Equal("Lost opening theme song", plan[0].Text);
+        Assert.Equal("Lost Michael Giacchino theme", plan[0].Text);
     }
 
     [Fact]

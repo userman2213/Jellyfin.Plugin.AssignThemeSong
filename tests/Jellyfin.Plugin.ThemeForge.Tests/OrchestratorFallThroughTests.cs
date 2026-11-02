@@ -83,6 +83,7 @@ public sealed class OrchestratorFallThroughTests : IDisposable
             Search = { Results = { Searched() } },
             Acquisition = { Broken = { CatalogueUrl } },
         };
+        world.Identities.AfterResearch = Credited();
 
         var outcome = await world.Orchestrator(_identity).ProcessItemAsync(_item, new RunReport(), Config(), CancellationToken.None);
 
@@ -102,6 +103,7 @@ public sealed class OrchestratorFallThroughTests : IDisposable
             Search = { Results = { Searched() } },
             Acquisition = { Broken = { CatalogueUrl } },
         };
+        world.Identities.AfterResearch = Credited();
 
         await world.Orchestrator(_identity).ProcessItemAsync(_item, new RunReport(), Config(), CancellationToken.None);
 
@@ -132,10 +134,13 @@ public sealed class OrchestratorFallThroughTests : IDisposable
             Provenance = { Answer = Catalogue() },
             Acquisition = { Broken = { CatalogueUrl } },
         };
+        world.Identities.AfterResearch = Credited();
 
         var outcome = await world.Orchestrator(_identity).ProcessItemAsync(_item, new RunReport(), Config(), CancellationToken.None);
 
         Assert.Equal(ItemOutcome.NoCandidate, outcome);
+        Assert.True(world.Search.Asked > 0);
+        Assert.Equal("the search returned no candidates", world.Index.Get(_item.Id)!.LastError);
     }
 
     // ---- the music is looked up before the search ------------------------------------
@@ -147,6 +152,7 @@ public sealed class OrchestratorFallThroughTests : IDisposable
         // be unusable the title is searched after all, and was being searched with no composer and
         // no theme name.
         var world = new World(_root) { Search = { Results = { Searched() } } };
+        world.Identities.AfterResearch = Credited();
 
         await world.Orchestrator(_identity).ProcessItemAsync(_item, new RunReport(), Config(), CancellationToken.None);
 
@@ -162,17 +168,7 @@ public sealed class OrchestratorFallThroughTests : IDisposable
         // when the identity names a composer, which it does only after the research.
         var world = new World(_root) { Search = { Results = { Searched() } } };
         world.Search.OnlyWhen = query => query.Contains("Dust Brothers", StringComparison.Ordinal);
-        world.Identities.AfterResearch = new MediaIdentity
-        {
-            ItemId = _identity.ItemId,
-            Title = _identity.Title,
-            NormalizedTitle = _identity.NormalizedTitle,
-            Year = _identity.Year,
-            Kind = _identity.Kind,
-            TmdbId = _identity.TmdbId,
-            ImdbId = _identity.ImdbId,
-            Composers = new[] { "The Dust Brothers" },
-        };
+        world.Identities.AfterResearch = Credited();
 
         var outcome = await world.Orchestrator(_identity).ProcessItemAsync(_item, new RunReport(), Config(), CancellationToken.None);
 
@@ -203,7 +199,8 @@ public sealed class OrchestratorFallThroughTests : IDisposable
         world.Composers.Cache.RecordTheme(keys, ResearchedCredits.None, "nobody", DateTime.UtcNow);
         world.Composers.Cache.RecordOrigin(keys, ResearchedCredits.None with { Countries = new[] { "US" } }, DateTime.UtcNow);
 
-        var outcome = await world.Orchestrator(_identity).ProcessItemAsync(_item, new RunReport(), Config(), CancellationToken.None);
+        // Resolving the identity reads the cache, so it names the composer the cache holds.
+        var outcome = await world.Orchestrator(Credited()).ProcessItemAsync(_item, new RunReport(), Config(), CancellationToken.None);
 
         Assert.Equal(ItemOutcome.Assigned, outcome);
         Assert.Empty(world.Composers.Synced);
@@ -212,12 +209,73 @@ public sealed class OrchestratorFallThroughTests : IDisposable
     [Fact]
     public async Task AResearchFailureDoesNotStopTheSearch()
     {
+        // Jellyfin's own metadata already names the composer, so the search has something to go on.
+        var world = new World(_root) { Search = { Results = { Searched() } } };
+        world.Composers.Fail = true;
+
+        var outcome = await world.Orchestrator(Credited()).ProcessItemAsync(_item, new RunReport(), Config(), CancellationToken.None);
+
+        Assert.Equal(ItemOutcome.Assigned, outcome);
+    }
+
+    // ---- nothing to search for -----------------------------------------------------------
+
+    [Fact]
+    public async Task ATitleNobodyIsCreditedWithTheMusicOfIsNotSearchedForByItsName()
+    {
+        // What assigned AI-generated "theme songs" and same-named songs: with nobody to search
+        // for, the title was searched on its own. Now nothing is searched, and the reason says
+        // exactly that rather than "the search found nothing".
+        var world = new World(_root) { Search = { Results = { Searched() } } };
+        var keys = CreditsKeys.For(_identity.ImdbId, _identity.TmdbId, _identity.TvdbId, _identity.IsSeries);
+        world.Composers.Cache.RecordComposers(keys, ResearchedCredits.None, "nobody", DateTime.UtcNow);
+        world.Composers.Cache.RecordTheme(keys, ResearchedCredits.None, "nobody", DateTime.UtcNow);
+        world.Composers.Cache.RecordOrigin(keys, ResearchedCredits.None with { Countries = new[] { "US" } }, DateTime.UtcNow);
+
+        var outcome = await world.Orchestrator(_identity).ProcessItemAsync(_item, new RunReport(), Config(), CancellationToken.None);
+
+        Assert.Equal(ItemOutcome.NoCandidate, outcome);
+        Assert.Equal(0, world.Search.Asked);
+        Assert.Empty(world.Acquisition.Tried);
+
+        var entry = world.Index.Get(_item.Id)!;
+        Assert.Equal(ThemeItemState.NoCandidate, entry.State);
+        Assert.StartsWith(ThemeOrchestrator.NobodyCredited, entry.LastError, StringComparison.Ordinal);
+        Assert.Contains("Jellyfin's metadata, IMDb, Wikidata or Wikipedia", entry.LastError, StringComparison.Ordinal);
+        Assert.Contains("never searched for unattended", entry.LastError, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ResearchThatCouldNotBeDoneIsNotPassedOffAsNobodyKnowing()
+    {
         var world = new World(_root) { Search = { Results = { Searched() } } };
         world.Composers.Fail = true;
 
         var outcome = await world.Orchestrator(_identity).ProcessItemAsync(_item, new RunReport(), Config(), CancellationToken.None);
 
-        Assert.Equal(ItemOutcome.Assigned, outcome);
+        Assert.Equal(ItemOutcome.NoCandidate, outcome);
+        Assert.Equal(0, world.Search.Asked);
+        var reason = world.Index.Get(_item.Id)!.LastError!;
+        Assert.DoesNotContain(ThemeOrchestrator.NobodyCredited, reason, StringComparison.Ordinal);
+        Assert.Contains("could not be looked up this time", reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ATitleWithNoCreditsIsNotSearchedEvenWhenTheCatalogueLinkFails()
+    {
+        // The fall-through to the search is a fall-through to a search for who made the music.
+        var world = new World(_root)
+        {
+            Provenance = { Answer = Catalogue() },
+            Search = { Results = { Searched() } },
+            Acquisition = { Broken = { CatalogueUrl } },
+        };
+
+        var outcome = await world.Orchestrator(_identity).ProcessItemAsync(_item, new RunReport(), Config(), CancellationToken.None);
+
+        Assert.Equal(ItemOutcome.NoCandidate, outcome);
+        Assert.Equal(new[] { CatalogueUrl }, world.Acquisition.Tried);
+        Assert.Equal(0, world.Search.Asked);
     }
 
     // ---- the pieces --------------------------------------------------------------------
@@ -230,6 +288,19 @@ public sealed class OrchestratorFallThroughTests : IDisposable
         configuration.RequestDelayMs = 0;
         return configuration;
     }
+
+    /// <summary>The same film, with its composer known.</summary>
+    private MediaIdentity Credited() => new()
+    {
+        ItemId = _identity.ItemId,
+        Title = _identity.Title,
+        NormalizedTitle = _identity.NormalizedTitle,
+        Year = _identity.Year,
+        Kind = _identity.Kind,
+        TmdbId = _identity.TmdbId,
+        ImdbId = _identity.ImdbId,
+        Composers = new[] { "The Dust Brothers" },
+    };
 
     private static Candidate Catalogue() => new()
     {
@@ -391,6 +462,8 @@ public sealed class OrchestratorFallThroughTests : IDisposable
         }
 
         public ResearchedCredits Known(IReadOnlyList<string> keys) => ResearchedCredits.None;
+
+        public IReadOnlyList<string> SourcesAsked(PluginConfiguration configuration) => new[] { "IMDb", "Wikidata", "Wikipedia" };
     }
 
     /// <summary>Downloads anything except the links it is told are broken.</summary>

@@ -13,8 +13,12 @@ public interface IQueryPlanner
     /// <summary>Plans the search ladder.</summary>
     /// <param name="identity">The item to search for.</param>
     /// <param name="configuration">Settings supplying the templates.</param>
+    /// <param name="includeTitleSearches">
+    /// Whether searches built from the title alone may run. Only when a person is choosing from
+    /// the results: an unattended run searches who made the music, never the title on its own.
+    /// </param>
     /// <returns>Queries ordered most-specific first.</returns>
-    IReadOnlyList<SearchQuery> Plan(MediaIdentity identity, PluginConfiguration configuration);
+    IReadOnlyList<SearchQuery> Plan(MediaIdentity identity, PluginConfiguration configuration, bool includeTitleSearches = false);
 }
 
 /// <summary>
@@ -41,6 +45,14 @@ public interface IQueryPlanner
 /// thing in every market. The title is left out when the song already contains it -- "Skyfall
 /// Adele", not "Skyfall Skyfall Adele".
 /// </para>
+/// <para>
+/// A template that names neither is a title search -- "{title} theme song" -- and an unattended run
+/// never makes one. Those are what YouTube answers with AI-generated "theme songs" and with any song
+/// that happens to share a film's name; a title with no credits to search for is left for a person
+/// rather than given whatever such a search returns. This is enforced here, not by the shipped
+/// ladder, so it holds for an edited ladder too. A person searching by hand still gets title
+/// searches, because nothing they turn up is assigned unless that person picks it.
+/// </para>
 /// </remarks>
 public sealed class QueryPlanner : IQueryPlanner
 {
@@ -53,8 +65,14 @@ public sealed class QueryPlanner : IQueryPlanner
     /// <summary>More composers than this on one work is a compilation, and each costs a search.</summary>
     private const int MaxComposersSearched = 2;
 
+    /// <summary>
+    /// Title searches a person searching by hand always gets, after the ladder: something to look at
+    /// even for a title nobody has credited the music of.
+    /// </summary>
+    private static readonly string[] ByHandFallbacks = { "{title} {year} theme", "{title} soundtrack" };
+
     /// <inheritdoc />
-    public IReadOnlyList<SearchQuery> Plan(MediaIdentity identity, PluginConfiguration configuration)
+    public IReadOnlyList<SearchQuery> Plan(MediaIdentity identity, PluginConfiguration configuration, bool includeTitleSearches = false)
     {
         ArgumentNullException.ThrowIfNull(identity);
         ArgumentNullException.ThrowIfNull(configuration);
@@ -71,7 +89,10 @@ public sealed class QueryPlanner : IQueryPlanner
         var queries = new List<SearchQuery>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var template in templates ?? Enumerable.Empty<string>())
+        var ladder = (templates ?? Enumerable.Empty<string>())
+            .Concat(includeTitleSearches ? ByHandFallbacks : Enumerable.Empty<string>());
+
+        foreach (var template in ladder)
         {
             if (string.IsNullOrWhiteSpace(template))
             {
@@ -87,6 +108,12 @@ public sealed class QueryPlanner : IQueryPlanner
             var namesTheme = template.Contains(ThemePlaceholder, StringComparison.OrdinalIgnoreCase);
             if (namesTheme && identity.Theme is null)
             {
+                continue;
+            }
+
+            if (!namesComposer && !namesTheme && !includeTitleSearches)
+            {
+                // A title search. Never run unattended; see the remarks.
                 continue;
             }
 

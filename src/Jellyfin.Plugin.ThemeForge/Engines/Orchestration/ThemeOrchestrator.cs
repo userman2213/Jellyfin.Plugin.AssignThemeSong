@@ -200,6 +200,15 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
     /// <summary>The longest query that will be sent to a search, in characters.</summary>
     private const int MaxQueryLength = 200;
 
+    /// <summary>
+    /// How the reason recorded for a title nobody is credited with the music of begins; Diagnostics
+    /// counts the titles by it.
+    /// </summary>
+    internal const string NobodyCredited = "nobody is credited with its music";
+
+    /// <summary>Ends every reason a title was not searched for.</summary>
+    private const string NoTitleSearches = "a title alone is never searched for unattended";
+
     private int _running;
 
     /// <summary>Initializes a new instance of the <see cref="ThemeOrchestrator"/> class.</summary>
@@ -553,7 +562,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         // decision -- so those words are searched for and nothing else is put in front of them.
         var plan = byHand
             ? new[] { new SearchQuery(typed, 0, "manual search") }
-            : _queryPlanner.Plan(identity, configuration);
+            : _queryPlanner.Plan(identity, configuration, includeTitleSearches: true);
 
         if (plan.Count == 0)
         {
@@ -940,7 +949,26 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
 
             identity = await ResearchBeforeSearchAsync(item, identity, configuration, cancellationToken).ConfigureAwait(false);
 
-            var (ranked, overlooked) = await SearchAndRankAsync(identity, configuration, cancellationToken).ConfigureAwait(false);
+            // An unattended run searches only for who made the music. With nobody credited there
+            // is nothing to search for, and saying "the search found nothing" would be untrue.
+            var plan = _queryPlanner.Plan(identity, configuration);
+            if (plan.Count == 0)
+            {
+                var nothing = new ThemeDecision(
+                    DecisionOutcome.NoAcceptableCandidate,
+                    null,
+                    await WhyNothingIsSearchedAsync(identity, configuration, cancellationToken).ConfigureAwait(false));
+
+                if (dryRun)
+                {
+                    return Report(identity, nothing, report);
+                }
+
+                RecordCandidates(entry, Array.Empty<ScoreResult>(), nothing, Array.Empty<ScoreResult>());
+                return NoCandidate(entry, nothing, configuration, report);
+            }
+
+            var (ranked, overlooked) = await SearchAndRankAsync(identity, plan, configuration, cancellationToken).ConfigureAwait(false);
             var decision = _decisionPolicy.Decide(ranked, configuration);
 
             if (dryRun)
@@ -1398,6 +1426,55 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         }
     }
 
+    /// <summary>
+    /// Says why a title was not searched for at all, naming what was asked so the reason can be
+    /// checked rather than taken on trust.
+    /// </summary>
+    private async Task<string> WhyNothingIsSearchedAsync(
+        MediaIdentity identity,
+        PluginConfiguration configuration,
+        CancellationToken cancellationToken)
+    {
+        if (identity.Composers.Count > 0 || identity.Theme is not null)
+        {
+            return "none of the search templates names {composer} or {theme}, and " + NoTitleSearches;
+        }
+
+        if (!configuration.ResearchComposers)
+        {
+            return "Jellyfin's metadata names nobody for its music, looking it up elsewhere is switched off, and " + NoTitleSearches;
+        }
+
+        var keys = CreditsKeys.For(identity.ImdbId, identity.TmdbId, identity.TvdbId, identity.IsSeries);
+        if (keys.Count == 0)
+        {
+            return "Jellyfin's metadata names nobody for its music and gives it no IMDb, TMDb or TVDB id to look that up by, and " + NoTitleSearches;
+        }
+
+        var known = await _composers.GetAsync(cancellationToken).ConfigureAwait(false);
+        if (known.NeedsComposers(keys, DateTime.UtcNow))
+        {
+            // Not settled: a source was down or refused. "Nobody" would be a claim nobody made.
+            return "who made its music could not be looked up this time, so it was not searched for; it is tried again later";
+        }
+
+        var asked = new List<string> { "Jellyfin's metadata" };
+        asked.AddRange(_composers.SourcesAsked(configuration));
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "{0} or named as its theme in {1}, so it was not searched for: {2}",
+            NobodyCredited,
+            JoinOr(asked),
+            NoTitleSearches);
+    }
+
+    private static string JoinOr(IReadOnlyList<string> names) => names.Count switch
+    {
+        0 => string.Empty,
+        1 => names[0],
+        _ => string.Join(", ", names.Take(names.Count - 1)) + " or " + names[^1],
+    };
+
     /// <summary>Reports whether ThemerrDB has a theme for a title, by any id it is known by.</summary>
     internal static bool HasThemerrTheme(ThemerrDbSnapshot catalogue, MediaIdentity identity)
     {
@@ -1528,6 +1605,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
     /// </remarks>
     private async Task<(IReadOnlyList<ScoreResult> Ranked, IReadOnlyList<ScoreResult> Overlooked)> SearchAndRankAsync(
         MediaIdentity identity,
+        IReadOnlyList<SearchQuery> plan,
         PluginConfiguration configuration,
         CancellationToken cancellationToken)
     {
@@ -1538,7 +1616,6 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
             FindExistingAssignment = videoId => _index.FindAssignmentOwner(videoId, identity.ItemId),
         };
 
-        var plan = _queryPlanner.Plan(identity, configuration);
         var best = new Dictionary<string, ScoreResult>(StringComparer.Ordinal);
         var overlooked = new Dictionary<string, ScoreResult>(StringComparer.Ordinal);
         var autoAssign = Math.Max(configuration.AutoAssignThreshold, configuration.ReviewThreshold);

@@ -89,6 +89,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<IScoringRule, PopularityRule>();
         serviceCollection.AddSingleton<IScoringRule, RecencyRule>();
         serviceCollection.AddSingleton<IScoringRule, AvailabilityRule>();
+        serviceCollection.AddSingleton<IScoringRule, AiGeneratedRule>();
         serviceCollection.AddSingleton<IScoringRule, DuplicateRule>();
         serviceCollection.AddSingleton<IScoringRule, QuerySpecificityRule>();
         serviceCollection.AddSingleton<IScoringRule, ComposerRule>();
