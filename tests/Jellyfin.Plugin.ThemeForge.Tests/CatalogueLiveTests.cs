@@ -56,12 +56,12 @@ public class CatalogueLiveTests
         foreach (var type in new[] { "movies", "tv_shows", "movie_collections" })
         {
             var pages = Engines.Catalogue.ThemerrDbCatalogue.ParsePageCount(
-                await client.GetStringAsync($"https://app.lizardbyte.dev/ThemerrDB/{type}/pages.json", CancellationToken.None));
+                await FromThemerrDbAsync(client, $"{type}/pages.json"));
 
             Assert.True(pages > 0, $"{type} reported {pages} pages");
 
             var entries = Engines.Catalogue.ThemerrDbCatalogue.ParsePage(
-                await client.GetStringAsync($"https://app.lizardbyte.dev/ThemerrDB/{type}/all_page_1.json", CancellationToken.None));
+                await FromThemerrDbAsync(client, $"{type}/all_page_1.json"));
 
             Assert.NotEmpty(entries);
             Assert.All(entries, entry => Assert.False(string.IsNullOrWhiteSpace(entry.Id)));
@@ -73,9 +73,7 @@ public class CatalogueLiveTests
     {
         // The film fallback depends on both, and both live on somebody else's server.
         using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
-        var body = await client.GetStringAsync(
-            "https://app.lizardbyte.dev/ThemerrDB/movie_collections/themoviedb/8091.json",
-            CancellationToken.None);
+        var body = await FromThemerrDbAsync(client, "movie_collections/themoviedb/8091.json");
 
         var (url, members) = Engines.Catalogue.ThemerrDbCatalogue.ParseCollection(body);
 
@@ -87,12 +85,7 @@ public class CatalogueLiveTests
     public async Task ThemerrDbStillHasAShowRecordWhereTheCodeLooksForOne()
     {
         using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
-        var body = await client.GetStringAsync(
-            string.Format(
-                System.Globalization.CultureInfo.InvariantCulture,
-                Engines.Catalogue.ThemerrDbCatalogue.ShowsByTmdb,
-                "1396"),
-            CancellationToken.None);
+        var body = await FromThemerrDbAsync(client, Engines.Catalogue.ThemerrDbCatalogue.ShowByTmdbPath("1396"));
 
         Assert.NotNull(Engines.Catalogue.ThemerrDbCatalogue.ReadThemeUrl(body));
     }
@@ -127,18 +120,78 @@ public class CatalogueLiveTests
     }
 
     /// <summary>Hands the catalogue a plain client, since there is no Jellyfin host here.</summary>
+    /// <summary>
+    /// Reads a file from wherever ThemerrDB publishes it now -- its website, else GitHub's copy --
+    /// as the plugin does. The format is what is checked, not which address is up.
+    /// </summary>
+    private static async Task<string> FromThemerrDbAsync(HttpClient client, string path)
+    {
+        foreach (var address in Engines.Catalogue.ThemerrDbCatalogue.Addresses)
+        {
+            using var response = await client.GetAsync($"{address}/{path}", CancellationToken.None);
+            if (response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadAsStringAsync(CancellationToken.None);
+            }
+        }
+
+        throw new HttpRequestException($"ThemerrDB has no {path} at any of its addresses");
+    }
+
     private sealed class SingleClientFactory : IHttpClientFactory
     {
         public HttpClient CreateClient(string name) => new();
     }
 
     [NetworkFact]
+    public async Task AgainstTheRealThemerrDbBlackSummerGetsNoOtherShowsTheme()
+    {
+        // Black Summer (TMDB 88052) is not in ThemerrDB; Black Summoner (157842), an anime, is.
+        // Until 3.1.1 the first was given the second's opening by a name close to its own.
+        var catalogue = new Engines.Catalogue.ThemerrDbCatalogue(
+            new SingleClientFactory(),
+            NullThemeForgeLogger<Engines.Catalogue.ThemerrDbCatalogue>.Instance);
+        var snapshot = await catalogue.SyncAsync(null, CancellationToken.None);
+        var source = new Engines.Discovery.ThemerrDbSource(
+            catalogue,
+            new SingleClientFactory(),
+            new AlwaysPlays(),
+            NullThemeForgeLogger<Engines.Discovery.ThemerrDbSource>.Instance);
+        var configuration = TestData.Config();
+        configuration.UseThemerrDb = true;
+
+        Assert.Null(Engines.Discovery.ThemerrDbSource.MatchShowByTitle("Black Summer", snapshot.TvShows));
+        Assert.Null(await source.FindAsync(Show("Black Summer", "88052", 2019), configuration, CancellationToken.None));
+        Assert.Null(await source.FindAsync(Show("Black Summer", null, 2019), configuration, CancellationToken.None));
+
+        var summoner = await source.FindAsync(Show("Black Summoner", "157842", 2022), configuration, CancellationToken.None);
+        Assert.Contains("UQgv8MBxCuU", summoner!.Url, StringComparison.Ordinal);
+
+        var breakingBad = await source.FindAsync(Show("Breaking Bad", "1396", 2008), configuration, CancellationToken.None);
+        Assert.Equal("its own TMDB id 1396", breakingBad!.MatchedOn);
+    }
+
+    private static Engines.Identity.MediaIdentity Show(string title, string? tmdbId, int year) => new()
+    {
+        ItemId = Guid.NewGuid(),
+        Title = title,
+        NormalizedTitle = Engines.Identity.TitleNormalizer.Normalize(title),
+        Year = year,
+        Kind = Jellyfin.Data.Enums.BaseItemKind.Series,
+        TmdbId = tmdbId,
+    };
+
+    private sealed class AlwaysPlays : Engines.Discovery.ILinkChecker
+    {
+        public Task<Engines.Discovery.LinkState> CheckAsync(string url, CancellationToken cancellationToken) =>
+            Task.FromResult(Engines.Discovery.LinkState.Alive);
+    }
+
+    [NetworkFact]
     public async Task ThemerrDbStillUsesTheFieldNameTheCodeReads()
     {
         using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
-        var json = await client.GetStringAsync(
-            $"https://app.lizardbyte.dev/ThemerrDB/movies/themoviedb/{KnownTmdbId}.json",
-            CancellationToken.None);
+        var json = await FromThemerrDbAsync(client, Engines.Catalogue.ThemerrDbCatalogue.MovieByTmdbPath(KnownTmdbId));
 
         var url = Engines.Catalogue.ThemerrDbCatalogue.ReadThemeUrl(json);
 

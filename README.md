@@ -20,7 +20,10 @@ Point it at your library and it will, for each movie and series:
    in twenty film entries — is passed over, and so is one that will not download. ThemerrDB is
    re-read every day, and a theme a search chose earlier is **replaced** as soon as ThemerrDB lists
    one for the title — under any library rule, and only while the file is still the one ThemeForge
-   wrote.
+   wrote. A title is looked up by its own TMDB or IMDb id. A show is matched by name only when
+   Jellyfin has no TMDB id for it, and then only by exactly its name and year: until 3.1.1 a close
+   name was enough, and *Black Summer* was given the opening of the anime *Black Summoner*. When
+   ThemerrDB's website does not answer, its data is read from GitHub's copy of it.
 3. Otherwise find out **who made the music**, by the title's IMDb id: IMDb's soundtrack listing,
    then IMDb's own crew credits, then Wikidata and Wikipedia.
 4. Search YouTube with **yt-dlp** for exactly that — the theme's own name and performer, or the

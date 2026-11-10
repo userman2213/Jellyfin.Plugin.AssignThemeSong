@@ -592,7 +592,7 @@ public class ThemeForgeController : ControllerBase
                     result.Deleted++;
                 }
 
-                Forget(entry);
+                entry.ForgetDecision();
                 _index.Put(entry);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -604,31 +604,6 @@ public class ThemeForgeController : ControllerBase
         await _index.FlushAsync(cancellationToken).ConfigureAwait(false);
         _logger.LogInformation("ThemeForge: redoing the themes a search chose — {Summary}", result.Summary);
         return result;
-    }
-
-    /// <summary>Returns an entry to the state of a title never looked at.</summary>
-    private static void Forget(ThemeIndexEntry entry)
-    {
-        entry.State = ThemeItemState.Unprocessed;
-        entry.ThemePath = null;
-        entry.Sha256 = null;
-        entry.AssignedBy = null;
-        entry.ChosenId = null;
-        entry.ChosenTitle = null;
-        entry.ChosenUrl = null;
-        entry.ChosenChannel = null;
-        entry.Score = null;
-        entry.ScoreBreakdown = new List<string>();
-        entry.Rejected = new List<RejectedCandidateRecord>();
-        entry.LoudnessLufs = null;
-        entry.DurationSeconds = null;
-        entry.BandDiffStd = null;
-        entry.Attempts = 0;
-        entry.LastError = null;
-        entry.NextRetryUtc = null;
-        entry.LastSkipReason = null;
-        entry.LastSkipUtc = null;
-        entry.NothingToSearchFor = false;
     }
 
     /// <summary>

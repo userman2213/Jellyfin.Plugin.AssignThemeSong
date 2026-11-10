@@ -64,6 +64,34 @@ public sealed class ThemerrDbCatalogue : IThemerrDbCatalogue
     /// <summary>Show records, keyed on a TMDB id. ThemerrDB has no TheTVDB path.</summary>
     public const string ShowsByTmdb = BaseUrl + "/tv_shows/themoviedb/{0}.json";
 
+    /// <summary>
+    /// GitHub's copy of the same published tree, read when the website does not answer.
+    /// </summary>
+    /// <remarks>
+    /// The website is GitHub Pages serving the project's <c>gh-pages</c> branch; this is that branch
+    /// read directly. Since 10 November 2026 the website has answered 404 for every ThemerrDB path,
+    /// which made every title look absent from ThemerrDB, while this still serves all of it.
+    /// </remarks>
+    public const string MirrorUrl = "https://raw.githubusercontent.com/LizardByte/ThemerrDB/gh-pages";
+
+    /// <summary>Gets where ThemerrDB's tree is published, in the order they are tried.</summary>
+    public static IReadOnlyList<string> Addresses { get; } = new[] { BaseUrl, MirrorUrl };
+
+    /// <summary>The path of a film's record, by TMDB id, below an address.</summary>
+    /// <param name="tmdbId">The TMDB id.</param>
+    /// <returns>The path.</returns>
+    public static string MovieByTmdbPath(string tmdbId) => $"movies/themoviedb/{tmdbId}.json";
+
+    /// <summary>The path of a film's record, by IMDb id, below an address.</summary>
+    /// <param name="imdbId">The IMDb id.</param>
+    /// <returns>The path.</returns>
+    public static string MovieByImdbPath(string imdbId) => $"movies/imdb/{imdbId}.json";
+
+    /// <summary>The path of a show's record, by TMDB id, below an address.</summary>
+    /// <param name="tmdbId">The TMDB id.</param>
+    /// <returns>The path.</returns>
+    public static string ShowByTmdbPath(string tmdbId) => $"tv_shows/themoviedb/{tmdbId}.json";
+
     /// <summary>How long to wait between requests, so a daily sync stays a polite guest.</summary>
     private static readonly TimeSpan RequestSpacing = TimeSpan.FromMilliseconds(40);
 
@@ -119,9 +147,19 @@ public sealed class ThemerrDbCatalogue : IThemerrDbCatalogue
 
             // Built into a new snapshot and only swapped in at the end, so a sync that fails
             // partway leaves yesterday's copy intact rather than a half-written one.
-            var fresh = new ThemerrDbSnapshot { UpdatedUtc = DateTime.UtcNow };
+            var address = await ChooseAddressAsync(client, cancellationToken).ConfigureAwait(false);
+            if (address is null)
+            {
+                _logger.LogWarning(
+                    "ThemeForge: ThemerrDB answered at neither {Website} nor {Mirror}; the previous copy has been kept.",
+                    BaseUrl,
+                    MirrorUrl);
+                return _snapshot ??= Read() ?? new ThemerrDbSnapshot();
+            }
 
-            var movies = await ReadIndexAsync(client, "movies", progress, 0, 60, cancellationToken).ConfigureAwait(false);
+            var fresh = new ThemerrDbSnapshot { UpdatedUtc = DateTime.UtcNow, Source = address };
+
+            var movies = await ReadIndexAsync(client, address, "movies", progress, 0, 60, cancellationToken).ConfigureAwait(false);
             fresh.MovieTmdbIds = movies.Select(entry => entry.Id).ToList();
             fresh.MovieImdbIds = movies
                 .Select(entry => entry.ImdbId)
@@ -129,11 +167,11 @@ public sealed class ThemerrDbCatalogue : IThemerrDbCatalogue
                 .Select(id => id!)
                 .ToList();
 
-            var shows = await ReadIndexAsync(client, "tv_shows", progress, 60, 20, cancellationToken).ConfigureAwait(false);
+            var shows = await ReadIndexAsync(client, address, "tv_shows", progress, 60, 20, cancellationToken).ConfigureAwait(false);
             fresh.TvShows = shows.Select(entry => new CatalogueTitle(entry.Id, entry.Title)).ToList();
 
-            var collections = await ReadIndexAsync(client, "movie_collections", progress, 80, 5, cancellationToken).ConfigureAwait(false);
-            fresh.Collections = await ReadCollectionsAsync(client, collections, progress, 85, 15, cancellationToken).ConfigureAwait(false);
+            var collections = await ReadIndexAsync(client, address, "movie_collections", progress, 80, 5, cancellationToken).ConfigureAwait(false);
+            fresh.Collections = await ReadCollectionsAsync(client, address, collections, progress, 85, 15, cancellationToken).ConfigureAwait(false);
 
             if (!fresh.IsUsable)
             {
@@ -317,15 +355,39 @@ public sealed class ThemerrDbCatalogue : IThemerrDbCatalogue
         return (url, members);
     }
 
+    /// <summary>Finds the address ThemerrDB's index can be read from: the website, else GitHub's copy.</summary>
+    private async Task<string?> ChooseAddressAsync(HttpClient client, CancellationToken cancellationToken)
+    {
+        foreach (var address in Addresses)
+        {
+            var pages = await GetStringAsync(client, $"{address}/movies/pages.json", cancellationToken).ConfigureAwait(false);
+            if (pages is not null && ParsePageCount(pages) > 0)
+            {
+                if (!string.Equals(address, BaseUrl, StringComparison.Ordinal))
+                {
+                    _logger.LogWarning(
+                        "ThemeForge: ThemerrDB's website ({Website}) is not answering; its data is read from GitHub's copy ({Mirror}) instead.",
+                        BaseUrl,
+                        address);
+                }
+
+                return address;
+            }
+        }
+
+        return null;
+    }
+
     private async Task<IReadOnlyList<IndexEntry>> ReadIndexAsync(
         HttpClient client,
+        string address,
         string type,
         IProgress<double>? progress,
         double progressFrom,
         double progressSpan,
         CancellationToken cancellationToken)
     {
-        var pageCount = ParsePageCount(await GetStringAsync(client, $"{BaseUrl}/{type}/pages.json", cancellationToken).ConfigureAwait(false)
+        var pageCount = ParsePageCount(await GetStringAsync(client, $"{address}/{type}/pages.json", cancellationToken).ConfigureAwait(false)
                                       ?? "{}");
 
         if (pageCount == 0)
@@ -339,7 +401,7 @@ public sealed class ThemerrDbCatalogue : IThemerrDbCatalogue
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var body = await GetStringAsync(client, $"{BaseUrl}/{type}/all_page_{page.ToString(CultureInfo.InvariantCulture)}.json", cancellationToken)
+            var body = await GetStringAsync(client, $"{address}/{type}/all_page_{page.ToString(CultureInfo.InvariantCulture)}.json", cancellationToken)
                 .ConfigureAwait(false);
 
             if (body is not null)
@@ -357,6 +419,7 @@ public sealed class ThemerrDbCatalogue : IThemerrDbCatalogue
 
     private async Task<List<CatalogueCollection>> ReadCollectionsAsync(
         HttpClient client,
+        string address,
         IReadOnlyList<IndexEntry> index,
         IProgress<double>? progress,
         double progressFrom,
@@ -372,7 +435,7 @@ public sealed class ThemerrDbCatalogue : IThemerrDbCatalogue
             var entry = index[i];
             var body = await GetStringAsync(
                 client,
-                $"{BaseUrl}/movie_collections/themoviedb/{entry.Id}.json",
+                $"{address}/movie_collections/themoviedb/{entry.Id}.json",
                 cancellationToken).ConfigureAwait(false);
 
             if (body is not null)

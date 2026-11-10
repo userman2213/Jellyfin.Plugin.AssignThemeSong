@@ -115,6 +115,7 @@ public sealed class PlexTvThemeSource : IThemeProvenanceSource
                 FoundBy = new SearchQuery($"tvdb:{identity.TvdbId}", 0, "provenance"),
                 IsHydrated = true,
                 Provenance = Name,
+                MatchedOn = $"its own TheTVDB id {identity.TvdbId}",
                 IsDirectAudio = true,
             };
         }

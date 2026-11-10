@@ -207,6 +207,9 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
     /// </summary>
     internal const string NobodyCredited = "nobody is credited with its music";
 
+    /// <summary>What a theme from ThemerrDB is recorded as having been assigned by.</summary>
+    private const string ThemerrDbName = "ThemerrDB";
+
     /// <summary>Ends every reason a title was not searched for.</summary>
     private const string NoTitleSearches = "a title alone is never searched for unattended";
 
@@ -862,6 +865,10 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         // they stayed there after dry run was switched off again.
         var dryRun = configuration.DryRun;
 
+        // Before anything is decided about the item: a theme recorded as ThemerrDB's that ThemerrDB
+        // does not give this show is withdrawn, so the item is looked at afresh in this same pass.
+        await WithdrawThemerrDbMismatchAsync(identity, entry, report, dryRun, cancellationToken).ConfigureAwait(false);
+
         // Three gates, in this order, and the order is the point. Whether a theme may be written at
         // all is decided first and stops everything. The catalogues come next and are never behind
         // a backoff: a lookup keyed on the item's own id costs nothing for a miss, and the backoff
@@ -908,7 +915,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
                 var certain = new ThemeDecision(
                     DecisionOutcome.AutoAssign,
                     Certain(known),
-                    $"listed in {known.Provenance} against this title's own database id");
+                    $"listed in {known.Provenance} under {MatchedOn(known)}");
 
                 if (dryRun)
                 {
@@ -1503,6 +1510,10 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         _ => string.Join(", ", names.Take(names.Count - 1)) + " or " + names[^1],
     };
 
+    /// <summary>Says how a catalogue matched a candidate to the item, for the record.</summary>
+    private static string MatchedOn(Candidate candidate) =>
+        string.IsNullOrWhiteSpace(candidate.MatchedOn) ? "this title's own database id" : candidate.MatchedOn;
+
     /// <summary>Reports whether ThemerrDB has a theme for a title, by any id it is known by.</summary>
     internal static bool HasThemerrTheme(ThemerrDbSnapshot catalogue, MediaIdentity identity)
     {
@@ -1619,7 +1630,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
                 "Provenance",
                 1,
                 100,
-                $"listed in {candidate.Provenance} against this title's own database id, so it was not scored"),
+                $"listed in {candidate.Provenance} under {MatchedOn(candidate)}, so it was not scored"),
         },
     };
 
@@ -1758,7 +1769,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         var certain = new ThemeDecision(
             DecisionOutcome.AutoAssign,
             Certain(known),
-            $"listed in {source} against this title's own database id, replacing the theme ThemeForge had chosen before");
+            $"listed in {source} under {MatchedOn(known)}, replacing the theme ThemeForge had chosen before");
 
         if (dryRun)
         {
@@ -1828,6 +1839,103 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         {
             CleanUpStaging(audio);
         }
+    }
+
+    /// <summary>
+    /// Withdraws a series theme recorded as ThemerrDB's that ThemerrDB does not give that series.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Until 3.1.1 a show ThemerrDB did not list under its own TMDB id was matched to one whose
+    /// name was merely close to its own, and the result was recorded as ThemerrDB's answer: Black
+    /// Summer, the Netflix zombie series, was given the opening of the anime Black Summoner. Being
+    /// a catalogue's answer, it was never replaced afterwards.
+    /// </para>
+    /// <para>
+    /// Only a pick recorded before the fix is looked at -- one recorded since says how it was
+    /// matched -- and it is withdrawn only when ThemerrDB does not give the show a theme by the
+    /// rule in force now: under its own TMDB id, or, for a show with none, under exactly its name.
+    /// The file is deleted only while it is still byte for byte what ThemeForge wrote, with nothing
+    /// beside it; one changed by hand is kept, and the log says so.
+    /// </para>
+    /// </remarks>
+    /// <returns><see langword="true"/> when the theme was withdrawn.</returns>
+    private async Task<bool> WithdrawThemerrDbMismatchAsync(
+        MediaIdentity identity,
+        ThemeIndexEntry entry,
+        RunReport report,
+        bool dryRun,
+        CancellationToken cancellationToken)
+    {
+        if (!identity.IsSeries
+            || entry.State != ThemeItemState.AutoAssigned
+            || entry.ThemePath is not { } path
+            || !string.Equals(entry.AssignedBy, ThemerrDbName, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        // Recorded since the fix: the breakdown says "under its own TMDB id ..." or "under its
+        // exact name ...", and the strict rule made it.
+        var provenance = entry.ScoreBreakdown.Find(line => line.StartsWith("Provenance:", StringComparison.Ordinal));
+        if (provenance is null || !provenance.Contains(" against ", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var catalogue = await _themerrDb.GetAsync(cancellationToken).ConfigureAwait(false);
+        if (!catalogue.IsUsable)
+        {
+            // Nothing to tell a right theme from a wrong one by.
+            return false;
+        }
+
+        var backed = string.IsNullOrWhiteSpace(identity.TmdbId)
+            ? ThemerrDbSource.MatchShowByTitle(identity.Title, catalogue.TvShows) is not null
+            : catalogue.HasShow(identity.TmdbId);
+        if (backed)
+        {
+            return false;
+        }
+
+        if (dryRun)
+        {
+            _logger.LogInformation(
+                "ThemeForge: [dry run] would remove the theme of \"{Item}\": ThemerrDB has none for this show, so it came from another show's entry.",
+                identity.Label);
+            return false;
+        }
+
+        if (File.Exists(path))
+        {
+            if (!await IsStillOursAsync(entry, cancellationToken).ConfigureAwait(false))
+            {
+                _logger.LogWarning(
+                    "ThemeForge: the theme of \"{Item}\" came from another show's ThemerrDB entry, but the file has been changed or joined by another since, so it is left as it is.",
+                    identity.Label);
+                return false;
+            }
+
+            try
+            {
+                File.Delete(path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                _logger.LogWarning(ex, "ThemeForge: could not remove the wrong theme of \"{Item}\".", identity.Label);
+                return false;
+            }
+        }
+
+        _logger.LogWarning(
+            "ThemeForge: removed the theme of \"{Item}\" ({Video}). ThemerrDB has no theme for this show; it was taken from another show with a similar name. The show is looked at again now.",
+            identity.Label,
+            entry.ChosenUrl);
+
+        entry.ForgetDecision();
+        _index.Put(entry);
+        report.NoteReason("removed a theme that came from another show's ThemerrDB entry");
+        return true;
     }
 
     /// <summary>

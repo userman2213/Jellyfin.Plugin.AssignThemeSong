@@ -1,5 +1,11 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Threading;
+using System.Threading.Tasks;
 using Jellyfin.Plugin.ThemeForge.Engines.Catalogue;
 using Xunit;
 
@@ -182,5 +188,61 @@ public class ThemerrDbCatalogueTests
         Assert.Equal(
             "https://app.lizardbyte.dev/ThemerrDB/tv_shows/themoviedb/1396.json",
             string.Format(System.Globalization.CultureInfo.InvariantCulture, ThemerrDbCatalogue.ShowsByTmdb, "1396"));
+    }
+
+    [Fact]
+    public async Task WhenTheWebsiteIsDownTheSyncReadsGitHubsCopyAndRemembersIt()
+    {
+        // Since 10 November 2026 ThemerrDB's website answers 404 for every path; the same tree is
+        // still published on GitHub. Without this the sync kept an ageing copy for ever.
+        var files = new Dictionary<string, string>
+        {
+            ["movies/pages.json"] = """{"count": 1, "pages": 1}""",
+            ["movies/all_page_1.json"] = """[{"id": 78, "imdb_id": "tt0083658", "title": "Blade Runner"}]""",
+            ["tv_shows/pages.json"] = """{"count": 1, "pages": 1}""",
+            ["tv_shows/all_page_1.json"] = """[{"id": 1396, "title": "Breaking Bad"}]""",
+            ["movie_collections/pages.json"] = """{"count": 1, "pages": 1}""",
+            ["movie_collections/all_page_1.json"] = """[{"id": 8091, "title": "Alien Collection"}]""",
+            ["movie_collections/themoviedb/8091.json"] = """{"youtube_theme_url": "https://www.youtube.com/watch?v=collection1", "parts": [{"id": 348}]}""",
+        };
+        var handler = new WebsiteDown(files);
+        var catalogue = new ThemerrDbCatalogue(new Factory(handler), NullThemeForgeLogger<ThemerrDbCatalogue>.Instance);
+
+        var snapshot = await catalogue.SyncAsync(null, CancellationToken.None);
+
+        Assert.Equal(ThemerrDbCatalogue.MirrorUrl, snapshot.Source);
+        Assert.True(snapshot.HasMovie("78"));
+        Assert.True(snapshot.HasShow("1396"));
+        Assert.Single(snapshot.Collections);
+        Assert.All(handler.Requested.Skip(1), url => Assert.StartsWith(ThemerrDbCatalogue.MirrorUrl, url, StringComparison.Ordinal));
+    }
+
+    /// <summary>The website answering 404 for everything; GitHub's copy serving the files it is given.</summary>
+    private sealed class WebsiteDown : HttpMessageHandler
+    {
+        private readonly Dictionary<string, string> _files;
+
+        public WebsiteDown(Dictionary<string, string> files) => _files = files;
+
+        public List<string> Requested { get; } = new();
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var url = request.RequestUri!.ToString();
+            Requested.Add(url);
+            var prefix = ThemerrDbCatalogue.MirrorUrl + "/";
+            return Task.FromResult(url.StartsWith(prefix, StringComparison.Ordinal) && _files.TryGetValue(url[prefix.Length..], out var body)
+                ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) }
+                : new HttpResponseMessage(HttpStatusCode.NotFound) { Content = new StringContent("<html>404</html>") });
+        }
+    }
+
+    private sealed class Factory : IHttpClientFactory
+    {
+        private readonly HttpMessageHandler _handler;
+
+        public Factory(HttpMessageHandler handler) => _handler = handler;
+
+        public HttpClient CreateClient(string name) => new(_handler, disposeHandler: false);
     }
 }

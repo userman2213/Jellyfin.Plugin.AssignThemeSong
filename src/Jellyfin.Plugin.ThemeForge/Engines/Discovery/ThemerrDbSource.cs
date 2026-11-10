@@ -43,6 +43,9 @@ namespace Jellyfin.Plugin.ThemeForge.Engines.Discovery;
 /// </remarks>
 public sealed class ThemerrDbSource : IThemeProvenanceSource
 {
+    /// <summary>How far apart a show's first year and the item's may be and still be the same show.</summary>
+    private const int YearTolerance = 1;
+
     private readonly IThemerrDbCatalogue _catalogue;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILinkChecker _linkChecker;
@@ -95,23 +98,34 @@ public sealed class ThemerrDbSource : IThemeProvenanceSource
     }
 
     /// <summary>
-    /// Finds the show in the catalogue whose title is unmistakably this one.
+    /// Finds the one show in the catalogue with exactly this name.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// ThemerrDB keys shows on a TMDB id and nothing else, but a Jellyfin series may carry only a
-    /// TheTVDB id depending on which metadata providers are enabled. Matching on title is the only
-    /// way those series ever benefit — and against a curated list of about 1300 names it is a far
-    /// safer thing to do than against YouTube. It is still held to a strict standard: each title
-    /// has to name the other with nothing left over, in both directions, and the match has to be
-    /// the only one. That is what separates "Girls" from "Golden Girls", which name each other in
-    /// one direction only.
+    /// TheTVDB id depending on which metadata providers are enabled. Matching on the name is the
+    /// only way those series ever benefit. It is used only for them: a show with its own TMDB id
+    /// that ThemerrDB does not list has no theme there, and a name can then only find another show.
+    /// </para>
+    /// <para>
+    /// The name has to be the same once case, accents, punctuation and a leading article are set
+    /// aside, and only one entry may have it. It used to be close enough rather than the same, and
+    /// "Black Summer" was close enough to "Black Summoner": the Netflix zombie series was given the
+    /// opening of a Japanese anime.
+    /// </para>
     /// </remarks>
     /// <param name="title">The series title as Jellyfin has it.</param>
     /// <param name="shows">The catalogue's shows.</param>
-    /// <returns>The single unmistakable match, or <see langword="null"/>.</returns>
+    /// <returns>The single show with exactly this name, or <see langword="null"/>.</returns>
     public static CatalogueTitle? MatchShowByTitle(string? title, IReadOnlyList<CatalogueTitle> shows)
     {
         if (string.IsNullOrWhiteSpace(title) || shows is null)
+        {
+            return null;
+        }
+
+        var wanted = TitleNormalizer.Normalize(title);
+        if (wanted.Length == 0)
         {
             return null;
         }
@@ -120,14 +134,14 @@ public sealed class ThemerrDbSource : IThemeProvenanceSource
 
         foreach (var show in shows)
         {
-            if (!NamesTheSameWork(title, show.Title))
+            if (!string.Equals(TitleNormalizer.Normalize(show.Title), wanted, StringComparison.Ordinal))
             {
                 continue;
             }
 
             if (found is not null)
             {
-                // Two entries answer to this name, so the title alone cannot say which.
+                // Two entries answer to this name, so the name alone cannot say which.
                 return null;
             }
 
@@ -137,16 +151,30 @@ public sealed class ThemerrDbSource : IThemeProvenanceSource
         return found;
     }
 
-    private static bool NamesTheSameWork(string first, string second)
+    /// <summary>
+    /// Reports whether a show's record could be the item, by the year it first aired.
+    /// </summary>
+    /// <param name="record">The show's record.</param>
+    /// <param name="year">The item's year, when known.</param>
+    /// <returns><see langword="false"/> only when both years are known and more than one apart.</returns>
+    internal static bool AiredInTheSameYear(string record, int? year)
     {
-        var forward = TitleAnchor.Match(first, second);
-        if (forward.Rejected || forward.Residual < 1)
+        if (year is null)
         {
-            return false;
+            return true;
         }
 
-        var backward = TitleAnchor.Match(second, first);
-        return !backward.Rejected && backward.Residual >= 1;
+        using var document = JsonDocument.Parse(record);
+        if (document.RootElement.ValueKind != JsonValueKind.Object
+            || !document.RootElement.TryGetProperty("first_air_date", out var aired)
+            || aired.ValueKind != JsonValueKind.String
+            || aired.GetString() is not { Length: >= 4 } date
+            || !int.TryParse(date.AsSpan(0, 4), NumberStyles.None, CultureInfo.InvariantCulture, out var first))
+        {
+            return true;
+        }
+
+        return Math.Abs(first - year.Value) <= YearTolerance;
     }
 
     private async Task<Candidate?> FindMovieAsync(
@@ -162,8 +190,9 @@ public sealed class ThemerrDbSource : IThemeProvenanceSource
                 ? null
                 : await FetchAsync(
                     identity,
-                    string.Format(CultureInfo.InvariantCulture, ThemerrDbCatalogue.MoviesByTmdb, identity.TmdbId),
-                    $"TMDB id {identity.TmdbId}",
+                    snapshot,
+                    ThemerrDbCatalogue.MovieByTmdbPath(identity.TmdbId!),
+                    $"its own TMDB id {identity.TmdbId}",
                     cancellationToken).ConfigureAwait(false);
         }
 
@@ -171,8 +200,9 @@ public sealed class ThemerrDbSource : IThemeProvenanceSource
         {
             return await FetchAsync(
                 identity,
-                string.Format(CultureInfo.InvariantCulture, ThemerrDbCatalogue.MoviesByTmdb, identity.TmdbId),
-                $"TMDB id {identity.TmdbId}",
+                snapshot,
+                ThemerrDbCatalogue.MovieByTmdbPath(identity.TmdbId!),
+                $"its own TMDB id {identity.TmdbId}",
                 cancellationToken).ConfigureAwait(false);
         }
 
@@ -180,8 +210,9 @@ public sealed class ThemerrDbSource : IThemeProvenanceSource
         {
             return await FetchAsync(
                 identity,
-                string.Format(CultureInfo.InvariantCulture, ThemerrDbCatalogue.MoviesByImdb, identity.ImdbId),
-                $"IMDb id {identity.ImdbId}",
+                snapshot,
+                ThemerrDbCatalogue.MovieByImdbPath(identity.ImdbId!),
+                $"its own IMDb id {identity.ImdbId}",
                 cancellationToken).ConfigureAwait(false);
         }
 
@@ -197,7 +228,7 @@ public sealed class ThemerrDbSource : IThemeProvenanceSource
                 identity,
                 collection.ThemeUrl,
                 $"{identity.Title} ({collection.Title}, ThemerrDB)",
-                $"Chosen for the collection \"{collection.Title}\", which this film belongs to.",
+                $"the collection \"{collection.Title}\" its TMDB id {identity.TmdbId} belongs to",
                 cancellationToken).ConfigureAwait(false);
         }
 
@@ -215,8 +246,9 @@ public sealed class ThemerrDbSource : IThemeProvenanceSource
                 ? null
                 : await FetchAsync(
                     identity,
-                    string.Format(CultureInfo.InvariantCulture, ThemerrDbCatalogue.ShowsByTmdb, identity.TmdbId),
-                    $"TMDB id {identity.TmdbId}",
+                    snapshot,
+                    ThemerrDbCatalogue.ShowByTmdbPath(identity.TmdbId!),
+                    $"its own TMDB id {identity.TmdbId}",
                     cancellationToken).ConfigureAwait(false);
         }
 
@@ -224,22 +256,28 @@ public sealed class ThemerrDbSource : IThemeProvenanceSource
         {
             return await FetchAsync(
                 identity,
-                string.Format(CultureInfo.InvariantCulture, ThemerrDbCatalogue.ShowsByTmdb, identity.TmdbId),
-                $"TMDB id {identity.TmdbId}",
+                snapshot,
+                ThemerrDbCatalogue.ShowByTmdbPath(identity.TmdbId!),
+                $"its own TMDB id {identity.TmdbId}",
                 cancellationToken).ConfigureAwait(false);
         }
 
-        if (MatchShowByTitle(identity.Title, snapshot.TvShows) is { } matched)
+        // By name only for a show Jellyfin has no TMDB id for. A show with its own id that is not
+        // listed has no theme in ThemerrDB, and a name could only find a different show.
+        if (string.IsNullOrWhiteSpace(identity.TmdbId)
+            && MatchShowByTitle(identity.Title, snapshot.TvShows) is { } matched)
         {
             _logger.LogInformation(
-                "ThemeForge: \"{Item}\" has no TMDB id, but ThemerrDB lists exactly one show by that name.",
+                "ThemeForge: \"{Item}\" has no TMDB id, and ThemerrDB lists exactly one show by exactly that name.",
                 identity.Label);
 
             return await FetchAsync(
                 identity,
-                string.Format(CultureInfo.InvariantCulture, ThemerrDbCatalogue.ShowsByTmdb, matched.Id),
-                $"the single ThemerrDB entry named \"{matched.Title}\"",
-                cancellationToken).ConfigureAwait(false);
+                snapshot,
+                ThemerrDbCatalogue.ShowByTmdbPath(matched.Id),
+                $"its exact name, as the single ThemerrDB entry \"{matched.Title}\" (Jellyfin has no TMDB id for it)",
+                cancellationToken,
+                checkYear: true).ConfigureAwait(false);
         }
 
         return null;
@@ -247,22 +285,20 @@ public sealed class ThemerrDbSource : IThemeProvenanceSource
 
     private async Task<Candidate?> FetchAsync(
         MediaIdentity identity,
-        string url,
+        ThemerrDbSnapshot snapshot,
+        string path,
         string keyedOn,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool checkYear = false)
     {
         try
         {
-            var client = _httpClientFactory.CreateClient(NamedClient.Default);
-            using var response = await client.GetAsync(url, cancellationToken).ConfigureAwait(false);
-
-            // A miss is served as an HTML 404 page, so the status code is the only reliable signal.
-            if (response.StatusCode == HttpStatusCode.NotFound || !response.IsSuccessStatusCode)
+            var body = await ReadRecordAsync(snapshot, path, cancellationToken).ConfigureAwait(false);
+            if (body is null)
             {
                 return null;
             }
 
-            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             var themeUrl = ThemerrDbCatalogue.ReadThemeUrl(body);
 
             if (themeUrl is null)
@@ -270,8 +306,16 @@ public sealed class ThemerrDbSource : IThemeProvenanceSource
                 return null;
             }
 
+            if (checkYear && !AiredInTheSameYear(body, identity.Year))
+            {
+                _logger.LogInformation(
+                    "ThemeForge: ThemerrDB's show of the same name as \"{Item}\" first aired in another year, so it is a different show.",
+                    identity.Label);
+                return null;
+            }
+
             _logger.LogInformation(
-                "ThemeForge: ThemerrDB has a theme for \"{Item}\" ({KeyedOn}).",
+                "ThemeForge: ThemerrDB has a theme for \"{Item}\", by {KeyedOn}.",
                 identity.Label,
                 keyedOn);
 
@@ -279,14 +323,50 @@ public sealed class ThemerrDbSource : IThemeProvenanceSource
                 identity,
                 themeUrl,
                 $"{identity.Title} (ThemerrDB)",
-                $"Chosen for {keyedOn}.",
+                keyedOn,
                 cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
+        catch (JsonException ex)
         {
-            _logger.LogDebug(ex, "ThemeForge: could not read {Url}.", url);
+            _logger.LogDebug(ex, "ThemeForge: ThemerrDB's record {Path} could not be read.", path);
             return null;
         }
+    }
+
+    /// <summary>
+    /// Reads a record, from where the catalogue was last read first and then from the other address.
+    /// </summary>
+    /// <remarks>
+    /// A miss is served as an HTML 404 page, so the status code is the only signal -- and it is the
+    /// same signal a website that is down gives. Asking the other address before believing it keeps
+    /// a down website from reading as "ThemerrDB has nothing for this", which since 10 November 2026
+    /// it did for every title.
+    /// </remarks>
+    private async Task<string?> ReadRecordAsync(ThemerrDbSnapshot snapshot, string path, CancellationToken cancellationToken)
+    {
+        var client = _httpClientFactory.CreateClient(NamedClient.Default);
+        var addresses = string.IsNullOrEmpty(snapshot.Source)
+            ? ThemerrDbCatalogue.Addresses
+            : ThemerrDbCatalogue.Addresses.OrderBy(address => string.Equals(address, snapshot.Source, StringComparison.Ordinal) ? 0 : 1).ToList();
+
+        foreach (var address in addresses)
+        {
+            var url = $"{address}/{path}";
+            try
+            {
+                using var response = await client.GetAsync(url, cancellationToken).ConfigureAwait(false);
+                if (response.IsSuccessStatusCode)
+                {
+                    return await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                }
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
+            {
+                _logger.LogDebug(ex, "ThemeForge: could not read {Url}.", url);
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -302,7 +382,7 @@ public sealed class ThemerrDbSource : IThemeProvenanceSource
         MediaIdentity identity,
         string themeUrl,
         string title,
-        string description,
+        string matchedOn,
         CancellationToken cancellationToken)
     {
         var state = await _linkChecker.CheckAsync(themeUrl, cancellationToken).ConfigureAwait(false);
@@ -316,18 +396,19 @@ public sealed class ThemerrDbSource : IThemeProvenanceSource
             return null;
         }
 
-        return Describe(identity, themeUrl, title, description);
+        return Describe(identity, themeUrl, title, matchedOn);
     }
 
-    private Candidate Describe(MediaIdentity identity, string themeUrl, string title, string description) => new()
+    private Candidate Describe(MediaIdentity identity, string themeUrl, string title, string matchedOn) => new()
     {
         Id = Orchestration.ThemeOrchestrator.ExtractVideoId(themeUrl),
         Url = themeUrl,
         Title = title,
         Channel = Name,
-        Description = description,
+        Description = $"Chosen for {matchedOn}.",
         FoundBy = new SearchQuery($"themerrdb:{identity.StableKey}", 0, "catalogue"),
         IsHydrated = true,
         Provenance = Name,
+        MatchedOn = matchedOn,
     };
 }

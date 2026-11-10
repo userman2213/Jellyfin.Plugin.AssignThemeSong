@@ -36,6 +36,26 @@ public class TitleAnchorTests
     }
 
     [Fact]
+    public void AWordTwoEditsAwayIsAnotherWord()
+    {
+        // summer/summoner: a length ratio of exactly 0.75 and a similarity of 0.95, and two words.
+        Assert.True(TitleAnchor.Match("Black Summer", "Black Summoner Opening Theme").Rejected);
+        Assert.False(TitleAnchor.Match("Black Summer", "Black Summer Main Title").Rejected);
+    }
+
+    [Theory]
+    [InlineData("galactica", "galactika", true)]   // one letter changed
+    [InlineData("theatre", "theater", true)]       // two neighbours swapped
+    [InlineData("colour", "color", true)]          // one letter dropped
+    [InlineData("summer", "summoner", false)]      // two letters added
+    [InlineData("castle", "castlevania", false)]
+    public void OneEditIsTheMost(string first, string second, bool expected)
+    {
+        Assert.Equal(expected, TitleAnchor.WithinOneEdit(first, second));
+        Assert.Equal(expected, TitleAnchor.WithinOneEdit(second, first));
+    }
+
+    [Fact]
     public void AShorterWordMayNot()
     {
         // castle/castlevania and dark/darkside both score above 0.90 on similarity alone.
