@@ -176,6 +176,17 @@ public class EligibilityTests
     }
 
     [Fact]
+    public void WhatAnEarlierVersionFoundNothingToSearchForIsSearchedDespiteItsWait()
+    {
+        // 3.1.0 searched for nothing on a server whose templates named no credit and left each
+        // title waiting twelve hours; the fixed version must not sit that wait out.
+        var entry = Entry(ThemeItemState.NoCandidate, retryAt: Now.AddHours(11), matcher: ThemeIndexEntry.CurrentMatcher - 1);
+        entry.NothingToSearchFor = true;
+
+        Assert.True(Decide(entry).SearchAllowed);
+    }
+
+    [Fact]
     public void AFreshItemGetsEverything()
     {
         var decision = Decide(Entry(ThemeItemState.Unprocessed));

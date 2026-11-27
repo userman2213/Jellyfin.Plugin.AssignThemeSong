@@ -47,8 +47,10 @@ public sealed class ThemeIndexEntry
     /// Generation 5 (3.1) searches only for who made the music, never a title on its own, rejects
     /// AI-generated uploads, and no longer takes a film's song for its theme for sharing the film's
     /// name; what earlier generations queued, failed or gave up on gets one more search, by credits.
+    /// Generation 6 (3.1.2): 3.1.0 searched for nothing on a server whose saved templates named no
+    /// credit, and left each title waiting twelve hours; they are searched on the next run instead.
     /// </remarks>
-    public const int CurrentMatcher = 5;
+    public const int CurrentMatcher = 6;
 
     /// <summary>Gets or sets the Jellyfin item id.</summary>
     public Guid ItemId { get; set; }

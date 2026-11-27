@@ -884,7 +884,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         {
             if (!eligibility.CatalogueAllowed)
             {
-                return Skip(entry, identity, eligibility.StopReason!, dryRun);
+                return Skip(report, entry, identity, eligibility.StopReason!, dryRun);
             }
 
             if (eligibility.RetriedAfterUpgrade)
@@ -949,7 +949,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
             // Gate three: only the search is subject to backoff and attempt limits.
             if (!eligibility.SearchAllowed)
             {
-                return Skip(entry, identity, eligibility.SearchDeferral!, dryRun);
+                return Skip(report, entry, identity, eligibility.SearchDeferral!, dryRun);
             }
 
             entry.LastSkipReason = null;
@@ -1045,8 +1045,11 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
     }
 
     /// <summary>Leaves an item alone this run, and says why where the user will look.</summary>
-    private ItemOutcome Skip(ThemeIndexEntry entry, MediaIdentity identity, string reason, bool dryRun)
+    private ItemOutcome Skip(RunReport report, ThemeIndexEntry entry, MediaIdentity identity, string reason, bool dryRun)
     {
+        // In the run's summary too: "113 skipped" with no reason beside it answers nothing.
+        report.NoteSkip(reason);
+
         // Recorded rather than only logged: "why was this skipped" is the first question asked
         // when a settings change appears to do nothing, and the log is not where people look.
         if (!dryRun)
@@ -1779,7 +1782,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
 
         if (!await IsStillOursAsync(entry, cancellationToken).ConfigureAwait(false))
         {
-            return Skip(entry, identity, $"{source} lists a theme for it, but its theme file was changed or joined by another since ThemeForge wrote it, so it is left alone", dryRun);
+            return Skip(report, entry, identity, $"{source} lists a theme for it, but its theme file was changed or joined by another since ThemeForge wrote it, so it is left alone", dryRun);
         }
 
         AcquiredAudio audio;
@@ -1789,14 +1792,14 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         }
         catch (InvalidOperationException ex)
         {
-            return Skip(entry, identity, $"{source}'s theme could not be downloaded ({ex.Message}); the current theme stays", dryRun);
+            return Skip(report, entry, identity, $"{source}'s theme could not be downloaded ({ex.Message}); the current theme stays", dryRun);
         }
 
         try
         {
             if (audio.NeedsReview)
             {
-                return Skip(entry, identity, $"{source}'s theme did not sound like music ({audio.Assessment!.Reason}); the current theme stays", dryRun);
+                return Skip(report, entry, identity, $"{source}'s theme did not sound like music ({audio.Assessment!.Reason}); the current theme stays", dryRun);
             }
 
             // The file being replaced is ThemeForge's own, checked above, whatever this library's
@@ -1810,7 +1813,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
 
             if (!placement.Success)
             {
-                return Skip(entry, identity, $"{source}'s theme could not be written ({placement.Reason}); the current theme stays", dryRun);
+                return Skip(report, entry, identity, $"{source}'s theme could not be written ({placement.Reason}); the current theme stays", dryRun);
             }
 
             var replaced = entry.ChosenTitle;

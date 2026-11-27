@@ -113,8 +113,41 @@ public sealed class RunReport
             return;
         }
 
-        TopReasons[reason] = TopReasons.TryGetValue(reason, out var count) ? count + 1 : 1;
+        lock (TopReasons)
+        {
+            TopReasons[reason] = TopReasons.TryGetValue(reason, out var count) ? count + 1 : 1;
+        }
     }
+
+    /// <summary>Records why an item was left alone, so the summary can say what "skipped" means.</summary>
+    /// <remarks>
+    /// The time a backoff runs until is left out, or every item would be a reason of its own.
+    /// </remarks>
+    /// <param name="reason">The reason text.</param>
+    public void NoteSkip(string reason)
+    {
+        if (!string.IsNullOrWhiteSpace(reason))
+        {
+            NoteReason("skipped: " + UntilATime.Replace(reason, " for now"));
+        }
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex UntilATime = new(
+        @"\s+until \d{4}-\d{2}-\d{2}[ T][\d:]+Z?",
+        System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>Copies the reasons, safely while a run is still adding to them.</summary>
+    /// <returns>The reasons and their counts.</returns>
+    public IReadOnlyList<KeyValuePair<string, int>> Reasons()
+    {
+        lock (TopReasons)
+        {
+            return TopReasons.ToList();
+        }
+    }
+
+    /// <summary>Gets how many items have been dealt with so far.</summary>
+    public int Processed => Assigned + Queued + NoCandidate + Failed + WouldAssign + Skipped;
 
     /// <summary>Counts an outcome.</summary>
     /// <param name="outcome">What happened to the item.</param>
@@ -133,7 +166,11 @@ public sealed class RunReport
 
     /// <summary>Renders the one-line summary written to the log when a run ends.</summary>
     /// <returns>The summary.</returns>
-    public override string ToString() => WasDryRun
+    public override string ToString() => (FinishedUtc is null && Processed < Considered
+        ? string.Format(CultureInfo.InvariantCulture, "still running, {0} of {1} done so far: ", Processed, Considered)
+        : string.Empty) + Counts();
+
+    private string Counts() => WasDryRun
         ? string.Format(
             CultureInfo.InvariantCulture,
             "dry run: {0} considered, {1} would be assigned, {2} would need review, {3} without a candidate, {4} would fail, {5} skipped — nothing was written",

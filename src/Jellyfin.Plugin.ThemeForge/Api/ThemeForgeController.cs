@@ -125,7 +125,7 @@ public class ThemeForgeController : ControllerBase
                 .OrderByDescending(pair => pair.Value)
                 .Select(pair => $"{pair.Value} via {pair.Key}")
                 .ToList();
-            status.LastRunReasons = lastRun.TopReasons
+            status.LastRunReasons = lastRun.Reasons()
                 .OrderByDescending(pair => pair.Value)
                 .Take(5)
                 .Select(pair => $"{pair.Value}x {pair.Key}")
