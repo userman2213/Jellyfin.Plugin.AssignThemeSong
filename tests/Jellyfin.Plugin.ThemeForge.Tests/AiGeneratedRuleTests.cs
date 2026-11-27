@@ -122,6 +122,30 @@ public sealed class AiGeneratedRuleTests
         Assert.Same(real, ranked[0].Candidate);
     }
 
+    [Theory]
+    [InlineData("#aigenerated")]
+    [InlineData("AI Music")]
+    [InlineData("suno ai")]
+    [InlineData("udio")]
+    [InlineData("made with ai")]
+    public void VetoesAnUploadTaggedAsGenerated(string tag)
+    {
+        var candidate = TestData.Candidate("Lucky Strike Main Theme") with { Tags = new[] { "soundtrack", tag } };
+
+        Assert.True(_rule.Evaluate(candidate, TestData.Context(TestData.Movie("Lucky Strike", 2026))).IsVeto, tag);
+    }
+
+    [Fact]
+    public void LeavesOrdinaryTagsAlone()
+    {
+        var candidate = TestData.Candidate("Lucky Strike Main Theme") with
+        {
+            Tags = new[] { "soundtrack", "main theme", "Larry Groupé", "air", "suno na", "hawaii", "trailer music" },
+        };
+
+        Assert.False(_rule.Evaluate(candidate, TestData.Context(TestData.Movie("Lucky Strike", 2026))).IsVeto);
+    }
+
     [Fact]
     public void SaysWhatGaveItAway()
     {

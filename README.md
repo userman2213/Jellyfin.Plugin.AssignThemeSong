@@ -15,7 +15,9 @@ Point it at your library and it will, for each movie and series:
 
 1. Work out what the item actually is — title, alternate titles, year, where it was made,
    TVDB/TMDB/IMDb ids, who wrote its music, and what its theme is called.
-2. Check **ThemerrDB**, the community-curated list of theme songs. If it has a theme for the item
+2. Check the catalogues, by the item's own ids. First **Plex's television theme archive**, when you
+   have switched it on (series only, by TheTVDB id; off by default). Then
+   **ThemerrDB**, the community-curated list of theme songs. If it has a theme for the item
    **and that link still plays**, that is the theme and nothing else runs. A dead link — about one
    in twenty film entries — is passed over, and so is one that will not download. ThemerrDB is
    re-read every day, and a theme a search chose earlier is **replaced** as soon as ThemerrDB lists
@@ -27,7 +29,8 @@ Point it at your library and it will, for each movie and series:
 3. Otherwise find out **who made the music**, by the title's IMDb id: IMDb's soundtrack listing,
    then IMDb's own crew credits, then Wikidata and Wikipedia.
 4. Search YouTube with **yt-dlp** for exactly that — the theme's own name and performer, or the
-   title with its composer. **A title is never searched for on its own**: those searches are what
+   title with its composer. These searches are built in and run whatever the search templates in
+   the settings hold; templates there only add to them. **A title is never searched for on its own**: those searches are what
    turned up AI-generated "theme songs" and songs that merely share a film's name. A title nobody
    is credited with the music of is not searched at all, and Diagnostics lists it.
 5. Score every candidate against twelve independent rules, each of which explains itself.

@@ -1458,7 +1458,8 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
     {
         if (identity.Composers.Count > 0 || identity.Theme is not null)
         {
-            return "none of the search templates names {composer} or {theme}, and " + NoTitleSearches;
+            // Cannot happen with the built-in credit searches; said plainly if it ever does.
+            return "it has credits, but no search could be built from them (a bug; please report it)";
         }
 
         if (!configuration.ResearchComposers)

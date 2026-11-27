@@ -48,6 +48,14 @@ public sealed class AiGeneratedRule : IScoringRule
         @"(?:\bnot|\bno|\bnon|\bwithout|\bnever|n't|\bzero)[\s-]*$",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
+    /// <summary>Tags that mean generated, with spaces, hyphens and the hash removed.</summary>
+    private static readonly System.Collections.Generic.HashSet<string> GeneratedTags = new(StringComparer.Ordinal)
+    {
+        "ai", "aimusic", "aisong", "aisongs", "aigenerated", "aigeneratedmusic", "aicover", "aiart", "aivocals",
+        "aimade", "madewithai", "generatedbyai", "artificialintelligence", "generativeai",
+        "sunoai", "sunomusic", "sunoaimusic", "udio", "udioai", "udiomusic",
+    };
+
     /// <inheritdoc />
     public string Name => "AiGenerated";
 
@@ -82,7 +90,28 @@ public sealed class AiGeneratedRule : IScoringRule
             return RuleVerdict.Veto(string.Format(CultureInfo.InvariantCulture, "its description says it was made by AI (\"{0}\")", described));
         }
 
+        // Tags and hashtags are the uploader's own labels, one thing each.
+        foreach (var tag in candidate.Tags)
+        {
+            if (TaggedAsGenerated(tag) is { } label)
+            {
+                return RuleVerdict.Veto(string.Format(CultureInfo.InvariantCulture, "it is tagged as made by AI (\"{0}\")", label));
+            }
+        }
+
         return RuleVerdict.Abstain("nothing says it was made by AI");
+    }
+
+    /// <summary>Reports a tag that labels the upload as generated: a phrase, or a generator's name.</summary>
+    internal static string? TaggedAsGenerated(string? tag)
+    {
+        if (string.IsNullOrWhiteSpace(tag))
+        {
+            return null;
+        }
+
+        var bare = tag.Trim().TrimStart('#').Replace(" ", string.Empty, StringComparison.Ordinal).Replace("-", string.Empty, StringComparison.Ordinal).ToLowerInvariant();
+        return GeneratedTags.Contains(bare) || Claim(tag) is not null ? tag.Trim() : null;
     }
 
     /// <summary>Finds a phrase claiming the upload was generated, unless it is being denied.</summary>

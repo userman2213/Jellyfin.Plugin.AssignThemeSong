@@ -89,7 +89,12 @@ public sealed class QueryPlanner : IQueryPlanner
         var queries = new List<SearchQuery>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        var ladder = (templates ?? Enumerable.Empty<string>())
+        // The credit searches are built in and run whatever the saved templates hold. In 3.1.0
+        // they came from the saved templates alone, and a library whose templates named no credit
+        // -- edited once, or saved by an old version -- was not searched at all: 844 of 963 titles.
+        var builtIn = identity.IsSeries ? ShippedTemplates.Series : ShippedTemplates.Movies;
+        var ladder = builtIn
+            .Concat(templates ?? Enumerable.Empty<string>())
             .Concat(includeTitleSearches ? ByHandFallbacks : Enumerable.Empty<string>());
 
         foreach (var template in ladder)

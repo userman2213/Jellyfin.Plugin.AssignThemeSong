@@ -73,7 +73,8 @@ public class ComposerTests
         // The title search after it is never run unattended.
         Assert.Equal(
             new[] { "Firefly Greg Edmonson theme", "Firefly Someone Else theme" },
-            queries.Select(query => query.Text).ToArray());
+            queries.Take(2).Select(query => query.Text).ToArray());
+        Assert.DoesNotContain(queries, query => query.Text == "Firefly theme");
     }
 
     [Fact]
@@ -135,10 +136,23 @@ public class ComposerTests
     public void AnEditedLadderIsLeftAlone()
     {
         var configuration = TestData.Config();
-        configuration.SeriesQueryTemplates = new[] { "{title} my own query" };
+        configuration.SeriesQueryTemplates = new[] { "{title} {composer} my own query" };
         configuration.MovieQueryTemplates = ShippedTemplates.Movies.ToArray();
 
         Assert.False(ShippedTemplates.Upgrade(configuration));
-        Assert.Equal(new[] { "{title} my own query" }, configuration.SeriesQueryTemplates);
+        Assert.Equal(new[] { "{title} {composer} my own query" }, configuration.SeriesQueryTemplates);
+    }
+
+    [Fact]
+    public void ALadderNamingNoCreditIsReplaced()
+    {
+        // It does nothing in an unattended run, so leaving it would show settings that do not run.
+        var configuration = TestData.Config();
+        configuration.SeriesQueryTemplates = new[] { "{title} my own query" };
+        configuration.MovieQueryTemplates = System.Array.Empty<string>();
+
+        Assert.True(ShippedTemplates.Upgrade(configuration));
+        Assert.Equal(ShippedTemplates.Series, configuration.SeriesQueryTemplates);
+        Assert.Equal(ShippedTemplates.Movies, configuration.MovieQueryTemplates);
     }
 }

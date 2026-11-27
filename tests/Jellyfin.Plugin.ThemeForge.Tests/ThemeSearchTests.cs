@@ -125,11 +125,11 @@ public class ThemeSearchTests
     public void AnEditedLadderIsLeftAlone()
     {
         var configuration = TestData.Config();
-        configuration.SeriesQueryTemplates = new[] { "{title} opening theme song", "{title} my own phrasing" };
+        configuration.SeriesQueryTemplates = new[] { "{title} {theme} live", "{title} my own phrasing" };
 
         ShippedTemplates.Upgrade(configuration);
 
-        Assert.Equal(new[] { "{title} opening theme song", "{title} my own phrasing" }, configuration.SeriesQueryTemplates);
+        Assert.Equal(new[] { "{title} {theme} live", "{title} my own phrasing" }, configuration.SeriesQueryTemplates);
     }
 
     [Theory]

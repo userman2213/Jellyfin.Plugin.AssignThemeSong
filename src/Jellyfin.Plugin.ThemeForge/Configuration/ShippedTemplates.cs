@@ -121,6 +121,20 @@ public static class ShippedTemplates
 
         var changed = false;
 
+        // Templates naming no credit do nothing in an unattended run, and say nothing a person
+        // meant: they are an old ladder, edited or not. Replaced, so the settings show what runs.
+        if (!NamesACredit(configuration.SeriesQueryTemplates))
+        {
+            configuration.SeriesQueryTemplates = Series.ToArray();
+            changed = true;
+        }
+
+        if (!NamesACredit(configuration.MovieQueryTemplates))
+        {
+            configuration.MovieQueryTemplates = Movies.ToArray();
+            changed = true;
+        }
+
         if (PreviousSeries.Any(previous => previous.SequenceEqual(configuration.SeriesQueryTemplates ?? Array.Empty<string>(), StringComparer.Ordinal)))
         {
             configuration.SeriesQueryTemplates = Series.ToArray();
@@ -135,4 +149,10 @@ public static class ShippedTemplates
 
         return changed;
     }
+
+    private static bool NamesACredit(string[]? templates) =>
+        templates is not null && templates.Any(template =>
+            template is not null
+            && (template.Contains("{composer}", StringComparison.OrdinalIgnoreCase)
+                || template.Contains("{theme}", StringComparison.OrdinalIgnoreCase)));
 }

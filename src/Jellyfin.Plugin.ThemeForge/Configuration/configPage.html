@@ -309,10 +309,11 @@
                     </div>
                     <label class="emby-checkbox-label">
                         <input is="emby-checkbox" type="checkbox" id="UsePlexThemeArchive" />
-                        <span>Look series up in Plex's television theme archive by their TheTVDB id</span>
+                        <span>Look series up in Plex's television theme archive by their TheTVDB id, before ThemerrDB</span>
                     </label>
                     <div class="fieldDescription" style="margin:.25em 0 1em 0;color:#e8a33d;">
-                        Off by default, and worth a moment's thought before turning on. Coverage is good
+                        When on, it is asked first, before ThemerrDB; it has series only, so films go straight to
+                        ThemerrDB. Off by default, and worth a moment's thought before turning on. Coverage is good
                         &mdash; roughly 43% of American series &mdash; and a hit is certain in a way no search
                         result is. But these files are hosted by Plex for Plex's own clients, and the fair-use
                         rationale Plex publishes for them covers their software, not this plugin. Whether that
@@ -492,7 +493,10 @@
                     </label>
                     <div class="inputContainer">
                         <textarea is="emby-textarea" id="SeriesQueryTemplates" rows="5" label="Series searches (one per line)"></textarea>
-                        <div class="fieldDescription">Most specific first. {title} and {year} are substituted.</div>
+                        <div class="fieldDescription">Extra searches, run after the built-in ones. The built-in searches
+                        always run and cannot be removed: the theme's own name and performer, then the title with its
+                        composer. A line here is used in an unattended run only if it names {composer} or {theme};
+                        a line with only {title} and {year} is used in &ldquo;Change theme&rdquo;, where you pick the result.</div>
                     </div>
                     <div class="inputContainer">
                         <textarea is="emby-textarea" id="MovieQueryTemplates" rows="5" label="Movie searches (one per line)"></textarea>

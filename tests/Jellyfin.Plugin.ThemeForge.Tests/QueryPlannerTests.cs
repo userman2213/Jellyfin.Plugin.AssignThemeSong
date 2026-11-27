@@ -20,7 +20,7 @@ public class QueryPlannerTests
 
         var plan = _planner.Plan(TestData.Movie("Blade Runner", 1982, composers: Vangelis), configuration);
 
-        Assert.Equal("Blade Runner 1982 Vangelis main theme", plan[0].Text);
+        Assert.Contains(plan, query => query.Text == "Blade Runner 1982 Vangelis main theme");
     }
 
     [Fact]
@@ -42,8 +42,67 @@ public class QueryPlannerTests
         configuration.SeriesQueryTemplates = new[] { "series {title} {composer}" };
         configuration.MovieQueryTemplates = new[] { "movie {title} {composer}" };
 
-        Assert.StartsWith("series ", _planner.Plan(TestData.Series("X", composers: Edmonson), configuration)[0].Text, System.StringComparison.Ordinal);
-        Assert.StartsWith("movie ", _planner.Plan(TestData.Movie("X", composers: Edmonson), configuration)[0].Text, System.StringComparison.Ordinal);
+        var series = _planner.Plan(TestData.Series("X", composers: Edmonson), configuration).Select(query => query.Text).ToList();
+        var film = _planner.Plan(TestData.Movie("X", composers: Edmonson), configuration).Select(query => query.Text).ToList();
+
+        Assert.Contains(series, text => text.StartsWith("series ", System.StringComparison.Ordinal));
+        Assert.DoesNotContain(series, text => text.StartsWith("movie ", System.StringComparison.Ordinal));
+        Assert.Contains(film, text => text.StartsWith("movie ", System.StringComparison.Ordinal));
+        Assert.DoesNotContain(film, text => text.StartsWith("series ", System.StringComparison.Ordinal));
+    }
+
+    // ---- the credit searches do not depend on the saved templates -------------------------
+
+    public static TheoryData<string[]?> TemplatesThatNameNoCredit() => new()
+    {
+        new[] { "{title} opening theme song", "{title} main title theme", "{title} soundtrack" },
+        System.Array.Empty<string>(),
+        null,
+    };
+
+    [Theory]
+    [MemberData(nameof(TemplatesThatNameNoCredit))]
+    public void ATitleWithAComposerIsSearchedWhateverTheSavedTemplatesHold(string[]? saved)
+    {
+        // 3.1.0 took its searches from the saved templates alone. A server whose templates named
+        // no credit searched for nothing: 844 of 963 titles, every one with a composer known.
+        var configuration = TestData.Config();
+        configuration.MovieQueryTemplates = saved!;
+        configuration.SeriesQueryTemplates = saved!;
+
+        var film = _planner.Plan(TestData.Movie("Lucky Strike", 2026, composers: new[] { "Larry Groupé" }), configuration);
+        var series = _planner.Plan(TestData.Series("Firefly", composers: Edmonson), configuration);
+
+        Assert.Equal("Lucky Strike Larry Groupé main theme", film[0].Text);
+        Assert.Equal("Firefly Greg Edmonson theme", series[0].Text);
+        Assert.All(film.Concat(series), query => Assert.True(
+            query.Text.Contains("Larry Groupé", System.StringComparison.Ordinal) || query.Text.Contains("Greg Edmonson", System.StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void AKnownThemeIsSearchedFirstWhateverTheSavedTemplatesHold()
+    {
+        var configuration = TestData.Config();
+        configuration.SeriesQueryTemplates = new[] { "{title} intro" };
+
+        var plan = _planner.Plan(
+            TestData.Series("The Sopranos", theme: new Engines.Credits.ThemeSong("Woke Up This Morning", "Alabama 3")),
+            configuration);
+
+        Assert.Equal("The Sopranos Woke Up This Morning Alabama 3", Assert.Single(plan).Text);
+    }
+
+    [Fact]
+    public void ASavedTemplateNamingACreditRunsAfterTheBuiltInOnes()
+    {
+        var configuration = TestData.Config();
+        configuration.MovieQueryTemplates = new[] { "{title} {composer} suite", "{title} {composer} main theme" };
+
+        var plan = _planner.Plan(TestData.Movie("Alien", 1979, composers: new[] { "Jerry Goldsmith" }), configuration).Select(query => query.Text).ToList();
+
+        Assert.Equal("Alien Jerry Goldsmith main theme", plan[0]);
+        Assert.Equal("Alien Jerry Goldsmith suite", plan[^1]);
+        Assert.Equal(plan.Distinct().Count(), plan.Count);
     }
 
     [Fact]
@@ -74,7 +133,7 @@ public class QueryPlannerTests
             TestData.Series("Ghost in the Shell", alternates: new[] { "koukaku kidoutai" }, composers: new[] { "Kenji Kawai" }),
             configuration);
 
-        Assert.Equal(2, plan.Count);
+        Assert.Equal(2, plan.Count(query => query.Text.EndsWith("Kenji Kawai theme", System.StringComparison.Ordinal)));
         Assert.Contains(plan, query => query.Text.Contains("koukaku", System.StringComparison.Ordinal));
     }
 
@@ -86,7 +145,8 @@ public class QueryPlannerTests
 
         var plan = _planner.Plan(TestData.Series("Firefly", composers: Edmonson), configuration);
 
-        Assert.Single(plan);
+        Assert.Single(plan, query => query.Text == "Firefly Greg Edmonson theme");
+        Assert.Equal(plan.Select(query => query.Text).Distinct().Count(), plan.Count);
     }
 
     // ---- never the title on its own, unattended --------------------------------------------
@@ -111,7 +171,9 @@ public class QueryPlannerTests
 
         var plan = _planner.Plan(TestData.Movie("Lucky Strike", 2026, composers: new[] { "Larry Groupé" }), configuration);
 
-        Assert.Equal(new[] { "Lucky Strike Larry Groupé main theme" }, plan.Select(query => query.Text));
+        Assert.Equal(
+            new[] { "Lucky Strike Larry Groupé main theme", "Lucky Strike Larry Groupé main title", "Lucky Strike Larry Groupé soundtrack" },
+            plan.Select(query => query.Text));
     }
 
     [Fact]

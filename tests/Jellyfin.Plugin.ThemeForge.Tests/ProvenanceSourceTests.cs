@@ -163,11 +163,11 @@ public class ProvenanceSourceTests
         Assert.True(TestData.Config().UseThemerrDb);
 
     [Fact]
-    public void ThemerrDbIsAskedBeforePlex()
+    public void ThePlexArchiveIsAskedBeforeThemerrDb()
     {
-        // It covers films, shows and collections; Plex is the fallback for the series it lacks.
+        // The Plex archive first, for the series it has; ThemerrDB for everything else.
         // Stated by the sources rather than left to the order they happen to be registered in.
-        Assert.True(Themerr(new Forbidden()).Order < Plex(new Forbidden()).Order);
+        Assert.True(Plex(new Forbidden()).Order < Themerr(new Forbidden()).Order);
     }
 
     // ---- Films --------------------------------------------------------------------
