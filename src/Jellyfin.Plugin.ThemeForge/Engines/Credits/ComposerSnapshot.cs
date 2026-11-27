@@ -41,6 +41,9 @@ public sealed record ResearchedCredits(
     /// <remarks>A lead rather than an answer: it is how the infobox is found.</remarks>
     public string? WikipediaTitle { get; init; }
 
+    /// <summary>Gets the countries the work was made in, as ISO 3166 codes such as <c>US</c> and <c>GB</c>.</summary>
+    public IReadOnlyList<string> Countries { get; init; } = Array.Empty<string>();
+
     /// <summary>Gets a value indicating whether this names somebody who wrote the music.</summary>
     public bool Any => Composers.Count > 0 || !string.IsNullOrWhiteSpace(Artist);
 
@@ -56,8 +59,8 @@ public sealed record ResearchedCredits(
 
 /// <summary>One work's credits, as they were found and when.</summary>
 /// <remarks>
-/// Two questions are answered here, and each has its own date, because they are answered by
-/// different sources and go stale separately. The composer fields keep the names they had in 2.5,
+/// Each question answered here has its own date, because they are answered by different sources
+/// and go stale separately. The composer fields keep the names they had in 2.5,
 /// so a cache written by 2.5 still loads: its composers stand, and its theme question, which has no
 /// date yet, is asked once.
 /// </remarks>
@@ -99,6 +102,13 @@ public sealed class ComposerCredits
     /// <summary>Gets or sets the English Wikipedia article about the work.</summary>
     public string? WikipediaTitle { get; set; }
 
+    /// <summary>Gets or sets the countries the work was made in, as ISO 3166 codes.</summary>
+    public List<string> Countries { get; set; } = new();
+
+    /// <summary>Gets or sets when where the work was made was last settled; null means never.</summary>
+    /// <remarks>Null for every record written before 2.10, so each is asked about once.</remarks>
+    public DateTime? OriginLookedUpUtc { get; set; }
+
     /// <summary>Gets a value indicating whether somebody is named as having written the music.</summary>
     [JsonIgnore]
     public bool Found => Composers.Count > 0 || !string.IsNullOrWhiteSpace(Artist);
@@ -107,6 +117,10 @@ public sealed class ComposerCredits
     [JsonIgnore]
     public bool ThemeFound => !string.IsNullOrWhiteSpace(ThemeTitle) || ThemeComposers.Count > 0;
 
+    /// <summary>Gets a value indicating whether it is known where the work was made.</summary>
+    [JsonIgnore]
+    public bool OriginFound => Countries.Count > 0;
+
     /// <summary>Reads this record back as credits.</summary>
     /// <returns>The credits.</returns>
     public ResearchedCredits AsCredits() => new(Composers, Artist, ReleaseGroupId)
@@ -114,6 +128,7 @@ public sealed class ComposerCredits
         Theme = string.IsNullOrWhiteSpace(ThemeTitle) ? null : new ThemeSong(ThemeTitle, ThemePerformer),
         ThemeComposers = ThemeComposers,
         WikipediaTitle = WikipediaTitle,
+        Countries = Countries,
     };
 
     /// <summary>Copies this record, so a copy can be changed while the original is being read.</summary>
@@ -123,6 +138,7 @@ public sealed class ComposerCredits
         var copy = (ComposerCredits)MemberwiseClone();
         copy.Composers = Composers.ToList();
         copy.ThemeComposers = ThemeComposers.ToList();
+        copy.Countries = Countries.ToList();
         return copy;
     }
 }
@@ -203,14 +219,14 @@ public sealed class ComposerSnapshot
         return null;
     }
 
-    /// <summary>Reports whether either question about a work should be asked again.</summary>
+    /// <summary>Reports whether any question about a work should be asked again.</summary>
     /// <param name="keys">The provider keys to try.</param>
     /// <param name="nowUtc">The current time.</param>
     /// <returns><see langword="true"/> when something is unknown or has aged out.</returns>
     public bool NeedsLookUp(IEnumerable<string> keys, DateTime nowUtc)
     {
         var list = keys as IReadOnlyCollection<string> ?? keys.ToList();
-        return NeedsComposers(list, nowUtc) || NeedsTheme(list, nowUtc);
+        return NeedsComposers(list, nowUtc) || NeedsTheme(list, nowUtc) || NeedsOrigin(list, nowUtc);
     }
 
     /// <summary>Reports whether who wrote a work's music should be asked again.</summary>
@@ -241,6 +257,21 @@ public sealed class ComposerSnapshot
         }
 
         return nowUtc - asked > (found.ThemeFound ? HitLifetime : MissLifetime);
+    }
+
+    /// <summary>Reports whether where a work was made should be asked again.</summary>
+    /// <param name="keys">The provider keys to try.</param>
+    /// <param name="nowUtc">The current time.</param>
+    /// <returns><see langword="true"/> when it was never settled, or the answer has aged out.</returns>
+    public bool NeedsOrigin(IEnumerable<string> keys, DateTime nowUtc)
+    {
+        var found = Find(keys);
+        if (found?.OriginLookedUpUtc is not { } asked)
+        {
+            return true;
+        }
+
+        return nowUtc - asked > (found.OriginFound ? HitLifetime : MissLifetime);
     }
 
     /// <summary>Records who wrote a work's music, leaving what is known about its theme alone.</summary>
@@ -278,6 +309,22 @@ public sealed class ComposerSnapshot
             entry.ThemeComposers = credits.ThemeComposers.ToList();
             entry.ThemeSource = source;
             entry.ThemeLookedUpUtc = nowUtc;
+            Leads(entry, credits);
+        }
+    }
+
+    /// <summary>Records where a work was made, leaving everything else alone.</summary>
+    /// <param name="keys">Every id this work is known by.</param>
+    /// <param name="credits">What was found, which may be nothing.</param>
+    /// <param name="nowUtc">The current time.</param>
+    public void RecordOrigin(IReadOnlyList<string> keys, ResearchedCredits credits, DateTime nowUtc)
+    {
+        ArgumentNullException.ThrowIfNull(credits);
+
+        foreach (var entry in EntriesFor(keys))
+        {
+            entry.Countries = credits.Countries.ToList();
+            entry.OriginLookedUpUtc = nowUtc;
             Leads(entry, credits);
         }
     }

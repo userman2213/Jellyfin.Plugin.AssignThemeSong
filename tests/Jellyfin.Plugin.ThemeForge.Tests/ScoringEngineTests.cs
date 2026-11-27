@@ -62,8 +62,9 @@ public class ScoringEngineTests
             TestData.Candidate("Firefly - Main Title"),
             TestData.Context(TestData.Series("Firefly")));
 
-        // The review queue is only useful if every point is traceable to a named rule.
-        Assert.Equal(11, result.Breakdown.Count);
+        // The review queue is only useful if every point is traceable to a named rule. Twelve since
+        // 3.1 added the AI-music veto.
+        Assert.Equal(12, result.Breakdown.Count);
         Assert.All(result.Breakdown, signal =>
         {
             Assert.False(string.IsNullOrWhiteSpace(signal.Rule));
@@ -95,7 +96,7 @@ public class ScoringEngineTests
 
         var lines = ScoringEngine.Describe(result);
         Assert.StartsWith("Total:", lines[0], StringComparison.Ordinal);
-        Assert.Equal(12, lines.Count);
+        Assert.Equal(13, lines.Count);
     }
 
     [Fact]

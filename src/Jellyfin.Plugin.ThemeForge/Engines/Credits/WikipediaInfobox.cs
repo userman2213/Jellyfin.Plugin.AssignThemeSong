@@ -7,7 +7,8 @@ using System.Text.RegularExpressions;
 namespace Jellyfin.Plugin.ThemeForge.Engines.Credits;
 
 /// <summary>
-/// Reads a television article's infobox, and the theme out of it.
+/// Reads a television or film article's infobox: a show's theme and who wrote it, and who scored
+/// the work.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -30,7 +31,7 @@ namespace Jellyfin.Plugin.ThemeForge.Engines.Credits;
 public static class WikipediaInfobox
 {
     /// <summary>The infobox this reads. Films' infoboxes have no theme field.</summary>
-    private static readonly Regex Start = new(@"\{\{\s*Infobox[ _]television\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex Start = new(@"\{\{\s*Infobox[ _](?:television|film)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex Comment = new(@"<!--.*?-->", RegexOptions.Singleline | RegexOptions.Compiled);
 
@@ -81,7 +82,7 @@ public static class WikipediaInfobox
     private const int MaxNames = 3;
 
     /// <summary>
-    /// Reads the fields of the article's television infobox.
+    /// Reads the fields of the article's television or film infobox, whichever comes first.
     /// </summary>
     /// <param name="wikitext">The article's source.</param>
     /// <returns>Field names, lower-cased, to their raw values; empty when there is no such infobox.</returns>
@@ -144,6 +145,23 @@ public static class WikipediaInfobox
     {
         var fields = Read(wikitext);
         return ReadNames(fields.TryGetValue("theme_music_composer", out var value) ? value : null);
+    }
+
+    /// <summary>Reads who scored the work: a film's <c>music</c> field, or a show's <c>composer</c>.</summary>
+    /// <remarks>
+    /// Not the theme's writer, which a show's infobox keeps separately: Dexter's composer is Daniel
+    /// Licht, its theme Rolfe Kent's. A film's infobox has no theme field, so for a film this is
+    /// all there is.
+    /// </remarks>
+    /// <param name="wikitext">The article's source.</param>
+    /// <returns>The names, at most three.</returns>
+    public static IReadOnlyList<string> Composers(string? wikitext)
+    {
+        var fields = Read(wikitext);
+        return ReadNames(
+            fields.TryGetValue("music", out var music) ? music
+            : fields.TryGetValue("composer", out var composer) ? composer
+            : null);
     }
 
     /// <summary>

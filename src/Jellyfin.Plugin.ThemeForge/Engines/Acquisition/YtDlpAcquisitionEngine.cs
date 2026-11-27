@@ -120,7 +120,7 @@ public sealed class YtDlpAcquisitionEngine : IAcquisitionEngine
                     null,
                     null,
                     null,
-                    $"it came from {candidate.Provenance}, which is keyed on this title's own database id");
+                    $"it came from {candidate.Provenance}, by {candidate.MatchedOn ?? "this title's own database id"}");
 
             if (!assessment.IsAcceptable)
             {

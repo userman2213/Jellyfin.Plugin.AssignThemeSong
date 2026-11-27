@@ -16,36 +16,45 @@ public static class ShippedTemplates
 {
     /// <summary>The series ladder, most specific first.</summary>
     /// <remarks>
-    /// The theme's own title and performer come first, when known: nothing is more specific. The
-    /// rung is skipped for a show whose theme is not known, which leaves the ladder as it was.
+    /// Every rung names who made the music: the theme's own title and performer first, then its
+    /// composer. A rung whose credit is not known is skipped, and a title with no credits at all
+    /// is not searched unattended -- see <see cref="Engines.Query.QueryPlanner"/>. The searches by
+    /// title alone these ladders used to carry are what found AI-generated "theme songs" and
+    /// songs that merely shared a film's name.
     /// </remarks>
     public static readonly string[] Series =
     {
         "{title} {theme}",
-        "{title} opening theme song",
         "{title} {composer} theme",
-        "{title} main title theme",
-        "{title} theme song",
-        "{title} original soundtrack main title",
-        "{title} intro",
-        "{title} soundtrack main theme",
+        "{title} {composer} main title",
+        "{title} {composer} opening",
     };
 
     /// <summary>The film ladder, most specific first.</summary>
     public static readonly string[] Movies =
     {
         "{title} {theme}",
-        "{title} {year} main theme soundtrack",
         "{title} {composer} main theme",
-        "{title} main title theme",
-        "{title} original soundtrack",
-        "{title} theme song",
-        "{title} soundtrack suite",
+        "{title} {composer} main title",
+        "{title} {composer} soundtrack",
     };
 
     /// <summary>Every series ladder a previous release shipped.</summary>
     private static readonly string[][] PreviousSeries =
     {
+        // 2.6 to 3.0
+        new[]
+        {
+            "{title} {theme}",
+            "{title} opening theme song",
+            "{title} {composer} theme",
+            "{title} main title theme",
+            "{title} theme song",
+            "{title} original soundtrack main title",
+            "{title} intro",
+            "{title} soundtrack main theme",
+        },
+
         // 2.5
         new[]
         {
@@ -70,6 +79,18 @@ public static class ShippedTemplates
     /// <summary>Every film ladder a previous release shipped.</summary>
     private static readonly string[][] PreviousMovies =
     {
+        // 2.6 to 3.0
+        new[]
+        {
+            "{title} {theme}",
+            "{title} {year} main theme soundtrack",
+            "{title} {composer} main theme",
+            "{title} main title theme",
+            "{title} original soundtrack",
+            "{title} theme song",
+            "{title} soundtrack suite",
+        },
+
         // 2.5
         new[]
         {
@@ -100,6 +121,20 @@ public static class ShippedTemplates
 
         var changed = false;
 
+        // Templates naming no credit do nothing in an unattended run, and say nothing a person
+        // meant: they are an old ladder, edited or not. Replaced, so the settings show what runs.
+        if (!NamesACredit(configuration.SeriesQueryTemplates))
+        {
+            configuration.SeriesQueryTemplates = Series.ToArray();
+            changed = true;
+        }
+
+        if (!NamesACredit(configuration.MovieQueryTemplates))
+        {
+            configuration.MovieQueryTemplates = Movies.ToArray();
+            changed = true;
+        }
+
         if (PreviousSeries.Any(previous => previous.SequenceEqual(configuration.SeriesQueryTemplates ?? Array.Empty<string>(), StringComparer.Ordinal)))
         {
             configuration.SeriesQueryTemplates = Series.ToArray();
@@ -114,4 +149,10 @@ public static class ShippedTemplates
 
         return changed;
     }
+
+    private static bool NamesACredit(string[]? templates) =>
+        templates is not null && templates.Any(template =>
+            template is not null
+            && (template.Contains("{composer}", StringComparison.OrdinalIgnoreCase)
+                || template.Contains("{theme}", StringComparison.OrdinalIgnoreCase)));
 }

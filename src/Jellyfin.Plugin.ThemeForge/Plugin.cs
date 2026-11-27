@@ -195,12 +195,26 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
                 _logger.LogInformation("ThemeForge: the search ladders were still the previous defaults and have been brought up to date.");
             }
 
+            if (ShippedKeywords.Upgrade(Configuration))
+            {
+                changed = true;
+                _logger.LogInformation("ThemeForge: the disqualifying words were still the previous defaults and now also catch arrangements and instrumental covers.");
+            }
+
             if (AudioDefaults.Upgrade(Configuration))
             {
                 changed = true;
                 _logger.LogInformation(
                     "ThemeForge: audio processing was still at the previous defaults (normalise to -23 LUFS, fade in and out) and is now off, " +
                     "so themes are written as downloaded. \"Re-download all themes\" under Settings redoes the ones already written.");
+            }
+
+            if (AudioDefaults.UpgradeToMp3(Configuration))
+            {
+                changed = true;
+                _logger.LogInformation(
+                    "ThemeForge: themes are now written as theme.mp3. Themes already written keep their format until "
+                    + "\"Re-download all themes\" under Settings redoes them.");
             }
 
             if (changed)

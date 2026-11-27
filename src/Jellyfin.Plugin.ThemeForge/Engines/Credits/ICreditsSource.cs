@@ -19,6 +19,13 @@ public enum CreditsQuestion
 
     /// <summary>What the theme is called, who performs it, and who wrote it.</summary>
     Theme = 2,
+
+    /// <summary>Which country the work was made in.</summary>
+    /// <remarks>
+    /// Not about the music, but it decides which music: the American Office and the British one
+    /// share a title and have different themes. Jellyfin records it for films and not for series.
+    /// </remarks>
+    Origin = 4,
 }
 
 /// <summary>One work to find the music credits for.</summary>
@@ -43,6 +50,15 @@ public sealed record CreditsRequest(
 {
     /// <summary>Gets the English Wikipedia article an earlier source found for the work, when it did.</summary>
     public string? WikipediaTitle { get; init; }
+
+    /// <summary>Gets the questions about the work still open when a source is asked.</summary>
+    /// <remarks>
+    /// Lets a source that answers several questions skip a work for which only one it cannot
+    /// usefully answer is open. Wikipedia is asked about a film only for its composer: asked
+    /// about every film whose theme is unknown -- most of them -- it would fetch thousands of
+    /// articles to read a field a film's infobox does not have.
+    /// </remarks>
+    public CreditsQuestion Needs { get; init; } = CreditsQuestion.Composers | CreditsQuestion.Theme | CreditsQuestion.Origin;
 }
 
 /// <summary>What a source found, and which works it could not ask about at all.</summary>

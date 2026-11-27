@@ -91,6 +91,17 @@ public sealed record Candidate
     public string? Provenance { get; init; }
 
     /// <summary>
+    /// Gets how a catalogue matched this to the item -- "its own TMDB id 1396" -- or null when it
+    /// came from a search.
+    /// </summary>
+    /// <remarks>
+    /// Recorded in the score breakdown as it is. It used to say "this title's own database id"
+    /// whatever the match was, including a show matched by name, which is how a theme ThemerrDB
+    /// lists for another show read as ThemerrDB's answer for this one.
+    /// </remarks>
+    public string? MatchedOn { get; init; }
+
+    /// <summary>
     /// Gets a value indicating whether <see cref="Url"/> is an audio file rather than a page
     /// something has to extract audio from.
     /// </summary>

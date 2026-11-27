@@ -3,10 +3,9 @@
   <PropertyGroup>
     <AssemblyName>Jellyfin.Plugin.ThemeForge</AssemblyName>
     <RootNamespace>Jellyfin.Plugin.ThemeForge</RootNamespace>
-    <!-- Per target framework: X.Y.Z.0 for the Jellyfin 10.11 build, X.Y.Z.1 for Jellyfin 12. -->
-    <Version>$(ThemeForgePackageVersion)</Version>
-    <AssemblyVersion>$(ThemeForgePackageVersion)</AssemblyVersion>
-    <FileVersion>$(ThemeForgePackageVersion)</FileVersion>
+    <Version>$(ThemeForgeVersion)</Version>
+    <AssemblyVersion>$(ThemeForgeVersion)</AssemblyVersion>
+    <FileVersion>$(ThemeForgeVersion)</FileVersion>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
 
@@ -16,8 +15,8 @@
       transitive dependencies out of the plugin output: the Jellyfin host already has them
       loaded, and shipping a second copy invites assembly-identity conflicts. Deleting them
       after the fact from a hand-written list is not equivalent, because every Jellyfin release
-      can add a transitive package the list has never heard of. The version is the one for the
-      Jellyfin line each target framework is built for, set in Directory.Build.props.
+      can add a transitive package the list has never heard of. The version is set in
+      Directory.Build.props.
     -->
     <PackageReference Include="Jellyfin.Controller" Version="$(JellyfinVersion)" PrivateAssets="all" ExcludeAssets="runtime" />
     <PackageReference Include="Jellyfin.Model" Version="$(JellyfinVersion)" PrivateAssets="all" ExcludeAssets="runtime" />
@@ -33,16 +32,16 @@
   </ItemGroup>
 
   <!--
-    meta.json is generated per target framework from the template beside this file, so that each
-    build output is a valid package for its Jellyfin line. Jellyfin reads the zip's own meta.json
-    (its targetAbi wins over the repository manifest, and a version mismatch is logged), so a
-    copied template with the 10.11 values in the 12 package would be wrong, not merely untidy.
+    meta.json is generated from the template beside this file, with the version, targetAbi and
+    framework of this build, so the build output is a valid package as it stands. Jellyfin reads
+    the zip's own meta.json (its targetAbi wins over the repository manifest, and a version
+    mismatch is logged), so a stale copy of the template would be wrong, not merely untidy.
   -->
   <Target Name="GeneratePluginMeta" BeforeTargets="AssignTargetPaths">
     <PropertyGroup>
       <_MetaOut>$(IntermediateOutputPath)meta.json</_MetaOut>
       <_Meta>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/meta.json'))</_Meta>
-      <_Meta>$([System.Text.RegularExpressions.Regex]::Replace('$(_Meta)', '"version":\s*"[^"]*"', '"version": "$(ThemeForgePackageVersion)"'))</_Meta>
+      <_Meta>$([System.Text.RegularExpressions.Regex]::Replace('$(_Meta)', '"version":\s*"[^"]*"', '"version": "$(ThemeForgeVersion)"'))</_Meta>
       <_Meta>$([System.Text.RegularExpressions.Regex]::Replace('$(_Meta)', '"targetAbi":\s*"[^"]*"', '"targetAbi": "$(ThemeForgeTargetAbi)"'))</_Meta>
       <_Meta>$([System.Text.RegularExpressions.Regex]::Replace('$(_Meta)', '"framework":\s*"[^"]*"', '"framework": "$(TargetFramework)"'))</_Meta>
     </PropertyGroup>

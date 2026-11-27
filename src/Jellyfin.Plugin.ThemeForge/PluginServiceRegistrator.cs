@@ -54,12 +54,14 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<IHeadlessBrowser, HeadlessBrowser>();
         serviceCollection.AddSingleton<ICreditsSource, ImdbSoundtrackSource>();
         serviceCollection.AddSingleton<IComposerCatalogue, ComposerCatalogue>();
+        serviceCollection.AddSingleton<IImdbCrewData, ImdbCrewData>();
 
         // Pipeline engines
         serviceCollection.AddSingleton<JellyfinPeopleLookup>();
         serviceCollection.AddSingleton<IPeopleLookup>(services => new ResearchedPeopleLookup(
             services.GetRequiredService<JellyfinPeopleLookup>(),
-            services.GetRequiredService<IComposerCatalogue>()));
+            services.GetRequiredService<IComposerCatalogue>(),
+            services.GetRequiredService<IImdbCrewData>()));
         serviceCollection.AddSingleton<IMediaIdentityResolver, MediaIdentityResolver>();
         serviceCollection.AddSingleton<IQueryPlanner, QueryPlanner>();
         serviceCollection.AddSingleton<ICandidateSource, YtDlpCandidateSource>();
@@ -68,6 +70,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         // decides for itself whether the user has enabled it, and the order they are asked in is
         // their own Order property rather than the order of these lines.
         serviceCollection.AddSingleton<IThemerrDbCatalogue, ThemerrDbCatalogue>();
+        serviceCollection.AddSingleton<ILinkChecker, LinkChecker>();
         serviceCollection.AddSingleton<IThemeProvenanceSource, ThemerrDbSource>();
         serviceCollection.AddSingleton<IThemeProvenanceSource, PlexTvThemeSource>();
         serviceCollection.AddSingleton<IDecisionPolicy, DecisionPolicy>();
@@ -88,6 +91,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<IScoringRule, PopularityRule>();
         serviceCollection.AddSingleton<IScoringRule, RecencyRule>();
         serviceCollection.AddSingleton<IScoringRule, AvailabilityRule>();
+        serviceCollection.AddSingleton<IScoringRule, AiGeneratedRule>();
         serviceCollection.AddSingleton<IScoringRule, DuplicateRule>();
         serviceCollection.AddSingleton<IScoringRule, QuerySpecificityRule>();
         serviceCollection.AddSingleton<IScoringRule, ComposerRule>();

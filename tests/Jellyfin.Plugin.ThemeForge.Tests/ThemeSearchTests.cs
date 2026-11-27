@@ -48,11 +48,11 @@ public class ThemeSearchTests
     public void TheRungIsSkippedWhenTheThemeIsNotKnown()
     {
         var configuration = TestData.Config();
-        var plan = _planner.Plan(TestData.Series("Lost", 2004), configuration);
+        var plan = _planner.Plan(TestData.Series("Lost", 2004, composers: new[] { "Michael Giacchino" }), configuration);
 
-        // Exactly the ladder as it was, and no query with the placeholder collapsed to nothing.
+        // The composer's rungs run, and no query has the placeholder collapsed to nothing.
         Assert.DoesNotContain(plan, query => query.Template.Contains(QueryPlanner.ThemePlaceholder, StringComparison.Ordinal));
-        Assert.Equal("Lost opening theme song", plan[0].Text);
+        Assert.Equal("Lost Michael Giacchino theme", plan[0].Text);
     }
 
     [Fact]
@@ -125,11 +125,34 @@ public class ThemeSearchTests
     public void AnEditedLadderIsLeftAlone()
     {
         var configuration = TestData.Config();
-        configuration.SeriesQueryTemplates = new[] { "{title} opening theme song", "{title} my own phrasing" };
+        configuration.SeriesQueryTemplates = new[] { "{title} {theme} live", "{title} my own phrasing" };
 
         ShippedTemplates.Upgrade(configuration);
 
-        Assert.Equal(new[] { "{title} opening theme song", "{title} my own phrasing" }, configuration.SeriesQueryTemplates);
+        Assert.Equal(new[] { "{title} {theme} live", "{title} my own phrasing" }, configuration.SeriesQueryTemplates);
+    }
+
+    [Theory]
+    [InlineData("2.9", new[] { "arr.", "arranged by", "arrangement", "piano", "violin", "cello" })]
+    [InlineData("2.10", new[] { "piano", "violin", "cello" })]
+    public void UneditedDisqualifyingWordsGainWhatWasAddedSince(string release, string[] addedSince)
+    {
+        var configuration = TestData.Config();
+        configuration.NegativeKeywords = ShippedKeywords.Negative.Where(word => !addedSince.Contains(word)).ToArray();
+
+        Assert.True(ShippedKeywords.Upgrade(configuration), $"the {release} list was not recognised");
+        Assert.Equal(ShippedKeywords.Negative, configuration.NegativeKeywords);
+        Assert.False(ShippedKeywords.Upgrade(configuration));
+    }
+
+    [Fact]
+    public void EditedDisqualifyingWordsAreLeftAlone()
+    {
+        var configuration = TestData.Config();
+        configuration.NegativeKeywords = new[] { "reaction", "my own word" };
+
+        Assert.False(ShippedKeywords.Upgrade(configuration));
+        Assert.Equal(new[] { "reaction", "my own word" }, configuration.NegativeKeywords);
     }
 
     // ---- Recognising it ----
@@ -142,7 +165,7 @@ public class ThemeSearchTests
             TestData.Context(TestData.Series("The Sopranos", 1999, theme: WokeUp)));
 
         Assert.False(verdict.IsVeto);
-        Assert.Equal(0.9, verdict.Raw);
+        Assert.Equal(1.0, verdict.Raw);
         Assert.Contains("Woke Up This Morning", verdict.Reason, StringComparison.Ordinal);
     }
 
@@ -242,6 +265,8 @@ public class ThemeSearchTests
         public IReadOnlyList<string> MusicCredits(BaseItem item) => Array.Empty<string>();
 
         public ThemeSong? Theme(BaseItem item) => null;
+
+        public IReadOnlyList<string> Countries(BaseItem item) => Array.Empty<string>();
     }
 
     private static Series Dexter()

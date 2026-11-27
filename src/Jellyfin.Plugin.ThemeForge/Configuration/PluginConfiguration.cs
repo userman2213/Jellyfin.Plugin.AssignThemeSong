@@ -140,12 +140,31 @@ public class PluginConfiguration : BasePluginConfiguration
     /// asked afterwards, about whatever it could not name.
     /// </para>
     /// <para>
-    /// An entry is taken only when the listing names it as the title music, or names it after the
-    /// work, or the work is a series -- for a film the listing is the licensed songs in playback
-    /// order, and its first entry is whatever plays first rather than the theme.
+    /// For a film an entry is taken only when the listing names it as the title music: the listing
+    /// is the licensed songs in playback order, and one sharing the film's name is far more often a
+    /// song that happens to. For a series, also one named after the show, or failing that its first.
     /// </para>
     /// </remarks>
     public bool UseImdbSoundtrack { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether IMDb's own crew data is downloaded and used for who
+    /// composed each title's music.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// IMDb publishes its credits as dataset files, for personal and non-commercial use. They name
+    /// the composer of half of all feature films since 2010 and of every mainstream film checked,
+    /// where the soundtrack listing only lists songs. Looked up by the title's IMDb id, so nothing
+    /// is matched by name; for a series, the composer credited on most of its episodes.
+    /// </para>
+    /// <para>
+    /// The files are large: about 1.2 GB is downloaded, at most once a week and normally once a
+    /// month. They are read as they arrive and never stored; only the composer credits are kept, in
+    /// a file of about 20 MB that is read from disk rather than held in memory.
+    /// </para>
+    /// </remarks>
+    public bool UseImdbCrewData { get; set; } = true;
 
     /// <summary>
     /// Gets or sets a value indicating whether IMDb's page may be rendered in headless Chrome when
@@ -261,16 +280,7 @@ public class PluginConfiguration : BasePluginConfiguration
     };
 
     /// <summary>Gets or sets words that suggest the candidate is not a theme. These carry the heaviest negative weight.</summary>
-    public string[] NegativeKeywords { get; set; } =
-    {
-        "reaction", "cover", "remix", "tutorial", "lesson", "how to play",
-        "1 hour", "10 hours", "hour loop", "loop", "extended", "amv",
-        "trailer", "review", "explained", "recap", "full episode", "episode",
-        "karaoke", "sheet music", "guitar", "piano tutorial", "8 bit", "8-bit",
-        "nightcore", "slowed", "reverb", "fan made", "fanmade", "parody",
-        "behind the scenes", "interview", "compilation", "every",
-        "joke", "bloopers", "deleted scene", "best of", "funniest", "scene",
-    };
+    public string[] NegativeKeywords { get; set; } = ShippedKeywords.Negative.ToArray();
 
     /// <summary>Gets or sets channel names or ids that are trusted sources of themes.</summary>
     public string[] PreferredChannels { get; set; } = Array.Empty<string>();
@@ -404,11 +414,27 @@ public class PluginConfiguration : BasePluginConfiguration
     public double FadeOutSeconds { get; set; }
 
     /// <summary>
-    /// Gets or sets a value indicating whether every theme is re-encoded to MP3 even when nothing
-    /// else needs changing. Off, a theme keeps the codec it was delivered in (Opus, AAC, MP3) and
-    /// loses nothing; on, it becomes an MP3 at <see cref="AudioBitrate"/> for a client that needs one.
+    /// Gets or sets a value indicating whether every theme is written as <c>theme.mp3</c>.
     /// </summary>
-    public bool AlwaysConvertToMp3 { get; set; }
+    /// <remarks>
+    /// On by default. YouTube delivers Opus or AAC, and written as it came a theme is
+    /// <c>theme.opus</c> or <c>theme.m4a</c>: nothing is lost, but not every Jellyfin client plays
+    /// those as theme music, and <c>theme.mp3</c> is what people expect to find in the folder. Off,
+    /// a theme keeps the codec it was delivered in.
+    /// </remarks>
+    public bool AlwaysConvertToMp3 { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the switch to MP3 by default has been applied to
+    /// these settings once.
+    /// </summary>
+    /// <remarks>
+    /// Saved settings keep the value they were saved with, and an off saved before MP3 became the
+    /// default cannot be told apart from somebody switching it off. So it is switched on once, on
+    /// the first start after the upgrade, and this records that it was -- from then on, off stays
+    /// off.
+    /// </remarks>
+    public bool Mp3DefaultApplied { get; set; }
 
     // ---- Placement -----------------------------------------------------------------
 

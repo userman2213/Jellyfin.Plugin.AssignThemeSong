@@ -14,7 +14,8 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.ThemeForge.Engines.Credits;
 
 /// <summary>
-/// Reads what a show's theme is called out of its Wikipedia article.
+/// Reads what a show's theme is called, and who scored a show or film, out of its Wikipedia
+/// article.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -24,8 +25,10 @@ namespace Jellyfin.Plugin.ThemeForge.Engines.Credits;
 /// the sitelink the Wikidata query already returns, so nothing is searched for by name.
 /// </para>
 /// <para>
-/// Asked only about series -- a film's infobox has no theme field -- and only about those Wikidata
-/// left without a theme. Five articles per request and one request a second. Wikimedia does rate
+/// Asked about a series for its theme and composer, and about a film only when its composer is
+/// still unknown -- a film's infobox has a <c>music</c> field and no theme field -- and in both
+/// cases only about what Wikidata left unanswered. Five articles per request and one request a
+/// second. Wikimedia does rate
 /// limit, and did during testing: a <c>429</c> is waited out once, as the response asks, and a
 /// second one ends the pass. Whatever was not asked is tried on the next run, and is not recorded
 /// as a miss.
@@ -84,7 +87,7 @@ public sealed class WikipediaThemeSource : ICreditsSource
     public int Order => 20;
 
     /// <inheritdoc />
-    public CreditsQuestion Answers => CreditsQuestion.Theme;
+    public CreditsQuestion Answers => CreditsQuestion.Theme | CreditsQuestion.Composers;
 
     /// <inheritdoc />
     public bool IsEnabled(PluginConfiguration configuration)
@@ -105,10 +108,10 @@ public sealed class WikipediaThemeSource : ICreditsSource
         var found = new Dictionary<string, ResearchedCredits>(StringComparer.OrdinalIgnoreCase);
         var failed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        // A film, or a show with no English article, cannot be answered here. That is a definite
-        // "nothing", not a failure.
+        // A work with no English article cannot be answered here, nor a film whose composer is
+        // already known. That is a definite "nothing", not a failure.
         var chunks = batch
-            .Where(work => work.IsSeries && !string.IsNullOrWhiteSpace(work.WikipediaTitle))
+            .Where(IsWorthAsking)
             .Chunk(BatchSize)
             .ToList();
 
@@ -150,11 +153,13 @@ public sealed class WikipediaThemeSource : ICreditsSource
                         continue;
                     }
 
-                    var theme = WikipediaInfobox.Theme(source);
-                    var composers = WikipediaInfobox.ThemeComposers(source);
-                    if (theme is not null || composers.Count > 0)
+                    // A film's infobox names nothing about a theme; only its music field is read.
+                    var theme = work.IsSeries ? WikipediaInfobox.Theme(source) : null;
+                    var themeComposers = work.IsSeries ? WikipediaInfobox.ThemeComposers(source) : Array.Empty<string>();
+                    var composers = WikipediaInfobox.Composers(source);
+                    if (theme is not null || themeComposers.Count > 0 || composers.Count > 0)
                     {
-                        found[work.Key] = ResearchedCredits.None with { Theme = theme, ThemeComposers = composers };
+                        found[work.Key] = new ResearchedCredits(composers, null, null) { Theme = theme, ThemeComposers = themeComposers };
                     }
                 }
             }
@@ -169,6 +174,15 @@ public sealed class WikipediaThemeSource : ICreditsSource
 
         return new CreditsAnswer(found, failed);
     }
+
+    /// <summary>Reports whether a work is worth fetching an article for.</summary>
+    /// <param name="work">The work.</param>
+    /// <returns><see langword="true"/> when it has an article that may answer an open question.</returns>
+    internal static bool IsWorthAsking(CreditsRequest work) =>
+        !string.IsNullOrWhiteSpace(work.WikipediaTitle)
+        && (work.IsSeries
+            ? (work.Needs & (CreditsQuestion.Theme | CreditsQuestion.Composers)) != CreditsQuestion.None
+            : work.Needs.HasFlag(CreditsQuestion.Composers));
 
     /// <summary>Fetches the source of a few articles, waiting once if asked to.</summary>
     private async Task<(Outcome Outcome, IReadOnlyDictionary<string, string> Articles)> FetchAsync(

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Jellyfin.Plugin.ThemeForge.Engines.Index;
 
@@ -40,9 +41,14 @@ public sealed class ThemeIndexEntry
     /// Generation 2 replaced a title matcher that scored any substring of a candidate's title as
     /// a perfect match, so everything it chose has to be looked at again. Generation 3 taught the
     /// matcher what a season number and a year are, and gave soundtrack uploads a hearing, so
-    /// everything generation 2 gave up on is worth one more look.
+    /// everything generation 2 gave up on is worth one more look. Generation 4 (2.10) stopped
+    /// handing on dead ThemerrDB links, which had failed those titles on every run until they ran
+    /// out of attempts, and stopped taking any track of a soundtrack album for the theme.
+    /// Generation 5 (3.1) searches only for who made the music, never a title on its own, rejects
+    /// AI-generated uploads, and no longer takes a film's song for its theme for sharing the film's
+    /// name; what earlier generations queued, failed or gave up on gets one more search, by credits.
     /// </remarks>
-    public const int CurrentMatcher = 3;
+    public const int CurrentMatcher = 5;
 
     /// <summary>Gets or sets the Jellyfin item id.</summary>
     public Guid ItemId { get; set; }
@@ -129,6 +135,108 @@ public sealed class ThemeIndexEntry
     /// Zero means it predates the stamp, which is to say it predates the rewrite.
     /// </remarks>
     public int DecidedByMatcher { get; set; }
+
+    /// <summary>What <see cref="AssignedBy"/> holds for a theme a search chose.</summary>
+    public const string BySearch = "search";
+
+    /// <summary>What <see cref="AssignedBy"/> holds for a theme a person chose or approved.</summary>
+    public const string ByYou = "you";
+
+    /// <summary>
+    /// Gets or sets who chose the theme: a catalogue's name such as <c>ThemerrDB</c>,
+    /// <see cref="BySearch"/>, or <see cref="ByYou"/>. Null when no theme was written.
+    /// </summary>
+    /// <remarks>
+    /// The difference decides what may replace it. A theme a search picked is a best guess, and
+    /// is replaced the moment ThemerrDB lists one for the title, even in a library set never to
+    /// replace a theme; one a catalogue or a person chose is not. Without this, nothing could tell
+    /// the two apart, so a search's guess stayed for good once made.
+    /// </remarks>
+    public string? AssignedBy { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the last pass found nobody to search for, and so
+    /// searched for nothing.
+    /// </summary>
+    /// <remarks>
+    /// An unattended run searches only for who made a title's music. When nobody is credited, no
+    /// search is made and no attempt is used; the title is looked at again twice a day, which costs
+    /// nothing until research or IMDb's crew data names somebody. Diagnostics counts these titles.
+    /// </remarks>
+    public bool NothingToSearchFor { get; set; }
+
+    /// <summary>Gets a value indicating whether this is a theme a search chose, and nothing better has replaced.</summary>
+    public bool IsSearchPick =>
+        State == ThemeItemState.AutoAssigned
+        && ThemePath is not null
+        && string.Equals(AssignedBy, BySearch, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Works out who chose a theme recorded before <see cref="AssignedBy"/> existed.
+    /// </summary>
+    /// <remarks>
+    /// A catalogue's choice was always recorded with one breakdown line naming it -- "Provenance:
+    /// ... (listed in ThemerrDB against this title's own database id ...)" -- and a search's never
+    /// was, so the breakdown answers the question for every entry already written.
+    /// </remarks>
+    /// <param name="entry">The entry.</param>
+    /// <returns>Who chose its theme, or null when it has none.</returns>
+    public static string? InferAssignedBy(ThemeIndexEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+
+        if (entry.ThemePath is null)
+        {
+            return null;
+        }
+
+        if (entry.State is ThemeItemState.ManualOverride or ThemeItemState.Approved)
+        {
+            return ByYou;
+        }
+
+        var provenance = entry.ScoreBreakdown.Find(line => line.StartsWith("Provenance:", StringComparison.Ordinal));
+        if (provenance is not null)
+        {
+            // "listed in ThemerrDB against this title's own database id" until 3.1.1, "listed in
+            // ThemerrDB under its own TMDB id 1396" since; the catalogue's name is the same either way.
+            const string Listed = "listed in ";
+            var start = provenance.IndexOf(Listed, StringComparison.Ordinal);
+            var end = start < 0 ? -1 : new[] { " against ", " under " }
+                .Select(word => provenance.IndexOf(word, start + Listed.Length, StringComparison.Ordinal))
+                .Where(at => at >= 0)
+                .DefaultIfEmpty(-1)
+                .Min();
+            return end > start ? provenance[(start + Listed.Length)..end] : "a catalogue";
+        }
+
+        return entry.State == ThemeItemState.AutoAssigned ? BySearch : null;
+    }
+
+    /// <summary>Returns the entry to the state of a title never looked at, once its theme is gone.</summary>
+    public void ForgetDecision()
+    {
+        State = ThemeItemState.Unprocessed;
+        ThemePath = null;
+        Sha256 = null;
+        AssignedBy = null;
+        ChosenId = null;
+        ChosenTitle = null;
+        ChosenUrl = null;
+        ChosenChannel = null;
+        Score = null;
+        ScoreBreakdown = new List<string>();
+        Rejected = new List<RejectedCandidateRecord>();
+        LoudnessLufs = null;
+        DurationSeconds = null;
+        BandDiffStd = null;
+        Attempts = 0;
+        LastError = null;
+        NextRetryUtc = null;
+        LastSkipReason = null;
+        LastSkipUtc = null;
+        NothingToSearchFor = false;
+    }
 
     /// <summary>
     /// Gets a value indicating whether this decision was made by a matcher no longer in use.

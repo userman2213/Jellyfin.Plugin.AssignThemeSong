@@ -151,18 +151,68 @@ public class ImdbSoundtrackTests
         Assert.Equal(expected, ImdbSoundtrackPage.NamesATheme(title));
 
     [Fact]
-    public void TakesAnEntryNamedAfterTheWorkEvenForAFilm()
+    public void NeverTakesAFilmsSongAsItsThemeForSharingTheFilmsName()
+    {
+        // Lucky Strike (2026) is a war film. Its listing carries a licensed western song of the
+        // same name, and that song was taken as the film's theme, searched for first and assigned.
+        var luckyStrike = new[]
+        {
+            new SoundtrackEntry("Lucky Strike", "A Country Act", "A Songwriter"),
+            new SoundtrackEntry("Lucky Strike Blues", "Another Act", "Another Songwriter"),
+            new SoundtrackEntry("Some Other Song", "A Band", null),
+        };
+
+        Assert.Null(ImdbSoundtrackPage.ChooseTheme(luckyStrike, isSeries: false, "Lucky Strike"));
+    }
+
+    [Fact]
+    public void StillTakesAFilmEntryThatSaysItIsTheMainTitle()
     {
         var entries = new[]
         {
-            new SoundtrackEntry("Something Else", "A Band", null),
-            new SoundtrackEntry("The Ballad of Serenity", "Sonny Rhodes", null),
+            new SoundtrackEntry("Lucky Strike", "A Country Act", null),
+            new SoundtrackEntry("Main Title", null, "Larry Groupé"),
         };
 
-        var theme = ImdbSoundtrackPage.ChooseTheme(entries, isSeries: false, "Serenity");
+        var theme = ImdbSoundtrackPage.ChooseTheme(entries, isSeries: false, "Lucky Strike");
 
-        Assert.NotNull(theme);
-        Assert.Equal("The Ballad of Serenity", theme!.Title);
+        Assert.Equal("Main Title", theme!.Title);
+    }
+
+    [Theory]
+    [InlineData("Hawaii Five-O", "Hawaii Five-O")]
+    [InlineData("The Sopranos Theme", "The Sopranos")]
+    [InlineData("Theme from The Sopranos", "The Sopranos")]
+    public void TakesASeriesEntryNamedAfterTheShow(string entryTitle, string show)
+    {
+        // Not first, so it is the name that chose it and not its place in the listing.
+        var entries = new[]
+        {
+            new SoundtrackEntry("Something Else", "A Band", null),
+            new SoundtrackEntry(entryTitle, "Somebody", null),
+        };
+
+        var theme = ImdbSoundtrackPage.ChooseTheme(entries, isSeries: true, show);
+
+        Assert.Equal(entryTitle, theme!.Title);
+    }
+
+    [Theory]
+    [InlineData("Lucky Strike Blues", "Lucky Strike")]
+    [InlineData("Lucky Strikes Again", "Lucky Strike")]
+    [InlineData("Sopranos in Love", "The Sopranos")]
+    public void DoesNotTakeASeriesEntryThatMerelyContainsTheShowsName(string entryTitle, string show)
+    {
+        var entries = new[]
+        {
+            new SoundtrackEntry("Opening Number", "A Band", null),
+            new SoundtrackEntry(entryTitle, "Somebody", null),
+        };
+
+        var theme = ImdbSoundtrackPage.ChooseTheme(entries, isSeries: true, show);
+
+        // A series still falls back on its first entry; what matters is that the name did not win.
+        Assert.Equal("Opening Number", theme!.Title);
     }
 
     [Fact]

@@ -52,11 +52,11 @@ public sealed class PlexTvThemeSource : IThemeProvenanceSource
 
     /// <inheritdoc />
     /// <remarks>
-    /// After ThemerrDB, which covers shows too and is keyed on the same TMDB id Jellyfin already
-    /// holds. This one is the fallback for the series ThemerrDB does not have, which is most of
-    /// them: it lists around 1300 shows against this archive's several thousand.
+    /// Asked first, before ThemerrDB: it holds the theme itself as audio, keyed on the series'
+    /// TheTVDB id, for several thousand series against ThemerrDB's 1900. It has no films, so a
+    /// film goes straight to ThemerrDB.
     /// </remarks>
-    public int Order => 10;
+    public int Order => -10;
 
     /// <inheritdoc />
     public bool IsEnabled(PluginConfiguration configuration) =>
@@ -115,6 +115,7 @@ public sealed class PlexTvThemeSource : IThemeProvenanceSource
                 FoundBy = new SearchQuery($"tvdb:{identity.TvdbId}", 0, "provenance"),
                 IsHydrated = true,
                 Provenance = Name,
+                MatchedOn = $"its own TheTVDB id {identity.TvdbId}",
                 IsDirectAudio = true,
             };
         }

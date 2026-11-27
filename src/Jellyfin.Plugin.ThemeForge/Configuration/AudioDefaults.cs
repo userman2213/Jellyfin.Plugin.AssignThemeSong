@@ -35,6 +35,30 @@ public static class AudioDefaults
         return true;
     }
 
+    /// <summary>
+    /// Switches MP3 output on once, for settings saved before it became the default.
+    /// </summary>
+    /// <remarks>
+    /// Until 2.10 a theme was written in the codec YouTube delivered, so most were
+    /// <c>theme.opus</c>. An off saved then is indistinguishable from a deliberate one, so this
+    /// runs exactly once and leaves a marker; whatever is chosen after that is kept.
+    /// </remarks>
+    /// <param name="configuration">The saved settings.</param>
+    /// <returns><see langword="true"/> when something changed and the settings should be saved.</returns>
+    public static bool UpgradeToMp3(PluginConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        if (configuration.Mp3DefaultApplied)
+        {
+            return false;
+        }
+
+        configuration.AlwaysConvertToMp3 = true;
+        configuration.Mp3DefaultApplied = true;
+        return true;
+    }
+
     /// <summary>Whether every processing setting is exactly what releases before 2.3 shipped.</summary>
     /// <param name="configuration">The saved settings.</param>
     /// <returns><see langword="true"/> when nothing has been edited since those defaults.</returns>

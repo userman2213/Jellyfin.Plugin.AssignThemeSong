@@ -56,6 +56,12 @@ public sealed class ThemerrDbSnapshot
     /// <summary>Gets or sets the film collections that have a theme, with their members.</summary>
     public List<CatalogueCollection> Collections { get; set; } = new();
 
+    /// <summary>
+    /// Gets or sets the address the catalogue was read from, so a record is asked for there first;
+    /// null for a copy made before 3.1.1, which was read from the website.
+    /// </summary>
+    public string? Source { get; set; }
+
     /// <summary>Gets a value indicating whether this snapshot holds anything worth consulting.</summary>
     [JsonIgnore]
     public bool IsUsable => MovieTmdbIds.Count > 0 || TvShows.Count > 0;

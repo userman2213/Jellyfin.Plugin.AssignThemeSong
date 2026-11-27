@@ -62,6 +62,7 @@ public sealed class MediaIdentityResolver : IMediaIdentityResolver
             OriginalTitle = item.OriginalTitle,
             AlternateTitles = BuildAlternateTitles(item, normalized),
             Year = item.ProductionYear,
+            Countries = _people.Countries(item),
             Composers = _people.Composers(item),
             MusicCredits = _people.MusicCredits(item),
             Theme = _people.Theme(item),

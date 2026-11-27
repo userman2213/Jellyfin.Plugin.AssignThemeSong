@@ -602,12 +602,21 @@ public static partial class TitleAnchor
     /// Whether two words are the same word.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Approximate matching is deliberately hard to satisfy. A plain similarity threshold scores
     /// <c>castle</c> against <c>castlevania</c> at 0.909, <c>dark</c> against <c>darkside</c> at
     /// 0.900 and <c>you</c> against <c>young</c> at 0.907 — all of them different works. Requiring
     /// comparable length as well as similarity separates a spelling difference from a shorter word
     /// that happens to start the same way, and a one-word title has to match exactly: Alien and
     /// Aliens are not the same film.
+    /// </para>
+    /// <para>
+    /// The two words must also be at most one edit apart: one letter added, dropped or changed, or
+    /// two neighbours swapped. <c>summer</c> and <c>summoner</c> pass both other tests -- a length
+    /// ratio of exactly 0.75 and a similarity of 0.95 -- and are two different words; that is how
+    /// Black Summer was taken for Black Summoner. <c>Galactica</c>/<c>Galactika</c> and
+    /// <c>theatre</c>/<c>theater</c> are one edit apart and still match.
+    /// </para>
     /// </remarks>
     private static bool Same(string wanted, string actual, bool exactOnly)
     {
@@ -622,7 +631,65 @@ public static partial class TitleAnchor
         }
 
         var ratio = (double)Math.Min(wanted.Length, actual.Length) / Math.Max(wanted.Length, actual.Length);
-        return ratio >= FuzzyLengthRatio && TextSimilarity.JaroWinkler(wanted, actual) >= FuzzySimilarity;
+        return ratio >= FuzzyLengthRatio
+            && WithinOneEdit(wanted, actual)
+            && TextSimilarity.JaroWinkler(wanted, actual) >= FuzzySimilarity;
+    }
+
+    /// <summary>
+    /// Reports whether two words differ by at most one letter added, dropped or changed, or by two
+    /// neighbouring letters swapped.
+    /// </summary>
+    internal static bool WithinOneEdit(string first, string second)
+    {
+        if (Math.Abs(first.Length - second.Length) > 1)
+        {
+            return false;
+        }
+
+        if (first.Length == second.Length)
+        {
+            var differ = -1;
+            var differences = 0;
+            for (var index = 0; index < first.Length; index++)
+            {
+                if (first[index] == second[index])
+                {
+                    continue;
+                }
+
+                if (differences++ == 0)
+                {
+                    differ = index;
+                }
+            }
+
+            return differences <= 1
+                || (differences == 2
+                    && differ + 1 < first.Length
+                    && first[differ] == second[differ + 1]
+                    && first[differ + 1] == second[differ]);
+        }
+
+        var (shorter, longer) = first.Length < second.Length ? (first, second) : (second, first);
+        var skipped = false;
+        for (int i = 0, j = 0; i < shorter.Length; j++)
+        {
+            if (shorter[i] == longer[j])
+            {
+                i++;
+            }
+            else if (skipped)
+            {
+                return false;
+            }
+            else
+            {
+                skipped = true;
+            }
+        }
+
+        return true;
     }
 
     private static bool IsNumber(string token) => token.Length > 0 && token.All(char.IsDigit);

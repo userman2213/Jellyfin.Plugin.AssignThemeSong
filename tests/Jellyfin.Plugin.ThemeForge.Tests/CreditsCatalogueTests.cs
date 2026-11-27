@@ -75,7 +75,7 @@ public sealed class CreditsCatalogueTests : IDisposable
         new(new Dictionary<string, ResearchedCredits> { [key] = credits }, new HashSet<string>());
 
     private static Source Wikidata(Func<IReadOnlyList<CreditsRequest>, CreditsAnswer> answer) =>
-        new("Wikidata", 0, CreditsQuestion.Composers | CreditsQuestion.Theme, answer);
+        new("Wikidata", 0, CreditsQuestion.Composers | CreditsQuestion.Theme | CreditsQuestion.Origin, answer);
 
     private static Source Imdb(Func<IReadOnlyList<CreditsRequest>, CreditsAnswer> answer) =>
         new("IMDb", 30, CreditsQuestion.Composers, answer);
@@ -112,7 +112,7 @@ public sealed class CreditsCatalogueTests : IDisposable
     [Fact]
     public async Task ASourceThatThrowsCouldNotBeAsked()
     {
-        var broken = new Source("Wikidata", 0, CreditsQuestion.Composers | CreditsQuestion.Theme, _ => throw new InvalidOperationException("down"));
+        var broken = new Source("Wikidata", 0, CreditsQuestion.Composers | CreditsQuestion.Theme | CreditsQuestion.Origin, _ => throw new InvalidOperationException("down"));
         var snapshot = await Catalogue(broken).SyncAsync(new[] { Battlestar }, null, CancellationToken.None);
 
         Assert.Null(snapshot.Find(Battlestar.Keys));

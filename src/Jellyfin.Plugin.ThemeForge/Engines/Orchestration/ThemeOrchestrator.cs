@@ -2,6 +2,7 @@ using Jellyfin.Plugin.ThemeForge.Logging;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -151,6 +152,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
     private readonly IThemeIndex _index;
     private readonly ILibraryPolicyResolver _policyResolver;
     private readonly IThemeForgeLogger<ThemeOrchestrator> _logger;
+    private readonly IImdbCrewData? _crew;
     private readonly RequestThrottle _throttle = new();
 
     /// <summary>Paces searches somebody is waiting for, separately from the run's.</summary>
@@ -199,6 +201,21 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
     /// <summary>The longest query that will be sent to a search, in characters.</summary>
     private const int MaxQueryLength = 200;
 
+    /// <summary>
+    /// How the reason recorded for a title nobody is credited with the music of begins; Diagnostics
+    /// counts the titles by it.
+    /// </summary>
+    internal const string NobodyCredited = "nobody is credited with its music";
+
+    /// <summary>What a theme from ThemerrDB is recorded as having been assigned by.</summary>
+    private const string ThemerrDbName = "ThemerrDB";
+
+    /// <summary>Ends every reason a title was not searched for.</summary>
+    private const string NoTitleSearches = "a title alone is never searched for unattended";
+
+    /// <summary>How soon a title with nobody to search for is looked at again; it costs nothing.</summary>
+    private static readonly TimeSpan NothingToSearchRecheck = TimeSpan.FromHours(12);
+
     private int _running;
 
     /// <summary>Initializes a new instance of the <see cref="ThemeOrchestrator"/> class.</summary>
@@ -216,6 +233,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
     /// <param name="index">Records decisions.</param>
     /// <param name="policyResolver">Resolves per-library overwrite rules.</param>
     /// <param name="logger">Logger.</param>
+    /// <param name="crew">IMDb's crew data, named when a title is not searched for; null for none.</param>
     public ThemeOrchestrator(
         ILibraryManager libraryManager,
         IMediaIdentityResolver identityResolver,
@@ -230,7 +248,8 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         IThemePlacementEngine placementEngine,
         IThemeIndex index,
         ILibraryPolicyResolver policyResolver,
-        IThemeForgeLogger<ThemeOrchestrator> logger)
+        IThemeForgeLogger<ThemeOrchestrator> logger,
+        IImdbCrewData? crew = null)
     {
         _libraryManager = libraryManager;
         _identityResolver = identityResolver;
@@ -247,6 +266,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         _index = index;
         _policyResolver = policyResolver;
         _logger = logger;
+        _crew = crew;
     }
 
     /// <inheritdoc />
@@ -552,7 +572,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         // decision -- so those words are searched for and nothing else is put in front of them.
         var plan = byHand
             ? new[] { new SearchQuery(typed, 0, "manual search") }
-            : _queryPlanner.Plan(identity, configuration);
+            : _queryPlanner.Plan(identity, configuration, includeTitleSearches: true);
 
         if (plan.Count == 0)
         {
@@ -744,7 +764,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         await _interactive.WaitAsync(TimeSpan.FromMilliseconds(ManualSearchSpacingMs), cancellationToken).ConfigureAwait(false);
         var hydrated = await _candidateSource.HydrateAsync(shortlist, cancellationToken).ConfigureAwait(false);
 
-        return Merge(ranked, _scoringEngine.Rank(hydrated, context));
+        return ScoringEngine.Order(Merge(ranked, _scoringEngine.Rank(hydrated, context)), context.Configuration);
     }
 
     /// <summary>
@@ -769,7 +789,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         var better = new Dictionary<string, ScoreResult>(StringComparer.Ordinal);
         foreach (var result in inspected)
         {
-            if (!better.TryGetValue(result.Candidate.Id, out var seen) || result.Total > seen.Total)
+            if (!better.TryGetValue(result.Candidate.Id, out var seen) || result.Earned > seen.Earned)
             {
                 better[result.Candidate.Id] = result;
             }
@@ -845,6 +865,10 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         // they stayed there after dry run was switched off again.
         var dryRun = configuration.DryRun;
 
+        // Before anything is decided about the item: a theme recorded as ThemerrDB's that ThemerrDB
+        // does not give this show is withdrawn, so the item is looked at afresh in this same pass.
+        await WithdrawThemerrDbMismatchAsync(identity, entry, report, dryRun, cancellationToken).ConfigureAwait(false);
+
         // Three gates, in this order, and the order is the point. Whether a theme may be written at
         // all is decided first and stops everything. The catalogues come next and are never behind
         // a backoff: a lookup keyed on the item's own id costs nothing for a miss, and the backoff
@@ -875,12 +899,23 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
             // right". Scoring the first against the second's yardstick could only make it worse,
             // so a hit is applied on where it came from and nothing else runs.
             var known = await LookUpAsync(identity, configuration, cancellationToken).ConfigureAwait(false);
+
+            // An item that already has ThemeForge's theme -- a search's guess, or a catalogue's
+            // answer in a library allowed to replace its own -- is updated from the catalogue
+            // without risking what it has: if the catalogue's theme cannot be fetched or written,
+            // the current one stays exactly as it was.
+            if (known is not null && entry.State == ThemeItemState.AutoAssigned && entry.ThemePath is not null)
+            {
+                return await ReplaceFromCatalogueAsync(item, identity, entry, known, configuration, policy, report, dryRun, cancellationToken).ConfigureAwait(false);
+            }
+
+            var attemptBegun = false;
             if (known is not null)
             {
                 var certain = new ThemeDecision(
                     DecisionOutcome.AutoAssign,
                     Certain(known),
-                    $"listed in {known.Provenance} against this title's own database id");
+                    $"listed in {known.Provenance} under {MatchedOn(known)}");
 
                 if (dryRun)
                 {
@@ -888,8 +923,27 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
                 }
 
                 Begin(entry);
+                attemptBegun = true;
                 RecordCandidates(entry, new[] { certain.Best! }, certain, Array.Empty<ScoreResult>());
-                return await AssignAsync(item, identity, entry, certain, configuration, policy, report, cancellationToken).ConfigureAwait(false);
+
+                try
+                {
+                    return await AssignAsync(item, identity, entry, certain, configuration, policy, report, cancellationToken).ConfigureAwait(false);
+                }
+                catch (InvalidOperationException ex) when (eligibility.SearchAllowed)
+                {
+                    // A catalogue link that cannot be downloaded is not a theme, whatever the
+                    // catalogue says. Failing the item here meant the next run met the same link
+                    // first and failed again, so the item never reached the search. Dead links are
+                    // caught before this by the catalogue's own check; this is for the ones that
+                    // look alive and still will not play -- a private video answers the check the
+                    // same way as one that only has embedding switched off.
+                    _logger.LogInformation(
+                        "ThemeForge: {Source}'s theme for \"{Item}\" could not be downloaded ({Error}); searching instead.",
+                        known.Provenance,
+                        identity.Label,
+                        ex.Message);
+                }
             }
 
             // Gate three: only the search is subject to backoff and attempt limits.
@@ -901,12 +955,41 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
             entry.LastSkipReason = null;
             entry.LastSkipUtc = null;
 
-            if (!dryRun)
+            identity = await ResearchBeforeSearchAsync(item, identity, configuration, cancellationToken).ConfigureAwait(false);
+
+            // An unattended run searches only for who made the music. With nobody credited there
+            // is nothing to search for, and saying "the search found nothing" would be untrue. Nor
+            // is it an attempt: the attempts limit searches, and a title that has used them up is
+            // never searched again, even once somebody is credited with its music.
+            var plan = _queryPlanner.Plan(identity, configuration);
+            if (plan.Count == 0)
+            {
+                var nothing = new ThemeDecision(
+                    DecisionOutcome.NoAcceptableCandidate,
+                    null,
+                    await WhyNothingIsSearchedAsync(identity, configuration, cancellationToken).ConfigureAwait(false));
+
+                if (dryRun)
+                {
+                    return Report(identity, nothing, report);
+                }
+
+                RecordCandidates(entry, Array.Empty<ScoreResult>(), nothing, Array.Empty<ScoreResult>());
+                var outcome = NoCandidate(entry, nothing, configuration, report);
+                entry.NothingToSearchFor = true;
+                entry.NextRetryUtc = DateTime.UtcNow.Add(NothingToSearchRecheck);
+                return outcome;
+            }
+
+            entry.NothingToSearchFor = false;
+
+            // One attempt per processed item, even when the catalogue's link failed first.
+            if (!dryRun && !attemptBegun)
             {
                 Begin(entry);
             }
 
-            var (ranked, overlooked) = await SearchAndRankAsync(identity, configuration, cancellationToken).ConfigureAwait(false);
+            var (ranked, overlooked) = await SearchAndRankAsync(identity, plan, configuration, cancellationToken).ConfigureAwait(false);
             var decision = _decisionPolicy.Decide(ranked, configuration);
 
             if (dryRun)
@@ -1054,6 +1137,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
                 SettleScoreForNewChoice(entry, candidate.Id, DateTime.UtcNow);
 
                 entry.State = state;
+                entry.AssignedBy = ThemeIndexEntry.ByYou;
                 entry.ChosenId = candidate.Id;
                 entry.ChosenTitle = candidate.Title;
                 entry.ChosenUrl = candidate.Url;
@@ -1297,6 +1381,140 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
         return works;
     }
 
+    /// <summary>
+    /// Looks up a title's music just before it is searched for, if nobody has yet.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The daily research leaves out every title ThemerrDB has a theme for, since that theme is
+    /// taken outright and nothing is searched. But a ThemerrDB link can be dead, and then the title
+    /// is searched after all -- with no composer and no theme name, because they were never looked
+    /// up, so with the weakest queries the ladder has. A title added since the last research pass is
+    /// in the same position.
+    /// </para>
+    /// <para>
+    /// The catalogue asks only about what it does not already know, and remembers a miss, so for a
+    /// title that was researched this costs nothing; the work is done exactly for the titles that
+    /// were skipped and now need it.
+    /// </para>
+    /// </remarks>
+    private async Task<MediaIdentity> ResearchBeforeSearchAsync(
+        BaseItem item,
+        MediaIdentity identity,
+        PluginConfiguration configuration,
+        CancellationToken cancellationToken)
+    {
+        if (!configuration.ResearchComposers)
+        {
+            return identity;
+        }
+
+        var keys = CreditsKeys.For(identity.ImdbId, identity.TmdbId, identity.TvdbId, identity.IsSeries);
+        if (keys.Count == 0)
+        {
+            return identity;
+        }
+
+        try
+        {
+            // Read from memory first: a title that was researched is the common case, and asking
+            // the catalogue to sync it would wait behind a nightly pass and log that there was
+            // nothing to do, once for every title searched.
+            var known = await _composers.GetAsync(cancellationToken).ConfigureAwait(false);
+            if (!known.NeedsLookUp(keys, DateTime.UtcNow))
+            {
+                return identity;
+            }
+
+            var request = new CreditsRequest(
+                keys[0], keys, identity.ImdbId, identity.TmdbId, identity.IsSeries, identity.Label);
+
+            await _composers.SyncAsync(new[] { request }, null, cancellationToken).ConfigureAwait(false);
+
+            // The identity reads the cache when it is resolved, so resolving it again is what
+            // brings whatever was just found into the search.
+            return _identityResolver.Resolve(item) ?? identity;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // The search still works without the research; it is only less specific.
+            _logger.LogWarning(ex, "ThemeForge: could not look up the music for \"{Item}\" before searching.", identity.Label);
+            return identity;
+        }
+    }
+
+    /// <summary>
+    /// Says why a title was not searched for at all, naming what was asked so the reason can be
+    /// checked rather than taken on trust.
+    /// </summary>
+    private async Task<string> WhyNothingIsSearchedAsync(
+        MediaIdentity identity,
+        PluginConfiguration configuration,
+        CancellationToken cancellationToken)
+    {
+        if (identity.Composers.Count > 0 || identity.Theme is not null)
+        {
+            // Cannot happen with the built-in credit searches; said plainly if it ever does.
+            return "it has credits, but no search could be built from them (a bug; please report it)";
+        }
+
+        if (!configuration.ResearchComposers)
+        {
+            return "Jellyfin's metadata names nobody for its music, looking it up elsewhere is switched off, and " + NoTitleSearches;
+        }
+
+        var keys = CreditsKeys.For(identity.ImdbId, identity.TmdbId, identity.TvdbId, identity.IsSeries);
+        if (keys.Count == 0)
+        {
+            return "Jellyfin's metadata names nobody for its music and gives it no IMDb, TMDb or TVDB id to look that up by, and " + NoTitleSearches;
+        }
+
+        var known = await _composers.GetAsync(cancellationToken).ConfigureAwait(false);
+        if (known.NeedsComposers(keys, DateTime.UtcNow))
+        {
+            // Not settled: a source was down or refused. "Nobody" would be a claim nobody made.
+            return "who made its music could not be looked up this time, so it was not searched for; it is tried again later";
+        }
+
+        var asked = new List<string> { "Jellyfin's metadata" };
+        var crewMissing = false;
+        if (_crew is not null && configuration.UseImdbCrewData)
+        {
+            if (_crew.Status(configuration).Available)
+            {
+                asked.Add("IMDb's crew data");
+            }
+            else
+            {
+                crewMissing = true;
+            }
+        }
+
+        asked.AddRange(_composers.SourcesAsked(configuration));
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "{0} or named as its theme in {1}{2}, so it was not searched for: {3}",
+            NobodyCredited,
+            JoinOr(asked),
+            crewMissing ? " (IMDb's crew data is not downloaded yet; it is asked once it is)" : string.Empty,
+            NoTitleSearches);
+    }
+
+    private static string JoinOr(IReadOnlyList<string> names) => names.Count switch
+    {
+        0 => string.Empty,
+        1 => names[0],
+        _ => string.Join(", ", names.Take(names.Count - 1)) + " or " + names[^1],
+    };
+
+    /// <summary>Says how a catalogue matched a candidate to the item, for the record.</summary>
+    private static string MatchedOn(Candidate candidate) =>
+        string.IsNullOrWhiteSpace(candidate.MatchedOn) ? "this title's own database id" : candidate.MatchedOn;
+
     /// <summary>Reports whether ThemerrDB has a theme for a title, by any id it is known by.</summary>
     internal static bool HasThemerrTheme(ThemerrDbSnapshot catalogue, MediaIdentity identity)
     {
@@ -1413,7 +1631,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
                 "Provenance",
                 1,
                 100,
-                $"listed in {candidate.Provenance} against this title's own database id, so it was not scored"),
+                $"listed in {candidate.Provenance} under {MatchedOn(candidate)}, so it was not scored"),
         },
     };
 
@@ -1427,6 +1645,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
     /// </remarks>
     private async Task<(IReadOnlyList<ScoreResult> Ranked, IReadOnlyList<ScoreResult> Overlooked)> SearchAndRankAsync(
         MediaIdentity identity,
+        IReadOnlyList<SearchQuery> plan,
         PluginConfiguration configuration,
         CancellationToken cancellationToken)
     {
@@ -1437,7 +1656,6 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
             FindExistingAssignment = videoId => _index.FindAssignmentOwner(videoId, identity.ItemId),
         };
 
-        var plan = _queryPlanner.Plan(identity, configuration);
         var best = new Dictionary<string, ScoreResult>(StringComparer.Ordinal);
         var overlooked = new Dictionary<string, ScoreResult>(StringComparer.Ordinal);
         var autoAssign = Math.Max(configuration.AutoAssignThreshold, configuration.ReviewThreshold);
@@ -1486,23 +1704,273 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
 
             foreach (var result in _scoringEngine.Rank(hydrated, context))
             {
-                if (!best.TryGetValue(result.Candidate.Id, out var existing) || result.Total > existing.Total)
+                if (!best.TryGetValue(result.Candidate.Id, out var existing) || result.Earned > existing.Earned)
                 {
                     best[result.Candidate.Id] = result;
                 }
             }
 
+            // Only the main theme ends the search early. A soundtrack track good enough to assign is
+            // kept, and assigned if nothing better turns up, but the next query may find the theme.
             if (configuration.StopLadderOnConfidentHit
-                && best.Values.Any(result => !result.IsVetoed && result.Total >= autoAssign))
+                && best.Values.Any(result => result.IsMainTheme && result.CanAutoAssign(autoAssign)))
             {
-                _logger.LogDebug("ThemeForge: stopping the search for \"{Item}\" early after a confident match.", identity.Label);
+                _logger.LogDebug("ThemeForge: stopping the search for \"{Item}\" early after finding its main theme.", identity.Label);
                 break;
             }
         }
 
-        var ranked = best.Values.OrderByDescending(result => result.Total).ToList();
+        var ranked = ScoringEngine.Order(best.Values, configuration);
         var unseen = overlooked.Values.Where(result => !best.ContainsKey(result.Candidate.Id)).ToList();
         return (ranked, unseen);
+    }
+
+    /// <summary>
+    /// Replaces the theme ThemeForge wrote for an item with the one a catalogue lists for it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The way a search's guess gives way to ThemerrDB: the daily sync adds entries, and the next
+    /// run finds one for a title a search had already filled. It also stops a library allowed to
+    /// replace its own themes from fetching the same catalogue theme again every night, since a
+    /// theme that is already the catalogue's is left as it is.
+    /// </para>
+    /// <para>
+    /// Nothing the item has is put at risk. Only the file ThemeForge wrote is replaced, and only
+    /// while it is still byte for byte what was written and nothing else sits beside it; a theme
+    /// someone changed or added is left alone. If the catalogue's theme cannot be fetched, sounds
+    /// wrong or cannot be written, the current one stays and the reason is recorded.
+    /// </para>
+    /// </remarks>
+    private async Task<ItemOutcome> ReplaceFromCatalogueAsync(
+        BaseItem item,
+        MediaIdentity identity,
+        ThemeIndexEntry entry,
+        Candidate known,
+        PluginConfiguration configuration,
+        ResolvedThemePolicy policy,
+        RunReport report,
+        bool dryRun,
+        CancellationToken cancellationToken)
+    {
+        var source = known.Provenance ?? "a catalogue";
+
+        if (string.Equals(entry.ChosenId, known.Id, StringComparison.Ordinal))
+        {
+            // Already that theme, whoever found it first. Nothing to fetch; only the record of who
+            // chose it changes, so it is no longer treated as a guess.
+            if (!dryRun && !string.Equals(entry.AssignedBy, source, StringComparison.Ordinal))
+            {
+                entry.AssignedBy = source;
+            }
+
+            return ItemOutcome.Skipped;
+        }
+
+        var certain = new ThemeDecision(
+            DecisionOutcome.AutoAssign,
+            Certain(known),
+            $"listed in {source} under {MatchedOn(known)}, replacing the theme ThemeForge had chosen before");
+
+        if (dryRun)
+        {
+            return WouldAssign(identity, certain);
+        }
+
+        if (!await IsStillOursAsync(entry, cancellationToken).ConfigureAwait(false))
+        {
+            return Skip(entry, identity, $"{source} lists a theme for it, but its theme file was changed or joined by another since ThemeForge wrote it, so it is left alone", dryRun);
+        }
+
+        AcquiredAudio audio;
+        try
+        {
+            audio = await _acquisitionEngine.AcquireAsync(known, configuration, cancellationToken).ConfigureAwait(false);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Skip(entry, identity, $"{source}'s theme could not be downloaded ({ex.Message}); the current theme stays", dryRun);
+        }
+
+        try
+        {
+            if (audio.NeedsReview)
+            {
+                return Skip(entry, identity, $"{source}'s theme did not sound like music ({audio.Assessment!.Reason}); the current theme stays", dryRun);
+            }
+
+            // The file being replaced is ThemeForge's own, checked above, whatever this library's
+            // rule for themes it did not write.
+            var placement = await _placementEngine.PlaceAsync(
+                item,
+                audio,
+                configuration,
+                policy with { Overwrite = ThemeOverwritePolicy.ReplaceOwn },
+                cancellationToken).ConfigureAwait(false);
+
+            if (!placement.Success)
+            {
+                return Skip(entry, identity, $"{source}'s theme could not be written ({placement.Reason}); the current theme stays", dryRun);
+            }
+
+            var replaced = entry.ChosenTitle;
+            RecordCandidates(entry, new[] { certain.Best! }, certain, Array.Empty<ScoreResult>());
+            entry.State = ThemeItemState.AutoAssigned;
+            entry.NothingToSearchFor = false;
+            entry.AssignedBy = source;
+            entry.ThemePath = placement.Path;
+            entry.Sha256 = audio.Sha256;
+            entry.LoudnessLufs = audio.MeasuredLoudnessLufs;
+            entry.DurationSeconds = audio.DurationSeconds;
+            entry.BandDiffStd = audio.Assessment?.BandDiffStd;
+            entry.LastError = null;
+            entry.NextRetryUtc = null;
+            entry.LastSkipReason = null;
+            entry.LastSkipUtc = null;
+
+            report.NoteAssignedBy(source);
+            _logger.LogInformation(
+                "ThemeForge: replaced \"{Previous}\" for \"{Item}\" with the theme {Source} lists for it.",
+                replaced,
+                identity.Label,
+                source);
+            return ItemOutcome.Assigned;
+        }
+        finally
+        {
+            CleanUpStaging(audio);
+        }
+    }
+
+    /// <summary>
+    /// Withdraws a series theme recorded as ThemerrDB's that ThemerrDB does not give that series.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Until 3.1.1 a show ThemerrDB did not list under its own TMDB id was matched to one whose
+    /// name was merely close to its own, and the result was recorded as ThemerrDB's answer: Black
+    /// Summer, the Netflix zombie series, was given the opening of the anime Black Summoner. Being
+    /// a catalogue's answer, it was never replaced afterwards.
+    /// </para>
+    /// <para>
+    /// Only a pick recorded before the fix is looked at -- one recorded since says how it was
+    /// matched -- and it is withdrawn only when ThemerrDB does not give the show a theme by the
+    /// rule in force now: under its own TMDB id, or, for a show with none, under exactly its name.
+    /// The file is deleted only while it is still byte for byte what ThemeForge wrote, with nothing
+    /// beside it; one changed by hand is kept, and the log says so.
+    /// </para>
+    /// </remarks>
+    /// <returns><see langword="true"/> when the theme was withdrawn.</returns>
+    private async Task<bool> WithdrawThemerrDbMismatchAsync(
+        MediaIdentity identity,
+        ThemeIndexEntry entry,
+        RunReport report,
+        bool dryRun,
+        CancellationToken cancellationToken)
+    {
+        if (!identity.IsSeries
+            || entry.State != ThemeItemState.AutoAssigned
+            || entry.ThemePath is not { } path
+            || !string.Equals(entry.AssignedBy, ThemerrDbName, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        // Recorded since the fix: the breakdown says "under its own TMDB id ..." or "under its
+        // exact name ...", and the strict rule made it.
+        var provenance = entry.ScoreBreakdown.Find(line => line.StartsWith("Provenance:", StringComparison.Ordinal));
+        if (provenance is null || !provenance.Contains(" against ", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var catalogue = await _themerrDb.GetAsync(cancellationToken).ConfigureAwait(false);
+        if (!catalogue.IsUsable)
+        {
+            // Nothing to tell a right theme from a wrong one by.
+            return false;
+        }
+
+        var backed = string.IsNullOrWhiteSpace(identity.TmdbId)
+            ? ThemerrDbSource.MatchShowByTitle(identity.Title, catalogue.TvShows) is not null
+            : catalogue.HasShow(identity.TmdbId);
+        if (backed)
+        {
+            return false;
+        }
+
+        if (dryRun)
+        {
+            _logger.LogInformation(
+                "ThemeForge: [dry run] would remove the theme of \"{Item}\": ThemerrDB has none for this show, so it came from another show's entry.",
+                identity.Label);
+            return false;
+        }
+
+        if (File.Exists(path))
+        {
+            if (!await IsStillOursAsync(entry, cancellationToken).ConfigureAwait(false))
+            {
+                _logger.LogWarning(
+                    "ThemeForge: the theme of \"{Item}\" came from another show's ThemerrDB entry, but the file has been changed or joined by another since, so it is left as it is.",
+                    identity.Label);
+                return false;
+            }
+
+            try
+            {
+                File.Delete(path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                _logger.LogWarning(ex, "ThemeForge: could not remove the wrong theme of \"{Item}\".", identity.Label);
+                return false;
+            }
+        }
+
+        _logger.LogWarning(
+            "ThemeForge: removed the theme of \"{Item}\" ({Video}). ThemerrDB has no theme for this show; it was taken from another show with a similar name. The show is looked at again now.",
+            identity.Label,
+            entry.ChosenUrl);
+
+        entry.ForgetDecision();
+        _index.Put(entry);
+        report.NoteReason("removed a theme that came from another show's ThemerrDB entry");
+        return true;
+    }
+
+    /// <summary>
+    /// Reports whether the theme on disk is still exactly the one ThemeForge wrote, with nothing
+    /// beside it.
+    /// </summary>
+    private static async Task<bool> IsStillOursAsync(ThemeIndexEntry entry, CancellationToken cancellationToken)
+    {
+        if (entry.ThemePath is not { } path || entry.Sha256 is null || !File.Exists(path))
+        {
+            return false;
+        }
+
+        var directory = Path.GetDirectoryName(path);
+        if (directory is null)
+        {
+            return false;
+        }
+
+        var themes = ThemePlacementEngine.ExistingThemeFiles(directory);
+        if (themes.Count != 1 || !string.Equals(themes[0], path, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        try
+        {
+            var actual = await FileHash.ComputeSha256Async(path, cancellationToken).ConfigureAwait(false);
+            return string.Equals(actual, entry.Sha256, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (IOException)
+        {
+            return false;
+        }
     }
 
     private async Task<ItemOutcome> AssignAsync(
@@ -1548,6 +2016,8 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
             }
 
             entry.State = ThemeItemState.AutoAssigned;
+            entry.NothingToSearchFor = false;
+            entry.AssignedBy = best.Candidate.Provenance ?? ThemeIndexEntry.BySearch;
             entry.ThemePath = placement.Path;
             entry.Sha256 = audio.Sha256;
             entry.LoudnessLufs = audio.MeasuredLoudnessLufs;
@@ -1555,7 +2025,7 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
             entry.LastError = null;
             entry.NextRetryUtc = null;
 
-            report.NoteAssignedBy(best.Candidate.Provenance ?? "search");
+            report.NoteAssignedBy(entry.AssignedBy);
             return ItemOutcome.Assigned;
         }
         finally
@@ -1571,7 +2041,9 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
 
         // A stale backoff on a review item skipped it before anyone looked at it again.
         entry.NextRetryUtc = null;
-        report.NoteReason("scored below the auto-assign threshold, so it needs review");
+        report.NoteReason(decision.HeldBack
+            ? "nothing in its title says it is the theme, so it needs review"
+            : "scored below the auto-assign threshold, so it needs review");
         _logger.LogDebug("ThemeForge: queued \"{Item}\" for review — {Reason}.", entry.Label, decision.Reason);
         return ItemOutcome.Queued;
     }

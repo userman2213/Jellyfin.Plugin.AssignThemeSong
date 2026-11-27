@@ -59,6 +59,17 @@ public class LoudnessMeasurementParsingTests
 /// </summary>
 public class EncodePlanTests
 {
+    /// <summary>
+    /// Settings that keep the delivered codec. These tests were written when that was the default;
+    /// they are about what forces a re-encode, so they say which codec choice they assume.
+    /// </summary>
+    private static PluginConfiguration Keeping()
+    {
+        var configuration = TestData.Config();
+        configuration.AlwaysConvertToMp3 = false;
+        return configuration;
+    }
+
     private static AudioProbeResult Source(string codec = "opus", double seconds = 90) =>
         new(true, seconds, codec, false, null);
 
@@ -66,9 +77,20 @@ public class EncodePlanTests
         new(integrated, truePeak, 6.6, integrated - 10, 0.0);
 
     [Fact]
-    public void ByDefaultTheStreamIsCopiedExactlyAsDelivered()
+    public void ByDefaultTheThemeIsWrittenAsMp3()
     {
+        // theme.mp3 is what people expect to find, and not every Jellyfin client plays an Opus
+        // theme. YouTube delivers Opus, so without this most themes were theme.opus.
         var plan = ThemeEncoder.Plan(Source("opus"), null, TestData.Config());
+
+        Assert.False(plan.Copy);
+        Assert.Equal(".mp3", plan.Extension);
+    }
+
+    [Fact]
+    public void WithMp3OffTheStreamIsCopiedExactlyAsDelivered()
+    {
+        var plan = ThemeEncoder.Plan(Source("opus"), null, Keeping());
 
         Assert.True(plan.Copy);
         Assert.Equal(".opus", plan.Extension);
@@ -94,7 +116,7 @@ public class EncodePlanTests
     [InlineData(null)]
     public void ACodecWithNoContainerOfItsOwnIsEncodedToMp3EvenWithNothingElseToDo(string? codec)
     {
-        var plan = ThemeEncoder.Plan(Source(codec!), null, TestData.Config());
+        var plan = ThemeEncoder.Plan(Source(codec!), null, Keeping());
 
         Assert.False(plan.Copy);
         Assert.Equal(".mp3", plan.Extension);
@@ -104,7 +126,7 @@ public class EncodePlanTests
     [Fact]
     public void ForcingMp3EncodesWithoutTouchingTheAudio()
     {
-        var configuration = TestData.Config();
+        var configuration = Keeping();
         configuration.AlwaysConvertToMp3 = true;
 
         var plan = ThemeEncoder.Plan(Source("opus"), null, configuration);
@@ -118,7 +140,7 @@ public class EncodePlanTests
     [Fact]
     public void RaisingAQuietThemeIsAPlainGainUpToTheFloor()
     {
-        var configuration = TestData.Config();
+        var configuration = Keeping();
         configuration.RaiseQuietThemes = true;
 
         // -24 LUFS against a -16 floor wants +8 dB; the peaks at -12 dBTP leave room for it.
@@ -132,7 +154,7 @@ public class EncodePlanTests
     [Fact]
     public void RaisingStopsShortOfClipping()
     {
-        var configuration = TestData.Config();
+        var configuration = Keeping();
         configuration.RaiseQuietThemes = true;
 
         // The same -24 LUFS, but peaks already at -8 dBTP: only 6.5 dB fit under the -1.5 ceiling.
@@ -144,7 +166,7 @@ public class EncodePlanTests
     [Fact]
     public void RaisingNeverLowersAThemeThatIsAlreadyLoudEnough()
     {
-        var configuration = TestData.Config();
+        var configuration = Keeping();
         configuration.RaiseQuietThemes = true;
 
         Assert.Null(ThemeEncoder.RaiseGain(Measured(-10, truePeak: -0.5), configuration));
@@ -156,7 +178,7 @@ public class EncodePlanTests
     [Fact]
     public void RaisingByLessThanHalfADecibelIsNotWorthAReencode()
     {
-        var configuration = TestData.Config();
+        var configuration = Keeping();
         configuration.RaiseQuietThemes = true;
 
         Assert.Null(ThemeEncoder.RaiseGain(Measured(-16.3, truePeak: -5), configuration));
@@ -166,7 +188,7 @@ public class EncodePlanTests
     [Fact]
     public void RaisingWithoutAMeasurementDoesNothing()
     {
-        var configuration = TestData.Config();
+        var configuration = Keeping();
         configuration.RaiseQuietThemes = true;
 
         Assert.True(ThemeEncoder.Plan(Source(), null, configuration).Copy);
@@ -175,7 +197,7 @@ public class EncodePlanTests
     [Fact]
     public void NormalisationUsesTheMeasuredValuesSoDynamicsArePreserved()
     {
-        var configuration = TestData.Config();
+        var configuration = Keeping();
         configuration.EnableLoudnessNormalization = true;
 
         var plan = ThemeEncoder.Plan(Source(), Measured(-14.83, truePeak: -0.35), configuration);
@@ -192,7 +214,7 @@ public class EncodePlanTests
     [Fact]
     public void NormalisationTakesPrecedenceOverRaising()
     {
-        var configuration = TestData.Config();
+        var configuration = Keeping();
         configuration.EnableLoudnessNormalization = true;
         configuration.RaiseQuietThemes = true;
 
@@ -205,7 +227,7 @@ public class EncodePlanTests
     [Fact]
     public void NormalisationIsSkippedWhenTheMeasurementFailed()
     {
-        var configuration = TestData.Config();
+        var configuration = Keeping();
         configuration.EnableLoudnessNormalization = true;
 
         var plan = ThemeEncoder.Plan(Source(), null, configuration);
@@ -217,7 +239,7 @@ public class EncodePlanTests
     [Fact]
     public void TheFadeOutIsPlacedAtTheEndOfTheOutput()
     {
-        var configuration = TestData.Config();
+        var configuration = Keeping();
         configuration.FadeOutSeconds = 3;
 
         var plan = ThemeEncoder.Plan(Source(seconds: 60), null, configuration);
@@ -230,7 +252,7 @@ public class EncodePlanTests
     public void AFadeThatWouldNotFitIsShortened()
     {
         // A four-second fade on a two-second clip would start before zero and silence it.
-        var configuration = TestData.Config();
+        var configuration = Keeping();
         configuration.FadeOutSeconds = 4;
 
         var plan = ThemeEncoder.Plan(Source(seconds: 2), null, configuration);
@@ -241,7 +263,7 @@ public class EncodePlanTests
     [Fact]
     public void TrimmingSilenceFadesTheEndWithoutKnowingWhereItIs()
     {
-        var configuration = TestData.Config();
+        var configuration = Keeping();
         configuration.TrimSilence = true;
         configuration.FadeOutSeconds = 3;
 
@@ -258,7 +280,7 @@ public class EncodePlanTests
     [Fact]
     public void ACutAppliesOnlyToSourcesLongerThanTheCap()
     {
-        var configuration = TestData.Config();
+        var configuration = Keeping();
         configuration.MaxThemeSeconds = 60;
 
         Assert.True(ThemeEncoder.Plan(Source(seconds: 30), null, configuration).Copy);
@@ -325,5 +347,37 @@ public class AudioDefaultsTests
         AudioDefaults.Upgrade(configuration);
 
         Assert.False(AudioDefaults.Upgrade(configuration));
+    }
+
+    [Fact]
+    public void SettingsSavedBeforeMp3BecameTheDefaultAreSwitchedOnce()
+    {
+        // An off saved by an earlier release cannot be told apart from a decision, so it is
+        // switched on once and a marker records that it was.
+        var saved = new PluginConfiguration { AlwaysConvertToMp3 = false, Mp3DefaultApplied = false };
+
+        Assert.True(AudioDefaults.UpgradeToMp3(saved));
+        Assert.True(saved.AlwaysConvertToMp3);
+        Assert.True(saved.Mp3DefaultApplied);
+    }
+
+    [Fact]
+    public void AnOffChosenAfterTheSwitchIsKept()
+    {
+        var chosen = new PluginConfiguration { AlwaysConvertToMp3 = false, Mp3DefaultApplied = true };
+
+        Assert.False(AudioDefaults.UpgradeToMp3(chosen));
+        Assert.False(chosen.AlwaysConvertToMp3);
+    }
+
+    [Fact]
+    public void TheSwitchHappensOnlyOnce()
+    {
+        var saved = new PluginConfiguration { AlwaysConvertToMp3 = false };
+
+        Assert.True(AudioDefaults.UpgradeToMp3(saved));
+        saved.AlwaysConvertToMp3 = false;
+        Assert.False(AudioDefaults.UpgradeToMp3(saved));
+        Assert.False(saved.AlwaysConvertToMp3);
     }
 }

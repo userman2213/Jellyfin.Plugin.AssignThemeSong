@@ -75,7 +75,7 @@ public class ProvenanceSourceTests
 
     private const string ThemeJson = """{"youtube_theme_url": "https://www.youtube.com/watch?v=abcdefghijk"}""";
 
-    private static MediaIdentity Series(string? tmdbId, string title = "Firefly", string? tvdbId = "78874") => new()
+    private static MediaIdentity Series(string? tmdbId, string title = "Firefly", string? tvdbId = "78874", int? year = null) => new()
     {
         ItemId = Guid.NewGuid(),
         Title = title,
@@ -83,6 +83,7 @@ public class ProvenanceSourceTests
         Kind = Jellyfin.Data.Enums.BaseItemKind.Series,
         TmdbId = tmdbId,
         TvdbId = tvdbId,
+        Year = year,
     };
 
     private static MediaIdentity Movie(string? tmdbId, string? imdbId = null, string title = "Blade Runner") => new()
@@ -98,8 +99,31 @@ public class ProvenanceSourceTests
     private static PlexTvThemeSource Plex(HttpMessageHandler handler) =>
         new(new Factory(handler), NullThemeForgeLogger<PlexTvThemeSource>.Instance);
 
-    private static ThemerrDbSource Themerr(HttpMessageHandler handler, ThemerrDbSnapshot? snapshot = null) =>
-        new(new StubCatalogue(snapshot), new Factory(handler), NullThemeForgeLogger<ThemerrDbSource>.Instance);
+    /// <summary>A link checker that gives a fixed answer and remembers what it was asked about.</summary>
+    private sealed class StubLinks : ILinkChecker
+    {
+        private readonly LinkState _state;
+
+        public StubLinks(LinkState state) => _state = state;
+
+        public List<string> Checked { get; } = new();
+
+        public Task<LinkState> CheckAsync(string url, CancellationToken cancellationToken)
+        {
+            Checked.Add(url);
+            return Task.FromResult(_state);
+        }
+    }
+
+    private static ThemerrDbSource Themerr(
+        HttpMessageHandler handler,
+        ThemerrDbSnapshot? snapshot = null,
+        ILinkChecker? links = null) =>
+        new(
+            new StubCatalogue(snapshot),
+            new Factory(handler),
+            links ?? new StubLinks(LinkState.Alive),
+            NullThemeForgeLogger<ThemerrDbSource>.Instance);
 
     private static PluginConfiguration Enabled()
     {
@@ -139,11 +163,11 @@ public class ProvenanceSourceTests
         Assert.True(TestData.Config().UseThemerrDb);
 
     [Fact]
-    public void ThemerrDbIsAskedBeforePlex()
+    public void ThePlexArchiveIsAskedBeforeThemerrDb()
     {
-        // It covers films, shows and collections; Plex is the fallback for the series it lacks.
+        // The Plex archive first, for the series it has; ThemerrDB for everything else.
         // Stated by the sources rather than left to the order they happen to be registered in.
-        Assert.True(Themerr(new Forbidden()).Order < Plex(new Forbidden()).Order);
+        Assert.True(Plex(new Forbidden()).Order < Themerr(new Forbidden()).Order);
     }
 
     // ---- Films --------------------------------------------------------------------
@@ -258,7 +282,69 @@ public class ProvenanceSourceTests
             .FindAsync(Series(null, "Firefly"), Enabled(), CancellationToken.None));
     }
 
+    // ---- Black Summer: given the anime Black Summoner's opening ---------------------------
+
+    [Fact]
+    public async Task AShowWithItsOwnTmdbIdIsNeverMatchedByName()
+    {
+        // Black Summer (TMDB 88052) is not in ThemerrDB, so ThemerrDB has no theme for it. It was
+        // matched by name to Black Summoner (157842) and given that anime's opening. Even a show
+        // with exactly its name is another show when its own id is not listed.
+        var shows = new[]
+        {
+            new CatalogueTitle("157842", "Black Summoner"),
+            new CatalogueTitle("999999", "Black Summer"),
+        };
+
+        Assert.Null(await Themerr(new Forbidden(), Snapshot(shows: shows))
+            .FindAsync(Series("88052", "Black Summer"), Enabled(), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task AShowWithNoTmdbIdIsNotGivenASimilarlyNamedShowsTheme()
+    {
+        var shows = new[] { new CatalogueTitle("157842", "Black Summoner") };
+
+        Assert.Null(await Themerr(new Forbidden(), Snapshot(shows: shows))
+            .FindAsync(Series(null, "Black Summer"), Enabled(), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task AShowOfTheSameNameFromAnotherYearIsAnotherShow()
+    {
+        const string Record = """{"first_air_date": "2022-07-09", "youtube_theme_url": "https://www.youtube.com/watch?v=abcdefghijk"}""";
+        var shows = new[] { new CatalogueTitle("1", "Black Summer") };
+
+        var found = await Themerr(new Canned(HttpStatusCode.OK, Record), Snapshot(shows: shows))
+            .FindAsync(Series(null, "Black Summer", year: 2019), Enabled(), CancellationToken.None);
+
+        Assert.Null(found);
+    }
+
+    [Fact]
+    public async Task AShowOfTheSameNameAndYearIsTakenAndSaysHowItWasFound()
+    {
+        const string Record = """{"first_air_date": "2019-04-11", "youtube_theme_url": "https://www.youtube.com/watch?v=abcdefghijk"}""";
+        var shows = new[] { new CatalogueTitle("1", "Black Summer") };
+
+        var found = await Themerr(new Canned(HttpStatusCode.OK, Record), Snapshot(shows: shows))
+            .FindAsync(Series(null, "Black Summer", year: 2019), Enabled(), CancellationToken.None);
+
+        Assert.NotNull(found);
+        Assert.StartsWith("its exact name", found!.MatchedOn, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AShowFoundByItsIdSaysSo()
+    {
+        var found = await Themerr(new Canned(HttpStatusCode.OK, ThemeJson), Snapshot(shows: new[] { new CatalogueTitle("1396", "Breaking Bad") }))
+            .FindAsync(Series("1396", "Breaking Bad"), Enabled(), CancellationToken.None);
+
+        Assert.Equal("its own TMDB id 1396", found!.MatchedOn);
+    }
+
     [Theory]
+    [InlineData("Black Summer", "Black Summoner")]
     [InlineData("Girls", "The Golden Girls")]
     [InlineData("Star Trek", "Star Trek: Deep Space Nine")]
     [InlineData("Alien", "Aliens")]
@@ -270,6 +356,8 @@ public class ProvenanceSourceTests
     [InlineData("Breaking Bad", "Breaking Bad")]
     [InlineData("The Office", "The Office")]
     [InlineData("Marvel's Agents of S.H.I.E.L.D.", "Marvel's Agents of S.H.I.E.L.D.")]
+    [InlineData("Pokémon", "Pokemon")]
+    [InlineData("The Office", "Office")]
     public void TheSameNameIs(string wanted, string catalogued) =>
         Assert.NotNull(ThemerrDbSource.MatchShowByTitle(wanted, new[] { new CatalogueTitle("1", catalogued) }));
 
@@ -286,10 +374,52 @@ public class ProvenanceSourceTests
     [Fact]
     public async Task WithNoMirrorTheRecordIsAskedForDirectly()
     {
-        // A fresh install, or one where the sync is switched off, still works.
+        // A fresh install, or one where the sync is switched off, still works. A 404 is only
+        // believed once both of ThemerrDB's addresses have given it.
         var handler = new Canned(HttpStatusCode.NotFound);
         Assert.Null(await Themerr(handler).FindAsync(Movie("78"), Enabled(), CancellationToken.None));
-        Assert.Single(handler.Requested);
+        Assert.Equal(
+            new[] { ThemerrDbCatalogue.BaseUrl + "/movies/themoviedb/78.json", ThemerrDbCatalogue.MirrorUrl + "/movies/themoviedb/78.json" },
+            handler.Requested.Select(request => request.Url.ToString()));
+    }
+
+    [Fact]
+    public async Task WhenThemerrDbsWebsiteIsDownItsDataIsReadFromGitHubsCopy()
+    {
+        // Since 10 November 2026 the website answers 404 for every ThemerrDB path, which read as
+        // "ThemerrDB has no theme for this" for every title.
+        var handler = new WebsiteDown();
+        var found = await Themerr(handler, Snapshot(shows: new[] { new CatalogueTitle("1396", "Breaking Bad") }))
+            .FindAsync(Series("1396", "Breaking Bad"), Enabled(), CancellationToken.None);
+
+        Assert.Equal("https://www.youtube.com/watch?v=abcdefghijk", found!.Url);
+        Assert.Equal(2, handler.Requested.Count);
+    }
+
+    [Fact]
+    public async Task ACopyReadFromGitHubIsAskedThereFirst()
+    {
+        var handler = new WebsiteDown();
+        var snapshot = Snapshot(shows: new[] { new CatalogueTitle("1396", "Breaking Bad") });
+        snapshot.Source = ThemerrDbCatalogue.MirrorUrl;
+
+        await Themerr(handler, snapshot).FindAsync(Series("1396", "Breaking Bad"), Enabled(), CancellationToken.None);
+
+        Assert.StartsWith(ThemerrDbCatalogue.MirrorUrl, Assert.Single(handler.Requested).ToString(), StringComparison.Ordinal);
+    }
+
+    /// <summary>ThemerrDB's website answering 404 for everything, and GitHub's copy serving the record.</summary>
+    private sealed class WebsiteDown : HttpMessageHandler
+    {
+        public List<Uri> Requested { get; } = new();
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Requested.Add(request.RequestUri!);
+            return Task.FromResult(request.RequestUri!.ToString().StartsWith(ThemerrDbCatalogue.MirrorUrl, StringComparison.Ordinal)
+                ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(ThemeJson) }
+                : new HttpResponseMessage(HttpStatusCode.NotFound) { Content = new StringContent("<html>404</html>") });
+        }
     }
 
     [Fact]
@@ -362,5 +492,124 @@ public class ProvenanceSourceTests
         // The field is community-supplied. Handing whatever it contains to a downloader would let
         // an arbitrary entry in someone else's database decide what this server fetches.
         Assert.Null(ThemerrDbCatalogue.AcceptableThemeUrl(url));
+    }
+
+    // ---- Dead links ---------------------------------------------------------------
+
+    [Fact]
+    public async Task ADeadThemerrLinkIsNotHandedOn()
+    {
+        // 6% of ThemerrDB's film links and 2% of its show links were 404 when sampled. Handed on,
+        // a dead one failed the download, the item was marked failed, and the next run -- the
+        // catalogue being consulted before the search and never behind a backoff -- met the same
+        // dead link again. The item never got a theme at all.
+        var links = new StubLinks(LinkState.Dead);
+        var source = Themerr(new Canned(HttpStatusCode.OK, ThemeJson), Snapshot(movies: new[] { "550" }), links);
+
+        var found = await source.FindAsync(Movie("550"), Enabled(), CancellationToken.None);
+
+        Assert.Null(found);
+        Assert.Single(links.Checked);
+        Assert.Contains("abcdefghijk", links.Checked[0], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ALiveThemerrLinkIsHandedOnAsBefore()
+    {
+        var source = Themerr(
+            new Canned(HttpStatusCode.OK, ThemeJson),
+            Snapshot(movies: new[] { "550" }),
+            new StubLinks(LinkState.Alive));
+
+        var found = await source.FindAsync(Movie("550"), Enabled(), CancellationToken.None);
+
+        Assert.NotNull(found);
+        Assert.Equal("https://www.youtube.com/watch?v=abcdefghijk", found!.Url);
+    }
+
+    [Fact]
+    public async Task ALinkTheCheckCannotVouchForIsStillTried()
+    {
+        // The check being unreachable, rate limited or ambiguous must never be the reason a good
+        // theme goes unused: the download is the real test, and it still happens.
+        var source = Themerr(
+            new Canned(HttpStatusCode.OK, ThemeJson),
+            Snapshot(movies: new[] { "550" }),
+            new StubLinks(LinkState.Unknown));
+
+        Assert.NotNull(await source.FindAsync(Movie("550"), Enabled(), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ADeadCollectionThemeIsNotHandedOnEither()
+    {
+        // The collection path answers from the mirror without fetching a record, and so skipped
+        // the place a check would naturally go.
+        var links = new StubLinks(LinkState.Dead);
+        var collection = new CatalogueCollection(
+            "1241", "Harry Potter Collection", "https://www.youtube.com/watch?v=deadvideo01", new[] { "671" });
+        var source = Themerr(
+            new Forbidden(),
+            Snapshot(movies: new[] { "999999" }, collections: new[] { collection }),
+            links);
+
+        Assert.Null(await source.FindAsync(Movie("671"), Enabled(), CancellationToken.None));
+        Assert.Single(links.Checked);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.OK, LinkState.Alive)]
+    [InlineData(HttpStatusCode.NotFound, LinkState.Dead)]
+    [InlineData(HttpStatusCode.BadRequest, LinkState.Dead)]
+    [InlineData(HttpStatusCode.Gone, LinkState.Dead)]
+    [InlineData(HttpStatusCode.Unauthorized, LinkState.Unknown)]
+    [InlineData(HttpStatusCode.Forbidden, LinkState.Unknown)]
+    [InlineData(HttpStatusCode.TooManyRequests, LinkState.Unknown)]
+    [InlineData(HttpStatusCode.InternalServerError, LinkState.Unknown)]
+    public void ReadsOEmbedsAnswer(HttpStatusCode status, LinkState expected) =>
+        // 401 in particular is not dead: it is answered both for a private video and for one
+        // whose owner only switched embedding off, which yt-dlp downloads perfectly well.
+        Assert.Equal(expected, LinkChecker.Interpret(status));
+
+    [Fact]
+    public async Task TheCheckerAsksOEmbedAboutTheVideo()
+    {
+        var handler = new Canned(HttpStatusCode.NotFound);
+        var checker = new LinkChecker(new Factory(handler), NullThemeForgeLogger<LinkChecker>.Instance);
+
+        var state = await checker.CheckAsync("https://www.youtube.com/watch?v=9uwFMvsmNA8", CancellationToken.None);
+
+        Assert.Equal(LinkState.Dead, state);
+        var asked = Assert.Single(handler.Requested);
+        Assert.StartsWith(LinkChecker.OEmbedEndpoint, asked.Url.ToString(), StringComparison.Ordinal);
+        Assert.Contains("9uwFMvsmNA8", asked.Url.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheCheckerLeavesAnythingButYouTubeAlone()
+    {
+        // The Plex archive's links are direct audio and are checked with a HEAD by that source.
+        var checker = new LinkChecker(new Factory(new Forbidden()), NullThemeForgeLogger<LinkChecker>.Instance);
+
+        Assert.Equal(
+            LinkState.Unknown,
+            await checker.CheckAsync("https://tvthemes.plexapp.com/78874.mp3", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task AnUnreachableCheckerVouchesForNothingButBlocksNothing()
+    {
+        var checker = new LinkChecker(new Factory(new Unreachable()), NullThemeForgeLogger<LinkChecker>.Instance);
+
+        Assert.Equal(
+            LinkState.Unknown,
+            await checker.CheckAsync("https://www.youtube.com/watch?v=abcdefghijk", CancellationToken.None));
+    }
+
+    /// <summary>A handler whose network is down.</summary>
+    private sealed class Unreachable : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            throw new HttpRequestException("no route to host");
     }
 }

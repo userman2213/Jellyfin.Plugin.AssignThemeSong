@@ -78,11 +78,15 @@ public static class Eligibility
             return Stop(string.Format(CultureInfo.InvariantCulture, "it is marked {0}", entry.State));
         }
 
-        // A theme ThemeForge chose is only revisited when the library allows replacing one.
+        // A theme ThemeForge chose is only revisited when the library allows replacing one --
+        // except a search's guess, which a catalogue's answer for the title always replaces. The
+        // catalogue is asked; the search is not, so the guess is not re-guessed nightly.
         if (entry.State is ThemeItemState.AutoAssigned or ThemeItemState.Approved
             && policy.Overwrite == ThemeOverwritePolicy.Never)
         {
-            return Stop("it already has a theme assigned by ThemeForge");
+            return entry.IsSearchPick
+                ? new EligibilityDecision(null, "a search chose its theme; only a ThemerrDB or Plex entry for it would replace that", false)
+                : Stop("it already has a theme assigned by ThemeForge");
         }
 
         // A theme file already on disk that ThemeForge did not write belongs to the user, and is
@@ -107,8 +111,11 @@ public static class Eligibility
             return Defer(string.Format(CultureInfo.InvariantCulture, "the retry backoff runs until {0:u}", retryAt));
         }
 
+        // A title nobody is credited with the music of was not searched for, and stays worth a
+        // look: research or IMDb's crew data may name somebody tomorrow.
         if (entry.Attempts >= configuration.MaxAttempts
-            && entry.State is ThemeItemState.Failed or ThemeItemState.NoCandidate)
+            && entry.State is ThemeItemState.Failed or ThemeItemState.NoCandidate
+            && !(entry.State == ThemeItemState.NoCandidate && entry.NothingToSearchFor))
         {
             return Defer(string.Format(CultureInfo.InvariantCulture, "it has been tried {0} times", entry.Attempts));
         }

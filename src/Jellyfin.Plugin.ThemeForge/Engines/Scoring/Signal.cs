@@ -12,7 +12,9 @@ namespace Jellyfin.Plugin.ThemeForge.Engines.Scoring;
 /// <param name="Weight">The configured weight applied to <paramref name="Raw"/>.</param>
 /// <param name="Reason">Short human-readable justification shown in the UI.</param>
 /// <param name="IsVeto">When true the candidate is disqualified outright, whatever else scored.</param>
-public sealed record Signal(string Rule, double Raw, double Weight, string Reason, bool IsVeto = false)
+/// <param name="ReviewOnly">When true the candidate is offered for review at most, whatever else scored.</param>
+/// <param name="MainTheme">When true the candidate is the work's main theme.</param>
+public sealed record Signal(string Rule, double Raw, double Weight, string Reason, bool IsVeto = false, bool ReviewOnly = false, bool MainTheme = false)
 {
     /// <summary>Gets this signal's weighted contribution to the total.</summary>
     public double Contribution => Raw * Weight;

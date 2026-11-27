@@ -103,7 +103,7 @@ public class ManualSearchTests
     {
         var identity = TestData.Series("Battlestar Galactica", year: 2004);
         var configuration = TestData.Config();
-        var firstRung = new QueryPlanner().Plan(identity, configuration)[0].Text;
+        var firstRung = new QueryPlanner().Plan(identity, configuration, includeTitleSearches: true)[0].Text;
 
         foreach (var nothing in new[] { null, string.Empty, "   " })
         {
