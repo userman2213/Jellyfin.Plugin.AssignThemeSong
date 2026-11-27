@@ -214,7 +214,9 @@ public class ThemerrDbCatalogueTests
         Assert.True(snapshot.HasMovie("78"));
         Assert.True(snapshot.HasShow("1396"));
         Assert.Single(snapshot.Collections);
-        Assert.All(handler.Requested.Skip(1), url => Assert.StartsWith(ThemerrDbCatalogue.MirrorUrl, url, StringComparison.Ordinal));
+        // The archive first, then the website once; everything after that from GitHub's copy.
+        Assert.Equal(ThemerrDbCatalogue.ArchiveUrl, handler.Requested[0]);
+        Assert.All(handler.Requested.Skip(2), url => Assert.StartsWith(ThemerrDbCatalogue.MirrorUrl, url, StringComparison.Ordinal));
     }
 
     /// <summary>The website answering 404 for everything; GitHub's copy serving the files it is given.</summary>

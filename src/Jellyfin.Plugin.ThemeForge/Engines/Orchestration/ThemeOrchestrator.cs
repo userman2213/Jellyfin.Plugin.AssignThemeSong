@@ -1274,14 +1274,16 @@ public sealed class ThemeOrchestrator : IThemeOrchestrator, IDisposable
             var snapshot = await _themerrDb.GetAsync(cancellationToken).ConfigureAwait(false);
             var maxAge = TimeSpan.FromDays(Math.Max(1, configuration.ThemerrDbMaxAgeDays));
 
-            if (snapshot.IsUsable && snapshot.Age < maxAge)
+            if (snapshot.IsUsable && snapshot.HasLinks && snapshot.Age < maxAge)
             {
                 return;
             }
 
             _logger.LogInformation(
                 "ThemeForge: the ThemerrDB catalogue is {State}; refreshing it before the run.",
-                snapshot.IsUsable ? $"{snapshot.Age.TotalDays:0.#} days old" : "empty");
+                !snapshot.IsUsable ? "empty"
+                    : !snapshot.HasLinks ? "a copy from an earlier version, without the theme links"
+                    : $"{snapshot.Age.TotalDays:0.#} days old");
 
             await _themerrDb.SyncAsync(null, cancellationToken).ConfigureAwait(false);
         }

@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Formats.Tar;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -74,6 +76,12 @@ public sealed class ThemerrDbCatalogue : IThemerrDbCatalogue
     /// </remarks>
     public const string MirrorUrl = "https://raw.githubusercontent.com/LizardByte/ThemerrDB/gh-pages";
 
+    /// <summary>The whole published tree as one archive: every record, in a single download of about 30 MB.</summary>
+    public const string ArchiveUrl = "https://codeload.github.com/LizardByte/ThemerrDB/tar.gz/refs/heads/gh-pages";
+
+    /// <summary>The fewest films an archive must hold to be believed; the real one holds about 4900.</summary>
+    internal const int MinimumFilms = 1000;
+
     /// <summary>Gets where ThemerrDB's tree is published, in the order they are tried.</summary>
     public static IReadOnlyList<string> Addresses { get; } = new[] { BaseUrl, MirrorUrl };
 
@@ -96,6 +104,9 @@ public sealed class ThemerrDbCatalogue : IThemerrDbCatalogue
     private static readonly TimeSpan RequestSpacing = TimeSpan.FromMilliseconds(40);
 
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>How long the one large download may take.</summary>
+    private static readonly TimeSpan ArchiveTimeout = TimeSpan.FromMinutes(10);
 
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IThemeForgeLogger<ThemerrDbCatalogue> _logger;
@@ -145,6 +156,21 @@ public sealed class ThemerrDbCatalogue : IThemerrDbCatalogue
             var client = _httpClientFactory.CreateClient(NamedClient.Default);
             client.Timeout = RequestTimeout;
 
+            // First choice: everything in one download, links included.
+            var whole = await ReadArchiveAsync(progress, cancellationToken).ConfigureAwait(false);
+            if (whole is not null)
+            {
+                Write(whole);
+                _snapshot = whole;
+                _logger.LogInformation(
+                    "ThemeForge: downloaded all of ThemerrDB: {Movies} films, {Shows} shows and {Collections} collections, with their theme links. Runs now ask ThemerrDB nothing.",
+                    whole.MovieThemes.Count,
+                    whole.ShowThemes.Count,
+                    whole.Collections.Count);
+                progress?.Report(100);
+                return whole;
+            }
+
             // Built into a new snapshot and only swapped in at the end, so a sync that fails
             // partway leaves yesterday's copy intact rather than a half-written one.
             var address = await ChooseAddressAsync(client, cancellationToken).ConfigureAwait(false);
@@ -159,7 +185,7 @@ public sealed class ThemerrDbCatalogue : IThemerrDbCatalogue
 
             var fresh = new ThemerrDbSnapshot { UpdatedUtc = DateTime.UtcNow, Source = address };
 
-            var movies = await ReadIndexAsync(client, address, "movies", progress, 0, 60, cancellationToken).ConfigureAwait(false);
+            var movies = await ReadIndexAsync(client, address, "movies", progress, 0, 20, cancellationToken).ConfigureAwait(false);
             fresh.MovieTmdbIds = movies.Select(entry => entry.Id).ToList();
             fresh.MovieImdbIds = movies
                 .Select(entry => entry.ImdbId)
@@ -167,11 +193,15 @@ public sealed class ThemerrDbCatalogue : IThemerrDbCatalogue
                 .Select(id => id!)
                 .ToList();
 
-            var shows = await ReadIndexAsync(client, address, "tv_shows", progress, 60, 20, cancellationToken).ConfigureAwait(false);
+            var shows = await ReadIndexAsync(client, address, "tv_shows", progress, 20, 8, cancellationToken).ConfigureAwait(false);
             fresh.TvShows = shows.Select(entry => new CatalogueTitle(entry.Id, entry.Title)).ToList();
 
-            var collections = await ReadIndexAsync(client, address, "movie_collections", progress, 80, 5, cancellationToken).ConfigureAwait(false);
-            fresh.Collections = await ReadCollectionsAsync(client, address, collections, progress, 85, 15, cancellationToken).ConfigureAwait(false);
+            var collections = await ReadIndexAsync(client, address, "movie_collections", progress, 28, 2, cancellationToken).ConfigureAwait(false);
+            fresh.Collections = await ReadCollectionsAsync(client, address, collections, progress, 30, 5, cancellationToken).ConfigureAwait(false);
+
+            // The archive was not to be had, so the links are fetched one record at a time -- here,
+            // in the task, never during a run. A link already known is kept: they rarely change.
+            await ReadLinksAsync(client, address, fresh, _snapshot ?? Read(), progress, 35, 65, cancellationToken).ConfigureAwait(false);
 
             if (!fresh.IsUsable)
             {
@@ -353,6 +383,211 @@ public sealed class ThemerrDbCatalogue : IThemerrDbCatalogue
         }
 
         return (url, members);
+    }
+
+    /// <summary>
+    /// Downloads the whole published tree as one archive and reads every record out of it.
+    /// </summary>
+    /// <returns>The snapshot, or null when the archive could not be had or does not look whole.</returns>
+    private async Task<ThemerrDbSnapshot?> ReadArchiveAsync(IProgress<double>? progress, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var client = _httpClientFactory.CreateClient(NamedClient.Default);
+            client.Timeout = ArchiveTimeout;
+            using var response = await client.GetAsync(ArchiveUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("ThemeForge: ThemerrDB's archive answered {Status}; reading it record by record instead.", (int)response.StatusCode);
+                return null;
+            }
+
+            await using var body = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+            var snapshot = await ParseArchiveAsync(body, cancellationToken).ConfigureAwait(false);
+            if (snapshot.MovieThemes.Count < MinimumFilms)
+            {
+                _logger.LogWarning(
+                    "ThemeForge: ThemerrDB's archive held only {Count} films, far fewer than it should; reading it record by record instead.",
+                    snapshot.MovieThemes.Count);
+                return null;
+            }
+
+            snapshot.Source = ArchiveUrl;
+            progress?.Report(95);
+            return snapshot;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException or OperationCanceledException or FormatException)
+        {
+            _logger.LogWarning(ex, "ThemeForge: could not download ThemerrDB's archive; reading it record by record instead.");
+            return null;
+        }
+    }
+
+    /// <summary>Reads every film, show and collection record out of the published tree's archive.</summary>
+    /// <param name="gzippedTar">The archive, as GitHub serves it.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>What it holds.</returns>
+    internal static async Task<ThemerrDbSnapshot> ParseArchiveAsync(Stream gzippedTar, CancellationToken cancellationToken)
+    {
+        var snapshot = new ThemerrDbSnapshot { UpdatedUtc = DateTime.UtcNow };
+        await using var gzip = new GZipStream(gzippedTar, CompressionMode.Decompress);
+        await using var tar = new TarReader(gzip);
+
+        while (await tar.GetNextEntryAsync(copyData: false, cancellationToken).ConfigureAwait(false) is { } entry)
+        {
+            if (entry.EntryType is not (TarEntryType.RegularFile or TarEntryType.V7RegularFile) || entry.DataStream is null)
+            {
+                continue;
+            }
+
+            // "<repo>-gh-pages/movies/themoviedb/9615.json": the kind is the last two folders.
+            var parts = entry.Name.Split('/');
+            if (parts.Length < 4 || parts[^2] != "themoviedb" || !parts[^1].EndsWith(".json", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var kind = parts[^3];
+            if (kind is not ("movies" or "tv_shows" or "movie_collections"))
+            {
+                continue;
+            }
+
+            var id = parts[^1][..^5];
+            using var text = new StreamReader(entry.DataStream);
+            var json = await text.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+
+            try
+            {
+                Take(snapshot, kind, id, json);
+            }
+            catch (JsonException)
+            {
+                // One unreadable record is that record's loss, not the database's.
+            }
+        }
+
+        return snapshot;
+    }
+
+    /// <summary>Files one record into the snapshot.</summary>
+    internal static void Take(ThemerrDbSnapshot snapshot, string kind, string id, string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        var record = document.RootElement;
+        var url = ReadThemeUrl(record);
+        if (record.ValueKind != JsonValueKind.Object || url is null || id.Length == 0)
+        {
+            return;
+        }
+
+        string? Text(string name) =>
+            record.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+
+        switch (kind)
+        {
+            case "movies":
+                snapshot.MovieTmdbIds.Add(id);
+                snapshot.MovieThemes[id] = url;
+                if (Text("imdb_id") is { Length: > 0 } imdb)
+                {
+                    snapshot.MovieImdbIds.Add(imdb);
+                    snapshot.MovieThemesByImdb[imdb] = url;
+                }
+
+                break;
+
+            case "tv_shows":
+                snapshot.TvShows.Add(new CatalogueTitle(id, Text("name") ?? string.Empty));
+                snapshot.ShowThemes[id] = url;
+                if (Text("first_air_date") is { Length: >= 4 } aired
+                    && int.TryParse(aired.AsSpan(0, 4), NumberStyles.None, CultureInfo.InvariantCulture, out var year))
+                {
+                    snapshot.ShowYears[id] = year;
+                }
+
+                break;
+
+            default:
+                var (_, members) = ParseCollection(json);
+                if (members.Count > 0)
+                {
+                    snapshot.Collections.Add(new CatalogueCollection(id, Text("name") ?? string.Empty, url, members));
+                }
+
+                break;
+        }
+    }
+
+    /// <summary>Fetches the links one record at a time, for the ids no earlier copy has a link for.</summary>
+    private async Task ReadLinksAsync(
+        HttpClient client,
+        string address,
+        ThemerrDbSnapshot fresh,
+        ThemerrDbSnapshot? previous,
+        IProgress<double>? progress,
+        double progressFrom,
+        double progressSpan,
+        CancellationToken cancellationToken)
+    {
+        var wanted = fresh.MovieTmdbIds.Select(id => ("movies", id))
+            .Concat(fresh.TvShows.Select(show => ("tv_shows", show.Id)))
+            .ToList();
+        var listed = new ThemerrDbSnapshot();
+        var fetched = 0;
+
+        for (var index = 0; index < wanted.Count; index++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var (kind, id) = wanted[index];
+
+            var known = kind == "movies" ? previous?.MovieTheme(id, null)?.Url : previous?.ShowTheme(id);
+            if (known is not null && (kind == "movies" || previous!.ShowYears.ContainsKey(id)))
+            {
+                if (kind == "movies")
+                {
+                    fresh.MovieThemes[id] = known;
+                }
+                else
+                {
+                    fresh.ShowThemes[id] = known;
+                    fresh.ShowYears[id] = previous!.ShowYears[id];
+                }
+
+                continue;
+            }
+
+            var body = await GetStringAsync(client, $"{address}/{kind}/themoviedb/{id}.json", cancellationToken).ConfigureAwait(false);
+            if (body is not null)
+            {
+                try
+                {
+                    Take(listed, kind, id, body);
+                    fetched++;
+                }
+                catch (JsonException)
+                {
+                }
+            }
+
+            progress?.Report(progressFrom + (progressSpan * (index + 1) / wanted.Count));
+            await Task.Delay(RequestSpacing, cancellationToken).ConfigureAwait(false);
+        }
+
+        foreach (var (id, url) in listed.MovieThemes) { fresh.MovieThemes[id] = url; }
+        foreach (var (id, url) in listed.MovieThemesByImdb) { fresh.MovieThemesByImdb[id] = url; }
+        foreach (var (id, url) in listed.ShowThemes) { fresh.ShowThemes[id] = url; }
+        foreach (var (id, year) in listed.ShowYears) { fresh.ShowYears[id] = year; }
+        if (previous is not null)
+        {
+            foreach (var (id, url) in previous.MovieThemesByImdb) { fresh.MovieThemesByImdb.TryAdd(id, url); }
+        }
+
+        _logger.LogInformation("ThemeForge: fetched {Count} ThemerrDB records one at a time for their theme links.", fetched);
     }
 
     /// <summary>Finds the address ThemerrDB's index can be read from: the website, else GitHub's copy.</summary>

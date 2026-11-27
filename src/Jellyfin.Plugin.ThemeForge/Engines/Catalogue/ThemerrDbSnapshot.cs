@@ -62,6 +62,54 @@ public sealed class ThemerrDbSnapshot
     /// </summary>
     public string? Source { get; set; }
 
+    /// <summary>Gets or sets each film's theme link, by TMDB id.</summary>
+    /// <remarks>
+    /// Until 3.1.2 only the ids were kept and each title's record was fetched during the run. A
+    /// request that failed then read as "ThemerrDB has nothing for this", and with the website down
+    /// and a thousand requests going to GitHub instead, that happened to listed films such as
+    /// Tokyo Drift. With the links kept here a run asks ThemerrDB nothing at all.
+    /// </remarks>
+    public Dictionary<string, string> MovieThemes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Gets or sets each film's theme link, by IMDb id.</summary>
+    public Dictionary<string, string> MovieThemesByImdb { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Gets or sets each show's theme link, by TMDB id.</summary>
+    public Dictionary<string, string> ShowThemes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Gets or sets the year each show first aired, by TMDB id, where the record says.</summary>
+    public Dictionary<string, int> ShowYears { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Gets a value indicating whether the theme links are held here, so nothing need be fetched.</summary>
+    [JsonIgnore]
+    public bool HasLinks => MovieThemes.Count > 0 || ShowThemes.Count > 0;
+
+    /// <summary>Finds a film's theme link in the local copy.</summary>
+    /// <param name="tmdbId">The film's TMDB id.</param>
+    /// <param name="imdbId">The film's IMDb id.</param>
+    /// <returns>The link and which id found it, or null.</returns>
+    public (string Url, bool ByImdb)? MovieTheme(string? tmdbId, string? imdbId)
+    {
+        if (!string.IsNullOrWhiteSpace(tmdbId) && Lookup(MovieThemes).TryGetValue(tmdbId, out var byTmdb))
+        {
+            return (byTmdb, false);
+        }
+
+        return !string.IsNullOrWhiteSpace(imdbId) && Lookup(MovieThemesByImdb).TryGetValue(imdbId, out var byImdb)
+            ? (byImdb, true)
+            : null;
+    }
+
+    /// <summary>Finds a show's theme link in the local copy.</summary>
+    /// <param name="tmdbId">The show's TMDB id.</param>
+    /// <returns>The link, or null.</returns>
+    public string? ShowTheme(string? tmdbId) =>
+        !string.IsNullOrWhiteSpace(tmdbId) && Lookup(ShowThemes).TryGetValue(tmdbId, out var url) ? url : null;
+
+    // A dictionary read back from JSON loses its comparer; ids are digits and "tt..." in lower
+    // case, so an ordinal lookup on the trimmed id is the same thing.
+    private static Dictionary<string, string> Lookup(Dictionary<string, string> map) => map;
+
     /// <summary>Gets a value indicating whether this snapshot holds anything worth consulting.</summary>
     [JsonIgnore]
     public bool IsUsable => MovieTmdbIds.Count > 0 || TvShows.Count > 0;

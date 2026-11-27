@@ -46,9 +46,8 @@ public sealed class UpdateThemerrDbTask : IScheduledTask
 
     /// <inheritdoc />
     public string Description =>
-        "Reads the list of films, shows and collections ThemerrDB has a theme for, so ThemeForge can tell at a "
-        + "glance whether a title is in the database instead of asking about every one of them. "
-        + "ThemerrDB publishes once a day at 12:00 UTC.";
+        "Downloads all of ThemerrDB in one file of about 30 MB: every film, show and collection it has a theme for, "
+        + "with the theme's link. A run then looks every title up in this local copy and asks ThemerrDB nothing.";
 
     /// <inheritdoc />
     public string Category => "ThemeForge";

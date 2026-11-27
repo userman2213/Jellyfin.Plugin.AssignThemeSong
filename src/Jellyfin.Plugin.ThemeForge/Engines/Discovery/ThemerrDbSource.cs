@@ -196,7 +196,27 @@ public sealed class ThemerrDbSource : IThemeProvenanceSource
                     cancellationToken).ConfigureAwait(false);
         }
 
-        if (snapshot.HasMovie(identity.TmdbId))
+        // The links are held locally: nothing is asked of ThemerrDB during a run.
+        if (snapshot.HasLinks)
+        {
+            if (snapshot.MovieTheme(identity.TmdbId, identity.ImdbId) is { } local)
+            {
+                return await PlayableOrNullAsync(
+                    identity,
+                    local.Url,
+                    $"{identity.Title} (ThemerrDB)",
+                    local.ByImdb ? $"its own IMDb id {identity.ImdbId}" : $"its own TMDB id {identity.TmdbId}",
+                    cancellationToken).ConfigureAwait(false);
+            }
+
+            if (snapshot.HasMovie(identity.TmdbId) || snapshot.HasMovieByImdb(identity.ImdbId))
+            {
+                _logger.LogInformation(
+                    "ThemeForge: ThemerrDB lists \"{Item}\", but its entry has no usable theme link.",
+                    identity.Label);
+            }
+        }
+        else if (snapshot.HasMovie(identity.TmdbId))
         {
             return await FetchAsync(
                 identity,
@@ -206,7 +226,7 @@ public sealed class ThemerrDbSource : IThemeProvenanceSource
                 cancellationToken).ConfigureAwait(false);
         }
 
-        if (snapshot.HasMovieByImdb(identity.ImdbId))
+        else if (snapshot.HasMovieByImdb(identity.ImdbId))
         {
             return await FetchAsync(
                 identity,
@@ -252,6 +272,11 @@ public sealed class ThemerrDbSource : IThemeProvenanceSource
                     cancellationToken).ConfigureAwait(false);
         }
 
+        if (snapshot.HasLinks)
+        {
+            return await FindShowLocallyAsync(identity, snapshot, cancellationToken).ConfigureAwait(false);
+        }
+
         if (snapshot.HasShow(identity.TmdbId))
         {
             return await FetchAsync(
@@ -281,6 +306,40 @@ public sealed class ThemerrDbSource : IThemeProvenanceSource
         }
 
         return null;
+    }
+
+    /// <summary>Finds a show's theme in the local copy: by its own id, or with no id by its exact name and year.</summary>
+    private async Task<Candidate?> FindShowLocallyAsync(MediaIdentity identity, ThemerrDbSnapshot snapshot, CancellationToken cancellationToken)
+    {
+        if (snapshot.ShowTheme(identity.TmdbId) is { } own)
+        {
+            return await PlayableOrNullAsync(
+                identity, own, $"{identity.Title} (ThemerrDB)", $"its own TMDB id {identity.TmdbId}", cancellationToken).ConfigureAwait(false);
+        }
+
+        if (!string.IsNullOrWhiteSpace(identity.TmdbId)
+            || MatchShowByTitle(identity.Title, snapshot.TvShows) is not { } matched
+            || snapshot.ShowTheme(matched.Id) is not { } byName)
+        {
+            return null;
+        }
+
+        if (identity.Year is { } year
+            && snapshot.ShowYears.TryGetValue(matched.Id, out var aired)
+            && Math.Abs(aired - year) > YearTolerance)
+        {
+            _logger.LogInformation(
+                "ThemeForge: ThemerrDB's show of the same name as \"{Item}\" first aired in another year, so it is a different show.",
+                identity.Label);
+            return null;
+        }
+
+        return await PlayableOrNullAsync(
+            identity,
+            byName,
+            $"{identity.Title} (ThemerrDB)",
+            $"its exact name, as the single ThemerrDB entry \"{matched.Title}\" (Jellyfin has no TMDB id for it)",
+            cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<Candidate?> FetchAsync(

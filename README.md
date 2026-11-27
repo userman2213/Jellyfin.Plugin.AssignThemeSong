@@ -25,7 +25,10 @@ Point it at your library and it will, for each movie and series:
    wrote. A title is looked up by its own TMDB or IMDb id. A show is matched by name only when
    Jellyfin has no TMDB id for it, and then only by exactly its name and year: until 3.1.1 a close
    name was enough, and *Black Summer* was given the opening of the anime *Black Summoner*. When
-   ThemerrDB's website does not answer, its data is read from GitHub's copy of it.
+   ThemerrDB's website does not answer, its data is read from GitHub's copy of it. The whole
+   database, theme links included, is downloaded once a day as one 30 MB file and kept locally, so
+   a run asks ThemerrDB nothing: until 3.1.2 each title's link was fetched during the run, and a
+   request that failed left a listed film such as *Tokyo Drift* without a theme.
 3. Otherwise find out **who made the music**, by the title's IMDb id: IMDb's soundtrack listing,
    then IMDb's own crew credits, then Wikidata and Wikipedia.
 4. Search YouTube with **yt-dlp** for exactly that — the theme's own name and performer, or the
